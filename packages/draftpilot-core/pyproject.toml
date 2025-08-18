@@ -1,0 +1,36 @@
+[project]
+name = "draftpilot-core"
+version = "0.1.0"
+description = "Core functionality for DraftPilot - shared between UI and MCP"
+readme = "README.md"
+authors = [{ name = "Amruth Vithala", email = "amruthvvkp@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+
+# Ensure this is built as a package (not virtual)
+[tool.uv]
+package = true # Default is true, but explicit is better
+
+[dependency-groups]
+dev = [
+    "isort>=6.0.1",
+    "jupyter>=1.1.1",
+    "mypy>=1.17.1",
+    "pre-commit>=4.3.0",
+    { include-group = "lint" },
+    { include-group = "test" },
+]
+lint = ["interrogate>=1.7.0", "ruff>=0.12.9"]
+test = [
+    "dirty-equals>=0.9.0",
+    "pyhamcrest>=2.1.0",
+    "pytest>=8.4.1",
+    "pytest-pretty>=1.3.0",
+]
