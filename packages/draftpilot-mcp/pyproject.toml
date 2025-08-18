@@ -15,7 +15,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "draftpilot-core", # Workspace member dependency,
+    "draftpilot-core", # Workspace member dependency
     "fastmcp>=2.11.3",
 ]
 
