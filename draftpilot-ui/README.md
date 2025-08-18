@@ -16,7 +16,7 @@ Run as a web app:
 uv run flet run --web
 ```
 
-### UV
+### uv
 
 Install dependencies from `pyproject.toml`:
 

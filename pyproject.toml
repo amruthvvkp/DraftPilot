@@ -15,7 +15,7 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["draftpilot-mcp", "draftpilot-core", "draftpilot-ui"]
+dependencies = ["draftpilot-mcp", "draftpilot-core"]
 
 [tool.uv.sources]
 draftpilot-mcp = { workspace = true }
@@ -33,6 +33,9 @@ docs = [
     "mkdocs-material>=9.6.17",
     "mkdocs-panzoom-plugin>=0.3.0",
     "mkdocstrings[python]>=0.30.0",
+]
+ui = [
+    "draftpilot-ui"
 ]
 
 [project.urls]

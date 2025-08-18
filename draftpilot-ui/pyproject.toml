@@ -1,7 +1,7 @@
 [project]
 name = "draftpilot-ui"
 version = "0.1.0"
-description = "Add your description here"
+description = "A user interface package for DraftPilot, providing interactive tools and components for drafting and managing projects."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
