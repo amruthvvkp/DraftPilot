@@ -15,38 +15,17 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = ["draftpilot-mcp", "flet[all]>=0.28.3", "pydantic>=2.11.7"]
-
-[project.scripts]
-draftpilot = "draftpilot:main"
-
-[build-system]
-requires = ["uv_build>=0.8.11,<0.9.0"]
-build-backend = "uv_build"
+dependencies = ["draftpilot-mcp", "draftpilot-core"]
 
 [tool.uv.sources]
 draftpilot-mcp = { workspace = true }
+draftpilot-core = { workspace = true }
+draftpilot-ui = { workspace = true }
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = ["draftpilot-mcp", "draftpilot-core", "draftpilot-ui"]
 
 [dependency-groups]
-dev = [
-    "isort>=6.0.1",
-    "jupyter>=1.1.1",
-    "mypy>=1.17.1",
-    "pre-commit>=4.3.0",
-    { include-group = "lint" },
-    { include-group = "test" },
-    { include-group = "docs" },
-]
-lint = ["interrogate>=1.7.0", "ruff>=0.12.9"]
-test = [
-    "dirty-equals>=0.9.0",
-    "pyhamcrest>=2.1.0",
-    "pytest>=8.4.1",
-    "pytest-pretty>=1.3.0",
-]
 docs = [
     "mkdocs>=1.6.1",
     "mkdocs-autorefs>=1.4.2",
@@ -54,6 +33,9 @@ docs = [
     "mkdocs-material>=9.6.17",
     "mkdocs-panzoom-plugin>=0.3.0",
     "mkdocstrings[python]>=0.30.0",
+]
+ui = [
+    "draftpilot-ui"
 ]
 
 [project.urls]
