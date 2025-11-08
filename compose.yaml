@@ -1,0 +1,39 @@
+services:
+  ui:
+    image: draftpilot-ui
+    build:
+      context: .
+      dockerfile: ./Dockerfile.ui
+    ports:
+      - 9000:8000
+    command:
+      [
+        "uv",
+        "run",
+        "flet",
+        "run",
+        "--web",
+        "--port",
+        "8000",
+        "src/draftpilot/ui/main.py",
+      ]
+
+  mcp:
+    image: draftpilot-mcp
+    build:
+      context: .
+      dockerfile: ./Dockerfile.mcp
+    ports:
+      - 9001:8000
+    command:
+      [
+        "uv",
+        "run",
+        "fastmcp",
+        "run",
+        "src/draftpilot/mcp/server.py:mcp",
+        "--transport",
+        "http",
+        "--port",
+        "8000",
+      ]
