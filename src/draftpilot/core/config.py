@@ -3,23 +3,34 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-if sys.version_info.minor < 11:
-    import toml  # type: ignore
-else:
+try:
     import tomllib as toml
+except ImportError:
+    import toml  # type: ignore
 
 
 __all__ = ["settings"]
 
 _ROOT = Path(__file__).parent.parent.parent.parent
 _PYPROJECT_TOML = _ROOT / "pyproject.toml"
-_PYPROJECT_TOML_CONTENT = toml.loads(_PYPROJECT_TOML.read_text())
 
+def get_pyproject_toml_content():
+    if not hasattr(get_pyproject_toml_content, "_cache"):
+        get_pyproject_toml_content._cache = toml.loads(_PYPROJECT_TOML.read_text())
+    return get_pyproject_toml_content._cache
 
 class Metadata(BaseSettings):
-    name: str = _PYPROJECT_TOML_CONTENT["project"]["name"]
-    version: str = _PYPROJECT_TOML_CONTENT["project"]["version"]
-    description: str = _PYPROJECT_TOML_CONTENT["project"]["description"]
+    @property
+    def name(self) -> str:
+        return get_pyproject_toml_content()["project"]["name"]
+
+    @property
+    def version(self) -> str:
+        return get_pyproject_toml_content()["project"]["version"]
+
+    @property
+    def description(self) -> str:
+        return get_pyproject_toml_content()["project"]["description"]
 
 
 class Settings(BaseSettings):
