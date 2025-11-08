@@ -15,7 +15,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 requires-python = ">=3.12"
-dependencies = ["flet[all]>=0.28.3"]
+dependencies = [
+    "httpx>=0.28.1",
+    "pydantic>=2.12.4",
+    "pydantic-settings>=2.11.0",
+]
 
 [project.scripts]
 draftpilot = "draftpilot:main"
@@ -54,6 +58,10 @@ docs = [
     "mkdocs-material>=9.6.17",
     "mkdocs-panzoom-plugin>=0.3.0",
     "mkdocstrings[python]>=0.30.0",
+]
+ui = ["flet[all]>=0.28.3"]
+mcp = [
+    "fastmcp>=2.13.0.2",
 ]
 
 [tool.flet]
