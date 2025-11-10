@@ -13,5 +13,5 @@ logfire.info("Telemetry setup complete")
 
 @mcp.tool
 def greet(name: str) -> str:
-    logfire.info(f"Greeting {name}")
+    logfire.info("Greeting user", extra={"user_name": name})
     return f"Hello, {name}!"

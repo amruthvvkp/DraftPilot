@@ -12,11 +12,11 @@ def main(page: ft.Page):
     counter = ft.Text("0", size=50, data=0)
 
     # Create a counter metric
-    messages_sent = logfire.metric_counter("messages_sent")
+    counter_increments = logfire.metric_counter("counter_increments")
 
     def increment_click(e):
         counter.data += 1
-        messages_sent.add(1)
+        counter_increments.add(1)
         counter.value = str(counter.data)
         counter.update()
 
