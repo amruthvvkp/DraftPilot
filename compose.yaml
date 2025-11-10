@@ -17,6 +17,9 @@ services:
         "8000",
         "src/draftpilot/ui/main.py",
       ]
+    environment:
+      - OTEL__EXPORTER_OTLP_ENDPOINT=http://grafana:4318
+      - OTEL__ENABLED=true
 
   mcp:
     image: draftpilot-mcp
@@ -37,3 +40,15 @@ services:
         "--port",
         "8000",
       ]
+    environment:
+      - OTEL__EXPORTER_OTLP_ENDPOINT=http://grafana:4318
+      - OTEL__ENABLED=true
+
+  grafana:
+    image: grafana/otel-lgtm:latest
+    container_name: lgtm
+    ports:
+      - "3000:3000" # Grafana UI
+      - "4317:4317" # OTLP/gRPC
+      - "4318:4318" # OTLP/HTTP
+    restart: unless-stopped
