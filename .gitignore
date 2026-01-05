@@ -142,3 +142,4 @@ cython_debug/
 
 # Flet
 storage/
+.DS_Store

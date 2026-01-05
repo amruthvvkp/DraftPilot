@@ -1,39 +1,49 @@
 services:
-  ui:
-    image: draftpilot-ui
+  app:
+    image: draftpilot
     build:
       context: .
-      dockerfile: ./Dockerfile.ui
+      dockerfile: ./Dockerfile
     ports:
       - 9000:8000
-    command:
-      [
-        "uv",
-        "run",
-        "flet",
-        "run",
-        "--web",
-        "--port",
-        "8000",
-        "src/draftpilot/ui/main.py",
-      ]
+    environment:
+      - NICEGUI_REDIS_URL=redis://redis:6379
+      - DRAFTPILOT_REDIS_URL=redis://redis:6379
+      - DRAFTPILOT_LOGFIRE_OTEL_ENDPOINT=http://grafana:4318
+      # Ollama running on host machine (Mac/Windows Docker Desktop)
+      # Use host.docker.internal to access services on the host from container
+      - DRAFTPILOT_OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+      # Note: Logfire settings use DRAFTPILOT_LOGFIRE_ prefix
+      # Examples:
+      # - DRAFTPILOT_LOGFIRE_ENABLED=true
+      # - DRAFTPILOT_LOGFIRE_SERVICE_NAME=draftpilot
+      # - DRAFTPILOT_LOGFIRE_OTEL_ENDPOINT=http://grafana:4318
+    volumes:
+      - ./:/app
+      # Note: .venv is not mounted - it's stored in /opt/venv (set via UV_PROJECT_ENVIRONMENT)
+      # This prevents the host's .venv from overwriting the container's .venv
+    command: ["uv", "run", "python", "-m", "draftpilot.app.main"]
+    depends_on:
+      - redis
 
-  mcp:
-    image: draftpilot-mcp
-    build:
-      context: .
-      dockerfile: ./Dockerfile.mcp
+  redis:
+    image: redis:alpine
     ports:
-      - 9001:8000
-    command:
-      [
-        "uv",
-        "run",
-        "fastmcp",
-        "run",
-        "src/draftpilot/mcp/server.py:mcp",
-        "--transport",
-        "http",
-        "--port",
-        "8000",
-      ]
+      - "6379:6379"
+    environment:
+      - REDIS_TIMEOUT=10
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Grafana LGTM Collector
+  grafana:
+    image: grafana/otel-lgtm:latest
+    container_name: lgtm
+    ports:
+      - "3000:3000" # Grafana UI
+      - "4317:4317" # OTLP/gRPC
+      - "4318:4318" # OTLP/HTTP
+    restart: unless-stopped

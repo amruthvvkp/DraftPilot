@@ -14,8 +14,11 @@ ENV UV_LINK_MODE=copy
 # Turns off buffering for easier container logging
 ENV PYTHONUNBUFFERED=1
 
+# Set venv location outside mounted directory to prevent overwrite
+# This allows bind mounting ./:/app without affecting the virtual environment
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
 
 WORKDIR /app
 COPY . /app
 
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-cache --group mcp
+RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-cache
