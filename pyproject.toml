@@ -4,19 +4,16 @@ version = "0.1.0"
 description = "AI-powered screenplay editor and story development platform"
 readme = "README.md"
 authors = [{ name = "Amruth Vithala", email = "amruthvvkp@gmail.com" }]
-license = { text = "MIT" }
+license = "MIT"
 keywords = ["screenplay", "screenwriting", "ai", "storytelling", "film"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: End Users/Desktop",
     "Topic :: Multimedia :: Video",
     "Topic :: Text Editors",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
-requires-python = ">3.11"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
@@ -33,8 +30,26 @@ Repository = "https://github.com/amruthvvkp/DraftPilot"
 Issues = "https://github.com/amruthvvkp/DraftPilot/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.7"]
+requires = ["uv_build>=0.9.7,<0.12"]
 build-backend = "uv_build"
+
+[tool.logfire]
+ignore_no_config = true
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+[tool.interrogate]
+# Every function, method, class, and module needs a (one-line) docstring.
+fail-under = 100
+ignore-init-method = true
+ignore-magic = true
+ignore-nested-functions = false
+ignore-setters = true
+ignore-overloaded-functions = true
+exclude = ["migrations/versions", "site", "tests", ".venv"]
 
 [dependency-groups]
 dev = [
@@ -59,7 +74,16 @@ docs = [
 ui = [
     "nicegui>=3.13.0",
     "pydantic-ai>=2.0.0",
+    "sqlmodel>=0.0.22",
+    "asyncpg>=0.30.0",
+    "psycopg[binary]>=3.2.0",
+    "alembic>=1.14.0",
+    "redis>=5.2.0",
+    "arq>=0.26.0",
+    { include-group = "otel" },
     { include-group = "lint" },
 ]
-mcp = ["fastmcp>=3"]
-otel = ["logfire[httpx,fastapi,system-metrics]>=4.37.0"]
+worker = [{ include-group = "ui" }]
+debugpy = ["debugpy>=1.8.0"]
+mcp = ["fastmcp>=3", { include-group = "otel" }]
+otel = ["logfire[asyncpg,httpx,fastapi,redis,system-metrics]>=4.37.0"]

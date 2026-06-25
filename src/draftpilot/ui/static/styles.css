@@ -1,0 +1,110 @@
+/* DraftPilot design system — CSS custom properties + component classes.
+   Tokens mirror ui/theme/design.py. Light values live on :root; dark values
+   are applied under Quasar's .body--dark selector. */
+
+:root {
+  --dp-bg: #f5f3ee;
+  --dp-surface: #ffffff;
+  --dp-surface-2: #efece4;
+  --dp-fg: #1c1f27;
+  --dp-fg-muted: #5c6270;
+  --dp-border: #e0ddd4;
+  --dp-primary: #c2873c;
+  --dp-shadow: 0 1px 3px rgba(20, 22, 28, 0.08), 0 4px 12px rgba(20, 22, 28, 0.04);
+
+  --dp-radius-sm: 6px;
+  --dp-radius-md: 10px;
+  --dp-radius-lg: 16px;
+  --dp-space-sm: 0.5rem;
+  --dp-space-md: 1rem;
+  --dp-space-lg: 1.5rem;
+
+  --dp-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --dp-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.body--dark {
+  --dp-bg: #14161c;
+  --dp-surface: #1c1f27;
+  --dp-surface-2: #232732;
+  --dp-fg: #e8e6e1;
+  --dp-fg-muted: #9aa0ac;
+  --dp-border: #2c313d;
+  --dp-primary: #e0a458;
+  --dp-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Base typography (minimal, modern; smaller scale shrinks rem + icons) --- */
+html {
+  font-size: 15px;
+}
+
+body {
+  font-family: var(--dp-font-sans);
+  line-height: 1.6;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tighten headings a touch for a cleaner look. */
+.text-h1, .text-h2, .text-h3, .text-2xl, .text-xl, .text-lg {
+  letter-spacing: -0.02em;
+}
+
+/* Default Material icons run large; cap them. Explicit `size=` props still win
+   (inline font-size overrides this class). */
+.q-icon {
+  font-size: 1.4rem;
+}
+
+/* --- Reusable component classes (referenced from the component library) --- */
+.dp-card {
+  background: var(--dp-surface);
+  border: 1px solid var(--dp-border);
+  border-radius: var(--dp-radius-lg);
+  box-shadow: var(--dp-shadow);
+  padding: var(--dp-space-lg);
+}
+
+.dp-section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dp-fg-muted);
+}
+
+.dp-stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--dp-fg);
+  line-height: 1.1;
+}
+
+.dp-muted {
+  color: var(--dp-fg-muted);
+}
+
+.dp-mono {
+  font-family: var(--dp-font-mono);
+}
+
+.dp-sidebar {
+  background: var(--dp-surface);
+  border-right: 1px solid var(--dp-border);
+  transition: width 0.25s ease-in-out;
+  overflow-x: hidden;
+}
+
+/* Mini-rail: nav labels fade + collapse out, icons stay. */
+.dp-nav-label {
+  white-space: nowrap;
+  transition: opacity 0.2s ease, max-width 0.2s ease;
+  max-width: 12rem;
+}
+.dp-nav-label--hidden {
+  opacity: 0;
+  max-width: 0;
+  pointer-events: none;
+}
