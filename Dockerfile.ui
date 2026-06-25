@@ -18,4 +18,9 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY . /app
 
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --no-cache --group ui
+# Set INSTALL_DEBUGPY=true (compose.dev.yml does this) to add the debugpy group.
+ARG INSTALL_DEBUGPY=false
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-cache --group ui \
+    $( [ "${INSTALL_DEBUGPY}" = "true" ] && printf '%s' "--group debugpy" )

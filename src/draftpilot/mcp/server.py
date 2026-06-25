@@ -1,3 +1,5 @@
+"""FastMCP server exposing DraftPilot tools over the MCP protocol."""
+
 import logfire
 from fastmcp import FastMCP
 
@@ -13,5 +15,6 @@ logfire.info("Telemetry setup complete")
 
 @mcp.tool
 def greet(name: str) -> str:
+    """Return a greeting for the given name."""
     logfire.info("Greeting user", extra={"user_name": name})
     return f"Hello, {name}!"

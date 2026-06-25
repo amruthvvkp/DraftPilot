@@ -1,0 +1,44 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Remote Attach (ui)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5678 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}/src", "remoteRoot": "/app/src" }
+      ],
+      "justMyCode": false,
+      "subProcess": true
+    },
+    {
+      "name": "Remote Attach (worker)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": { "host": "127.0.0.1", "port": 5679 },
+      "pathMappings": [
+        { "localRoot": "${workspaceFolder}/src", "remoteRoot": "/app/src" }
+      ],
+      "justMyCode": false,
+      "subProcess": true
+    },
+    {
+      "name": "(Local) UI",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "draftpilot.ui.main",
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false
+    },
+    {
+      "name": "(Local) Worker",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "arq",
+      "args": ["draftpilot.worker.settings.WorkerSettings"],
+      "envFile": "${workspaceFolder}/.env",
+      "justMyCode": false
+    }
+  ]
+}

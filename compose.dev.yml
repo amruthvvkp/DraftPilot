@@ -1,0 +1,54 @@
+# Development overlay — adds debugpy + live source mounts on top of compose.yml.
+#
+#   docker compose -f compose.yml -f compose.dev.yml up --build
+#
+# Then attach VS Code: "Remote Attach (ui)" → :5678, "Remote Attach (worker)" → :5679.
+# debugpy listens but does NOT wait for a client, so the stack runs with or without
+# the debugger attached. Source is bind-mounted, so edits land live (the project is
+# installed editable); set UI__RELOAD=true for the UI to hot-reload.
+
+services:
+  ui:
+    build:
+      args:
+        INSTALL_DEBUGPY: "true"
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "${DRAFTPILOT_UI_DEBUGPY_PORT:-5678}:5678"
+    environment:
+      UI__RELOAD: "true"
+    command:
+      [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "debugpy",
+        "--listen",
+        "0.0.0.0:5678",
+        "-m",
+        "draftpilot.ui.main",
+      ]
+
+  worker:
+    build:
+      args:
+        INSTALL_DEBUGPY: "true"
+    volumes:
+      - ./src:/app/src
+    ports:
+      - "${DRAFTPILOT_WORKER_DEBUGPY_PORT:-5679}:5678"
+    command:
+      [
+        "uv",
+        "run",
+        "python",
+        "-m",
+        "debugpy",
+        "--listen",
+        "0.0.0.0:5678",
+        "-m",
+        "arq",
+        "draftpilot.worker.settings.WorkerSettings",
+      ]
