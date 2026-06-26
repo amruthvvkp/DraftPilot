@@ -14,7 +14,15 @@ from pathlib import Path
 from nicegui import app, ui
 
 from draftpilot.core.config import settings
+from draftpilot.ui.components.user_menu import user_menu
 from draftpilot.ui.theme import design
+
+# Neutral header chrome: surface background, hairline border, no amber bar.
+_HEADER_STYLE = (
+    "background: var(--dp-surface); color: var(--dp-fg); "
+    "border-bottom: 1px solid var(--dp-border)"
+)
+_HEADER_BTN_STYLE = "color: var(--dp-fg-muted)"
 
 _STATIC_DIR = Path(__file__).parent.parent / "static"
 LOGO_URL = "/static/logo.png"
@@ -62,27 +70,31 @@ def _apply_theme(dark: ui.dark_mode, mode: str) -> None:
 def _build_header(
     dark: ui.dark_mode, drawer: ui.left_drawer, labels: list[ui.item_label]
 ) -> None:
-    """Render the page header: sidebar toggle, logo, title, and theme toggle."""
-    with ui.header().classes("items-center justify-between px-4 py-2"):
+    """Render the page header: sidebar toggle, logo, title, theme toggle, user menu."""
+    with ui.header().props("flat").classes("items-center justify-between px-4 py-2").style(
+        _HEADER_STYLE
+    ):
         with ui.row().classes("items-center gap-2"):
-            menu = ui.button(icon="menu").props("flat round dense color=white")
+            menu = ui.button(icon="menu").props("flat round dense").style(_HEADER_BTN_STYLE)
             menu.on_click(lambda: _toggle_sidebar(drawer, labels))
             menu.tooltip("Collapse / expand sidebar")
             ui.image(LOGO_URL).classes("w-7 h-8").props("no-spinner")
             ui.label(settings.ui.title).classes("text-lg font-semibold")
-        toggle = ui.button(icon=_THEME_ICON[_current_mode()]).props(
-            "flat round dense color=white"
-        )
+        with ui.row().classes("items-center gap-1"):
+            toggle = ui.button(icon=_THEME_ICON[_current_mode()]).props(
+                "flat round dense"
+            ).style(_HEADER_BTN_STYLE)
 
-        def cycle() -> None:
-            """Advance the theme to the next mode and persist it."""
-            mode = _THEME_CYCLE[_current_mode()]
-            app.storage.user["theme"] = mode
-            _apply_theme(dark, mode)
-            toggle.props(f"icon={_THEME_ICON[mode]} color=white")
+            def cycle() -> None:
+                """Advance the theme to the next mode and persist it."""
+                mode = _THEME_CYCLE[_current_mode()]
+                app.storage.user["theme"] = mode
+                _apply_theme(dark, mode)
+                toggle.props(f"icon={_THEME_ICON[mode]}")
 
-        toggle.on_click(cycle)
-        toggle.tooltip("Toggle theme (auto / dark / light)")
+            toggle.on_click(cycle)
+            toggle.tooltip("Toggle theme (auto / dark / light)")
+            user_menu()
 
 
 def _current_mode() -> str:

@@ -41,6 +41,31 @@ def content() -> None:
         c.select_field("Genre", ["Drama", "Comedy", "Thriller", "Sci-Fi"], value="Drama")
         c.text_area("Logline", placeholder="A one-sentence summary…")
 
+    with c.panel("Project cards"):
+        with ui.row().classes("gap-4 flex-wrap"):
+            with ui.column().classes("w-72"):
+                c.project_card(
+                    "The Last Reel",
+                    subtitle="A projectionist guards the final film print.",
+                    meta="3 screenplays",
+                    on_click=lambda: ui.notify("card click"),
+                )
+
+    with c.panel("Empty state"):
+        c.empty_state(
+            "movie_creation",
+            "Start a project",
+            "Create a project to collect your screenplays, research, and media.",
+            action_label="New project",
+            on_action=lambda: ui.notify("new project"),
+        )
+
+    with c.panel("User menu"):
+        ui.label("Rendered top-right in the header; opens profile/settings popups.").classes(
+            "dp-muted text-sm"
+        )
+        c.user_menu()
+
     with c.panel("Typography"):
         ui.label("Heading / Inter 700").classes("text-xl font-bold")
         ui.label("Body / Inter 400").classes("text-base")

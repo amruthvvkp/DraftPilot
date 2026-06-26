@@ -3,16 +3,32 @@
 from collections.abc import Awaitable, Callable
 
 from nicegui import ui
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.cache import cache_get
 from draftpilot.core.db import session_scope
 from draftpilot.core.queue import get_arq_pool
+from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
-from draftpilot.models import SceneCreate
+from draftpilot.models import ActCreate, SceneCreate
 from draftpilot.ui import components as c
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
+
+
+async def _default_act_id(session: AsyncSession, screenplay_id: int) -> int:
+    """Return the first act of a screenplay, creating a default one if absent."""
+    acts = await acts_crud.list_for_screenplay(session, screenplay_id)
+    if acts:
+        assert acts[0].id is not None
+        return acts[0].id
+    act = await acts_crud.create(
+        session,
+        ActCreate(screenplay_id=screenplay_id, title="Act One", position=0),
+    )
+    assert act.id is not None
+    return act.id
 
 
 async def content(screenplay_id: int) -> None:
@@ -95,13 +111,14 @@ def _new_scene_dialog(
             except ValueError:
                 pos = 0
             async with session_scope() as session:
+                act_id = await _default_act_id(session, screenplay_id)
                 await scenes_crud.create(
                     session,
                     SceneCreate(
                         heading=heading.value,
                         position=pos,
                         body=body.value or "",
-                        screenplay_id=screenplay_id,
+                        act_id=act_id,
                     ),
                 )
             dialog.close()
