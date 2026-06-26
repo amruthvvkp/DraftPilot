@@ -5,8 +5,9 @@ CSS custom properties (see ``ui/static/styles.css``). Spacing/radius/typography
 tokens are kept as plain constants used across the reusable component library.
 """
 
-# --- Brand palette (studio-style, warm dark + clean light) ---------------------
-# Primary accent — "clapperboard amber" used for primary actions.
+# --- Brand palette (neutral greyscale shell + clapperboard-amber accent) --------
+# Primary accent — "clapperboard amber" used for primary actions; everything else
+# (headers, menus, surfaces) stays neutral white/grey for a modern, sleek look.
 PRIMARY = "#e0a458"
 SECONDARY = "#5b8fb9"
 ACCENT = "#b56576"
@@ -15,9 +16,9 @@ NEGATIVE = "#e06c75"
 WARNING = "#e0a458"
 INFO = "#5b8fb9"
 
-# Quasar dark-page surfaces (consumed via CSS variables in styles.css).
-DARK_PAGE = "#14161c"
-DARK_SURFACE = "#1c1f27"
+# Quasar dark-page surfaces (neutral dark grey; consumed via CSS vars in styles.css).
+DARK_PAGE = "#1a1a1c"
+DARK_SURFACE = "#242427"
 
 # --- Typography ----------------------------------------------------------------
 FONT_SANS = "'Inter', system-ui, -apple-system, sans-serif"

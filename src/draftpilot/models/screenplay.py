@@ -7,8 +7,8 @@ from sqlmodel import Field, Relationship, SQLModel
 from draftpilot.models.base import TimestampMixin
 
 if TYPE_CHECKING:
+    from draftpilot.models.act import Act
     from draftpilot.models.project import Project
-    from draftpilot.models.scene import Scene
 
 
 class ScreenplayBase(SQLModel):
@@ -28,11 +28,11 @@ class Screenplay(ScreenplayBase, TimestampMixin, table=True):  # type: ignore[ca
     project_id: int = Field(foreign_key="project.id", index=True)
 
     project: "Project" = Relationship(back_populates="screenplays")
-    scenes: list["Scene"] = Relationship(
+    acts: list["Act"] = Relationship(
         back_populates="screenplay",
         sa_relationship_kwargs={
             "cascade": "all, delete-orphan",
-            "order_by": "Scene.position",
+            "order_by": "Act.position",
         },
     )
 

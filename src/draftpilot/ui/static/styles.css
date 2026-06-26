@@ -3,14 +3,14 @@
    are applied under Quasar's .body--dark selector. */
 
 :root {
-  --dp-bg: #f5f3ee;
+  --dp-bg: #f7f7f8;
   --dp-surface: #ffffff;
-  --dp-surface-2: #efece4;
-  --dp-fg: #1c1f27;
-  --dp-fg-muted: #5c6270;
-  --dp-border: #e0ddd4;
+  --dp-surface-2: #f0f0f2;
+  --dp-fg: #1a1a1c;
+  --dp-fg-muted: #6b7280;
+  --dp-border: #e5e5e8;
   --dp-primary: #c2873c;
-  --dp-shadow: 0 1px 3px rgba(20, 22, 28, 0.08), 0 4px 12px rgba(20, 22, 28, 0.04);
+  --dp-shadow: 0 1px 3px rgba(17, 17, 19, 0.06), 0 4px 12px rgba(17, 17, 19, 0.04);
 
   --dp-radius-sm: 6px;
   --dp-radius-md: 10px;
@@ -24,12 +24,12 @@
 }
 
 .body--dark {
-  --dp-bg: #14161c;
-  --dp-surface: #1c1f27;
-  --dp-surface-2: #232732;
-  --dp-fg: #e8e6e1;
-  --dp-fg-muted: #9aa0ac;
-  --dp-border: #2c313d;
+  --dp-bg: #1a1a1c;
+  --dp-surface: #242427;
+  --dp-surface-2: #2c2c30;
+  --dp-fg: #e8e8ea;
+  --dp-fg-muted: #9a9aa2;
+  --dp-border: #34343a;
   --dp-primary: #e0a458;
   --dp-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
 }

@@ -65,6 +65,10 @@ docker compose -f compose.yml -f compose.dev.yml up --build
 - After model changes: `uv run alembic revision --autogenerate -m "..."` then `upgrade head`.
 - Branches follow the repo's GitHub-issue convention (e.g. `amruthvvkp/issueN`). Reference the issue
   in commits. (This repo is not on Jira; the global Jira branch rule does not apply here.)
+- **Roadmap**: the phased modernization plan lives in `docs/roadmap.md` — consult it on demand when
+  planning or picking up feature work for phase scope/ordering/status, and keep it updated.
+- **Attribution**: when drawing on external tools/UIs for inspiration or code, record it in
+  `docs/references.md`; never vendor incompatibly-licensed code (e.g. GPL) into this MIT project.
 
 Detailed local guidance lives in nested `CLAUDE.md` files under `src/draftpilot/{ui,worker,core}/`.
 `AGENTS.md` mirrors this file for Codex compatibility.
