@@ -3,13 +3,40 @@
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.models import Project, ProjectCreate, ProjectUpdate
+from draftpilot.models import (
+    Project,
+    ProjectCreate,
+    ProjectReference,
+    ProjectReferenceCreate,
+    ProjectUpdate,
+)
 
 
 async def create(session: AsyncSession, data: ProjectCreate) -> Project:
     """Create and persist a new project."""
     project = Project.model_validate(data)
     session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    return project
+
+
+async def create_with_references(
+    session: AsyncSession,
+    data: ProjectCreate,
+    references: list[ProjectReferenceCreate],
+) -> Project:
+    """Create a project and its references in one transaction."""
+    project = Project.model_validate(data)
+    session.add(project)
+    await session.flush()
+    assert project.id is not None
+    for reference_data in references:
+        session.add(
+            ProjectReference.model_validate(
+                reference_data.model_copy(update={"project_id": project.id})
+            )
+        )
     await session.commit()
     await session.refresh(project)
     return project

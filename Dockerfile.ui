@@ -1,4 +1,12 @@
-# For more information, please refer to https://aka.ms/vscode-docker-python
+# Build the browser application before packaging the Python runtime.
+FROM node:22-alpine AS frontend-build
+
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.13-slim
 
 EXPOSE 8000
@@ -17,6 +25,7 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 COPY . /app
+COPY --from=frontend-build /frontend/dist /app/frontend/dist
 
 # Set INSTALL_DEBUGPY=true (compose.dev.yml does this) to add the debugpy group.
 ARG INSTALL_DEBUGPY=false

@@ -17,8 +17,13 @@ def text_area(label: str, value: str = "", placeholder: str = "") -> ui.textarea
     return field
 
 
-def select_field(label: str, options: list[str], value: str | None = None) -> ui.select:
+def select_field(
+    label: str,
+    options: list[str],
+    value: str | list[str] | None = None,
+    multiple: bool = False,
+) -> ui.select:
     """Render an outlined dropdown select filling its container."""
-    field = ui.select(options, label=label, value=value)
+    field = ui.select(options, label=label, value=value, multiple=multiple)
     field.props("outlined dense").classes("w-full")
     return field
