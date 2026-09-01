@@ -6,6 +6,13 @@ Move opened projects from the React vault into a modern screenplay workspace whi
 existing NiceGUI editor available during migration. Establish the data boundary needed for
 scene-aware editing, layered instructions, and future creative-context workflows.
 
+## Visual reference
+
+Use the page wireframes in [`draftpilot-pages.html`](../wireframes/draftpilot-pages.html) as the
+layout reference for the next surfaces. The existing project vault and screenplay workspace are
+the visual anchors; the other views show the intended information hierarchy for project overview,
+story development, agents/review, and settings/export.
+
 ## Scope
 
 - Add a read-only workspace API returning a project, screenplay metadata, acts, and scenes.
