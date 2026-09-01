@@ -23,6 +23,25 @@ Tracking epic: [#13](https://github.com/amruthvvkp/DraftPilot/issues/13).
   instructions, artifact/outline/timeline instructions, scene instructions, and run/task
   instructions. Creative context is first-class structured data, not only prompt text.
 
+## Ground-test screenplay benchmark
+
+The first serious validation project is a writer-owned 165-page feature screenplay developed in
+Final Draft 13. It is tested through two deliberately separate tracks:
+
+1. **From-scratch redevelopment** — provide only the premise, constraints, intended audience,
+   genre, and high-level creative goals. Do not provide the existing screenplay text. DraftPilot
+   must produce the brief, canon, outline, timeline, creative context, scenes, screenplay, and
+   review passes through the intended workflow.
+2. **Import and compare** — import the original FDX into an immutable control project, validate
+   structure and formatting, run analysis/context workflows, create changes only in revisions,
+   and export for round-trip comparison with the Final Draft source.
+
+Both tracks use isolated projects and named snapshots. The control screenplay is never modified.
+Evaluation records compare story beats, character arcs, pacing, tone, visual language, continuity,
+format fidelity, export fidelity, and writer usefulness. This benchmark becomes a release gate
+for the editor, context-generation workflows, agent permissions, revision/rollback behavior, and
+FDX import/export rather than relying only on synthetic fixtures.
+
 ## Phases
 
 Phases are dependency-ordered. Each gets its own spec → implementation; A+B ship together
