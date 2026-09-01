@@ -21,6 +21,23 @@ export type ProjectCreatePayload = {
   languages: string[]
 }
 
+export type Scene = {
+  id: number
+  act_id: number
+  heading: string
+  position: number
+  body: string
+}
+
+export type Act = { id: number; screenplay_id: number; title: string | null; position: number }
+
+export type ProjectWorkspace = {
+  project: Project
+  screenplay: { id: number; project_id: number; title: string; format: string; status: string } | null
+  acts: Act[]
+  scenes: Scene[]
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -39,4 +56,8 @@ export function createProject(payload: ProjectCreatePayload): Promise<Project> {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+}
+
+export function getProjectWorkspace(projectId: number): Promise<ProjectWorkspace> {
+  return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace`)
 }
