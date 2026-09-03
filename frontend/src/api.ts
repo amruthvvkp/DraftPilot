@@ -257,6 +257,10 @@ export function sendCopilotMessage(projectId: number, payload: Pick<CopilotMessa
   return request<CopilotMessage>(`/api/v1/projects/${projectId}/copilot/messages`, { method: 'POST', body: JSON.stringify({ ...payload, role: 'user' }) })
 }
 
+export function requestCopilotReply(projectId: number, payload: Pick<CopilotMessage, 'content' | 'page' | 'artifact' | 'selection' | 'instruction_layers' | 'citations' | 'active_tools'>): Promise<CopilotMessage> {
+  return request<CopilotMessage>(`/api/v1/projects/${projectId}/copilot/messages/respond`, { method: 'POST', body: JSON.stringify({ ...payload, role: 'user' }) })
+}
+
 export function getKnowledgeGraph(projectId: number): Promise<KnowledgeGraph> {
   return request<KnowledgeGraph>(`/api/v1/projects/${projectId}/knowledge-graph`)
 }

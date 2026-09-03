@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { AgentProposal, AgentRole, approveAgentProposal, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, rollbackAgentProposal, sendCopilotMessage } from './api'
+import { AgentProposal, AgentRole, approveAgentProposal, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, requestCopilotReply, rollbackAgentProposal } from './api'
 
 type CopilotPanelProps = { projectId: number }
 
@@ -35,7 +35,7 @@ export default function CopilotPanel({ projectId }: CopilotPanelProps) {
     event.preventDefault()
     if (!draft.trim()) return
     try {
-      const message = await sendCopilotMessage(projectId, {
+      const message = await requestCopilotReply(projectId, {
         content: draft.trim(), page: window.location.pathname, artifact: null, selection: null,
         instruction_layers: { agent_role: selectedRole, permission_mode: permissionMode }, citations: [], active_tools: ['screenplay.read', 'context.read', 'revisions.read'],
       })

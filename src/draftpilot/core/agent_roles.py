@@ -35,6 +35,13 @@ AGENT_ROLES: tuple[AgentRole, ...] = (
     AgentRole(key="audience_evaluator", label="Audience evaluator", description="Evaluate audience clarity, tone, pacing, and emotional impact."),
 )
 
+AGENT_ROLE_KEYS = frozenset(role.key for role in AGENT_ROLES)
+
+
+def normalize_agent_role(value: object) -> AgentRoleKey:
+    """Return a catalog role key, falling back to the default role."""
+    return value if isinstance(value, str) and value in AGENT_ROLE_KEYS else "story_architect"  # type: ignore[return-value]
+
 
 def agent_roles() -> list[AgentRole]:
     """Return independent copies of the built-in role catalog."""

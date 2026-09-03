@@ -1,10 +1,13 @@
 """Project-scoped Copilot conversation endpoints."""
 
+import logfire
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.agent_roles import normalize_agent_role
+from draftpilot.core.copilot import generate_reply
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import CopilotMessageCreate, CopilotMessageRead
@@ -53,3 +56,47 @@ async def create_message(
         ),
     )
     return CopilotMessageRead.model_validate(message)
+
+
+@router.post("/respond", response_model=CopilotMessageRead, status_code=status.HTTP_201_CREATED)
+async def respond_to_message(
+    project_id: int,
+    data: CopilotMessageRequest,
+    session: AsyncSession = Depends(async_get_db),
+) -> CopilotMessageRead:
+    """Persist a user turn and return a provider-backed assistant response."""
+    if data.role != "user":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Response input must be a user turn")
+    if await projects_crud.get(session, project_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    await messages_crud.create(session, CopilotMessageCreate(project_id=project_id, **data.model_dump()))
+    history = [
+        {"role": message.role, "content": message.content}
+        for message in await messages_crud.list_for_project(session, project_id)
+    ]
+    role = normalize_agent_role(data.instruction_layers.get("agent_role"))
+    try:
+        reply = await generate_reply(
+            data.content, data.page, data.artifact, data.selection, role, history
+        )
+    except Exception as exc:
+        logfire.warning("Copilot response unavailable: {exc}", exc=str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Configured Copilot provider is unavailable",
+        ) from exc
+    assistant = await messages_crud.create(
+        session,
+        CopilotMessageCreate(
+            project_id=project_id,
+            role="assistant",
+            content=reply,
+            page=data.page,
+            artifact=data.artifact,
+            selection=data.selection,
+            instruction_layers=data.instruction_layers,
+            citations=data.citations,
+            active_tools=data.active_tools,
+        ),
+    )
+    return CopilotMessageRead.model_validate(assistant)
