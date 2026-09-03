@@ -141,6 +141,7 @@ services:
         "8000",
       ]
     environment:
+      <<: *app-env
       MCP__AUTH_TOKEN: ${MCP__AUTH_TOKEN:-draftpilot-local-token}
       OTEL__ENABLED: ${OTEL__ENABLED:-true}
       OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}

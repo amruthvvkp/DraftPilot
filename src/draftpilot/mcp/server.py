@@ -3,11 +3,13 @@
 import json
 
 import logfire
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
 
 from draftpilot.core import telemetry
 from draftpilot.core.capabilities import capability_catalog
+from draftpilot.core.db import session_scope
+from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import valid_static_token
@@ -57,9 +59,26 @@ def workflow_turn(page: str, artifact: str = "", selection: str = "") -> str:
 
 
 @mcp.tool
-def propose_timeline_reorder(
-    current_scene_ids: list[int], proposed_scene_ids: list[int], durations: dict[int, int]
+async def propose_timeline_reorder(
+    project_id: int,
+    current_scene_ids: list[int],
+    proposed_scene_ids: list[int],
+    durations: dict[int, int],
+    ctx: Context,
 ) -> dict[str, object]:
     """Return a reversible, non-mutating timeline proposal."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "timeline.propose",
+                "propose",
+                {"scene_count": len(current_scene_ids)},
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
     proposal = propose_reorder(current_scene_ids, proposed_scene_ids, durations)
     return proposal.model_dump(mode="json")

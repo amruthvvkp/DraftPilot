@@ -5,7 +5,9 @@ from datetime import datetime, timezone
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core.authorization import CapabilityGrant, CapabilityRequest, authorize, redact_audit_payload
 from draftpilot.models import MCPClient, MCPGrant
+from draftpilot.models import MCPAuditEvent
 
 
 async def get_client(session: AsyncSession, client_id: str) -> MCPClient | None:
@@ -26,3 +28,53 @@ async def list_grants(session: AsyncSession, project_id: int, client_id: str) ->
     )
     now = datetime.now(timezone.utc)
     return [grant for grant in result.all() if grant.expires_at is None or grant.expires_at > now]
+
+
+async def authorize_invocation(
+    session: AsyncSession,
+    client_id: str,
+    project_id: int,
+    capability: str,
+    action: str,
+    payload: dict[str, object],
+    approved: bool = False,
+) -> None:
+    """Authorize one invocation and persist a redacted audit event."""
+    grants = [
+        CapabilityGrant(
+            client_id=client_id,
+            project_id=project_id,
+            capability=grant.capability,
+            expires_at=grant.expires_at,
+        )
+        for grant in await list_grants(session, project_id, client_id)
+    ]
+    reason: str | None = None
+    allowed = True
+    try:
+        authorize(
+            CapabilityRequest(
+                client_id=client_id,
+                project_id=project_id,
+                capability=capability,
+                approved=approved,
+            ),
+            grants,
+        )
+    except PermissionError as exc:
+        allowed = False
+        reason = str(exc)
+    session.add(
+        MCPAuditEvent(
+            client_id=client_id,
+            project_id=project_id,
+            capability=capability,
+            action=action,
+            allowed=allowed,
+            reason=reason,
+            payload=redact_audit_payload(payload, {"token", "content", "text"}),
+        )
+    )
+    await session.commit()
+    if not allowed:
+        raise PermissionError(reason or "Capability denied")
