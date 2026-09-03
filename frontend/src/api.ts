@@ -197,9 +197,15 @@ export function rollbackAgentProposal(projectId: number, proposalId: number): Pr
   return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals/${proposalId}/rollback`, { method: 'POST' })
 }
 
-export function updateProjectBlock(projectId: number, sceneId: number, blockId: number, version: number, text: string): Promise<ScreenplayBlock> {
+export function updateProjectBlock(projectId: number, sceneId: number, blockId: number, version: number, changes: { text?: string; element_type?: string }): Promise<ScreenplayBlock> {
   return request<ScreenplayBlock>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}`, {
-    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify({ text }),
+    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes),
+  })
+}
+
+export function updateProjectScene(projectId: number, sceneId: number, version: number, heading: string): Promise<Scene> {
+  return request<Scene>(`/api/v1/projects/${projectId}/scenes/${sceneId}`, {
+    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify({ heading }),
   })
 }
 

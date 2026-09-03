@@ -57,3 +57,4 @@ nav { display: grid; gap: 7px; } nav a { color: #8f8b81; padding: 11px 12px; bor
 .graph-empty strong { color: #403b35; }
 .context-links a { display: block; padding: 8px 0; color: #6e675e; font-size: 11px; text-decoration: none; }
 @media(max-width:980px){.context-grid{grid-template-columns:1fr}.context-grid>.context-panel{display:none}}
+ .semantic-row{display:grid;grid-template-columns:92px minmax(0,1fr);gap:10px;align-items:start;margin-bottom:12px}.element-selector{margin-top:8px;padding:5px 4px;border:1px solid #e1dcd4;border-radius:4px;background:#fffdf9;color:#918a81;font:9px 'DM Mono';text-transform:uppercase}.script-heading{display:block;width:100%;padding:0;border:0;background:transparent;outline:0}
