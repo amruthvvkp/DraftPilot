@@ -14,7 +14,7 @@ from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
-from draftpilot.core.mcp_auth import valid_static_token
+from draftpilot.core.mcp_auth import client_id_for_token
 from draftpilot.core.backup import BackupError, read_backup
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
@@ -41,10 +41,14 @@ class StaticTokenVerifier(TokenVerifier):
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """Return scoped access metadata for a valid configured token."""
-        expected = settings.mcp.auth_token.get_secret_value()
-        if not valid_static_token(token, expected):
+        client_id = client_id_for_token(
+            token,
+            settings.mcp.auth_token.get_secret_value(),
+            settings.mcp.client_tokens,
+        )
+        if client_id is None:
             return None
-        return AccessToken(token=token, client_id="mcp-client", scopes=["draftpilot"])
+        return AccessToken(token=token, client_id=client_id, scopes=["draftpilot"])
 
 
 mcp = FastMCP(

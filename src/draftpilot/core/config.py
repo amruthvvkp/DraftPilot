@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from pydantic import SecretStr, computed_field
+from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 try:
@@ -149,6 +149,7 @@ class MCPSettings(BaseSettings):
 
     auth_token: SecretStr = SecretStr("draftpilot-local-token")
     admin_token: SecretStr = SecretStr("draftpilot-local-admin-token")
+    client_tokens: dict[str, SecretStr] = Field(default_factory=dict)
     request_timeout_seconds: float = 10.0
     max_output_chars: int = 100_000
 

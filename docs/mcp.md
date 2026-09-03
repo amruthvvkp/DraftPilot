@@ -45,7 +45,9 @@ Client registration and grant administration are protected separately from MCP i
 
 The Streamable HTTP transport requires `Authorization: Bearer <MCP__AUTH_TOKEN>`. Compose uses
 `draftpilot-local-token` for local development; replace it before exposing port 9001 outside the
-local machine. Local stdio transport is intended for a process launched by the same user and does
+local machine. For multiple external clients, set `MCP__CLIENT_TOKENS` to a JSON map of registered
+client ids to distinct bearer tokens; those identities are used for project grants and audit events.
+Local stdio transport is intended for a process launched by the same user and does
 not need an HTTP bearer header.
 
 Mutation tools will be added only through the same capability service, with audit records, redaction,
