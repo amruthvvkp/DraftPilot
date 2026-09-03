@@ -31,6 +31,16 @@ async def list_for_project(session: AsyncSession, project_id: int) -> list[Workf
     return list(result.all())
 
 
+async def list_interrupted(session: AsyncSession) -> list[WorkflowRun]:
+    """Return runs left in a non-terminal running state by a worker exit."""
+    result = await session.exec(
+        select(WorkflowRun)
+        .where(WorkflowRun.status == "running")
+        .order_by(col(WorkflowRun.updated_at).asc())
+    )
+    return list(result.all())
+
+
 async def update_status(
     session: AsyncSession,
     run: WorkflowRun,
