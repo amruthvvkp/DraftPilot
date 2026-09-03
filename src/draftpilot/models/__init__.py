@@ -70,6 +70,7 @@ from draftpilot.models.timeline_proposal import (
     TimelineProposalRecord,
 )
 from draftpilot.models.story_artifact import StoryArtifact, StoryArtifactBase, StoryArtifactRead
+from draftpilot.models.agent_proposal import AgentProposal, AgentProposalBase, AgentProposalRead
 
 __all__ = [
     "BlockType",
@@ -122,4 +123,7 @@ __all__ = [
     "StoryArtifact",
     "StoryArtifactBase",
     "StoryArtifactRead",
+    "AgentProposal",
+    "AgentProposalBase",
+    "AgentProposalRead",
 ]
