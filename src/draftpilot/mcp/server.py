@@ -15,7 +15,7 @@ from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import client_id_for_token
-from draftpilot.core.backup import BackupError, read_backup
+from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
@@ -32,6 +32,7 @@ from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import AgentProposal, AgentProposalRead
 from draftpilot.models import WorkflowRunRead
+from draftpilot.api.backups import _project_payload
 
 telemetry.setup(mcp=True)
 
@@ -382,6 +383,44 @@ async def list_project_backups(project_id: int, ctx: Context) -> dict[str, objec
             if envelope.manifest.project_id == project_id:
                 results.append({"filename": path.name, "manifest": envelope.manifest.model_dump(mode="json")})
     result = {"project_id": project_id, "backups": results}
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Backup response exceeds MCP output limit")
+    return result
+
+
+@mcp.tool
+async def create_project_backup(
+    project_id: int, approved: bool = False, ctx: Context | None = None
+) -> dict[str, object]:
+    """Create an approved, project-scoped backup through the canonical backup service."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "backups.create",
+                "create",
+                {},
+                approved=approved,
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        project = await projects_crud.get(session, project_id)
+        if project is None:
+            raise ValueError("Project not found")
+        payload = await _project_payload(session, project_id)
+        filename, manifest = write_backup(
+            settings.backup.root,
+            project_id,
+            payload,
+            settings.metadata.version,
+            project.title,
+        )
+    result = {"project_id": project_id, "filename": filename, "manifest": manifest.model_dump(mode="json")}
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Backup response exceeds MCP output limit")
     return result
