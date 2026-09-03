@@ -3,6 +3,7 @@ import { createSceneRevision, diffSceneRevisions, listSceneRevisions, restoreSce
 import EvaluationPanel from './EvaluationPanel'
 import DualDialoguePanel from './DualDialoguePanel'
 import SceneCreationPanel from './SceneCreationPanel'
+import BlockCreationPanel from './BlockCreationPanel'
 
 type RevisionPanelProps = { projectId: number; sceneId: number; sceneVersion: number }
 
@@ -32,5 +33,5 @@ export default function RevisionPanel({ projectId, sceneId, sceneVersion }: Revi
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to restore revision') }
   }
 
-  return <><section className="revision-panel" aria-label="Scene revisions"><div className="panel-label"><span>Snapshots</span><span>{revisions.length}</span></div><div className="revision-create"><input value={message} onChange={event => setMessage(event.target.value)} placeholder="Name this snapshot" aria-label="Snapshot name" /><button className="mini-button" onClick={() => void snapshot()}>Save</button></div>{revisions.map(revision => <div className="revision-row" key={revision.id}><span>#{revision.rev_number}</span><strong>{revision.message || 'Unnamed snapshot'}</strong><button className="mini-button" onClick={() => void restore(revision.id)}>Restore</button></div>)}{revisions.length > 1 && <button className="button quiet" onClick={() => void review()}>Review latest diff</button>}{diff && <pre className="revision-diff">{diff}</pre>}{error && <p className="copilot-error">{error}</p>}</section><SceneCreationPanel projectId={projectId} sceneId={sceneId} /><DualDialoguePanel projectId={projectId} sceneId={sceneId} /><EvaluationPanel projectId={projectId} /></>
+  return <><section className="revision-panel" aria-label="Scene revisions"><div className="panel-label"><span>Snapshots</span><span>{revisions.length}</span></div><div className="revision-create"><input value={message} onChange={event => setMessage(event.target.value)} placeholder="Name this snapshot" aria-label="Snapshot name" /><button className="mini-button" onClick={() => void snapshot()}>Save</button></div>{revisions.map(revision => <div className="revision-row" key={revision.id}><span>#{revision.rev_number}</span><strong>{revision.message || 'Unnamed snapshot'}</strong><button className="mini-button" onClick={() => void restore(revision.id)}>Restore</button></div>)}{revisions.length > 1 && <button className="button quiet" onClick={() => void review()}>Review latest diff</button>}{diff && <pre className="revision-diff">{diff}</pre>}{error && <p className="copilot-error">{error}</p>}</section><SceneCreationPanel projectId={projectId} sceneId={sceneId} /><BlockCreationPanel projectId={projectId} sceneId={sceneId} /><DualDialoguePanel projectId={projectId} sceneId={sceneId} /><EvaluationPanel projectId={projectId} /></>
 }

@@ -195,6 +195,10 @@ export function createProjectScene(projectId: number, screenplayId: number, actI
   return request<Scene>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/scenes`, { method: 'POST', body: JSON.stringify({ act_id: actId, heading, position }) })
 }
 
+export function createProjectBlock(projectId: number, sceneId: number, version: number, elementType: string, text: string): Promise<ScreenplayBlock> {
+  return request<ScreenplayBlock>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks`, { method: 'POST', headers: { 'If-Match': String(version) }, body: JSON.stringify({ element_type: elementType, text }) })
+}
+
 export function createTimelineProposal(projectId: number, screenplayId: number, sceneIds: number[], durations: Record<number, number>): Promise<TimelineProposal> {
   return request<TimelineProposal>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals`, { method: 'POST', body: JSON.stringify({ scene_ids: sceneIds, durations }) })
 }
