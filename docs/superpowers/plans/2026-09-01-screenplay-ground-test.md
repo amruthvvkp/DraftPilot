@@ -19,7 +19,7 @@ redevelopment and production import/interoperability paths.
 - Keep the original Final Draft 13 FDX in an immutable control project and protected backup.
 - Import into a separate working project with an import report and warnings.
 - Compare page/scene counts, headings, blocks, characters, dialogue, transitions, dual dialogue,
-  revisions, and metadata.
+  revisions, metadata, estimated scene durations, cumulative runtime offsets, and pacing drift.
 - Run context and review workflows against the imported screenplay without changing the control.
 - Export FDX/PDF/Fountain from revisions and compare semantic and visual fidelity.
 
@@ -32,7 +32,9 @@ redevelopment and production import/interoperability paths.
 - Use mocked/fixture-backed browser tests; never use the developer's live Compose database as test
   state.
 - Score story beats, character arcs, pacing, tone, visual language, continuity, format fidelity,
-  export fidelity, and writer usefulness.
+  export fidelity, runtime/pacing accuracy, context retrieval quality, and writer usefulness.
+- Exercise editor interaction contracts: autocomplete, Tab element transitions, dual dialogue,
+  project/scene context switching, AI formatting diffs, and approval/rollback behavior.
 - Require explicit approval before applying agent changes and preserve rollback to the prior
   snapshot.
 

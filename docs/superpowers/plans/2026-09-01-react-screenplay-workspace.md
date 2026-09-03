@@ -16,12 +16,23 @@ right-side Copilot rail: conversation history, available agents, active run stat
 and a turn input. The assistant is persistent across stage changes, not an editor-only feature.
 The DraftPilot wordmark uses an amber star with an editorial serif “Draft” and precise sans-serif
 “Pilot” treatment as the premium shell identity.
+The editor reference also makes pacing visible: each scene carries an estimated duration and
+cumulative start/end offsets. Its interaction model includes semantic autocomplete, Tab-based
+element transitions, and paired dual dialogue. Project and scene context are two explicit controls
+that open the same expanded instruction editor; AI formatting is previewed as a diff before it can
+be applied. The Copilot rail exposes the page-aware tools available for the current artifact.
 
 ## Scope
 
 - Add a read-only workspace API returning a project, screenplay metadata, acts, and scenes.
 - Route project cards to a React workspace instead of treating a project id as a screenplay id.
 - Render a three-pane workspace shell: scene navigator, screenplay canvas, and context/instructions.
+- Treat scene time as a first-class screenplay property: estimated duration, cumulative start/end
+  offsets, overall runtime, and pacing/readiness drift indicators.
+- Make editor transitions semantic: autocomplete for elements, characters, and headings; Tab moves
+  to the next valid element; dual dialogue is represented as a paired structure.
+- Make project and scene context buttons open expanded instruction editors. AI formatting creates a
+  typed proposal and visible diff that requires writer approval.
 - Add project and scene instruction fields to the UI state without inventing persistence before
   their canonical models/API are designed.
 - Use Python Playwright with intercepted API responses for browser acceptance; never use the
@@ -50,4 +61,5 @@ The DraftPilot wordmark uses an amber star with an editorial serif “Draft” a
   from-scratch project, artifact manifests, rubric, snapshots, and comparison outputs.
 - The wireframe contract shows a Copilot rail on every workflow page and a visible path from
   conversation turn to scoped artifact proposal, approval, persistence, retrieval refresh, and UI
-  update.
+  update. The editor reference additionally shows runtime accumulation, semantic typing aids,
+  context switching, diff review, and page-aware tool routing.

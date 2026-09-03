@@ -79,11 +79,15 @@ project cards on `/projects`. Depends on B.
 top element selector + bottom bold/italic/underline/color toolbar), right persistent Copilot and
 agent panel. The same assistant panel appears in project, outline, timeline, context, review, and
 settings workflow views.
+Each scene shows an estimated duration beside cumulative start/end offsets, while the overall
+runtime and pacing drift remain visible as the screenplay grows. The editor provides semantic
+autocomplete, Tab-to-next-element transitions, and paired dual dialogue.
 Beat-board drag-drop (NiceGUI trello example) with timeline/act view toggle; per-section
 context refs (camera, palette, location, characters, reference scenes, directors, films,
 styles, lighting plans, and color palettes); smart typing; dual + translated dialogue editing;
-timeline scrubber dropdown. Add project and scene instruction editors with clear inheritance
-and override indicators. Wires when `SceneRevision` snapshots fire.
+timeline scrubber dropdown. Add project and scene instruction editors with clear inheritance and
+override indicators. Project and scene context are opened through two explicit controls; AI
+formatting produces a diff proposal before application. Wires when `SceneRevision` snapshots fire.
 Depends on B + C.
 
 ### Phase E — Agentic layer · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: planned
@@ -95,6 +99,8 @@ length). Add reusable context-generation workflows for reference scenes, visual 
 camera, lighting, color palettes, film/director/style research, and continuity. Every workflow
 must declare its input artifact scope, instruction layers, output artifact type, evaluator,
 permission mode, and rollback behavior. Expose only typed DraftPilot capabilities through MCP;
+route Copilot turns to the tools appropriate for the current page, artifact, and selection, and
+show those active tools to the writer;
 when a run needs generated code to compose or filter those capabilities, execute it through
 the Monty adapter rather than an unrestricted shell or Python subprocess. PDF/HTML export folds
 in here. Depends on B + D.
