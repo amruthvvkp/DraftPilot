@@ -172,3 +172,38 @@ def test_context_page_creates_typed_knowledge_node(page: Page) -> None:
     label = page.get_by_label("Edit Pather Panchali label")
     label.fill("Pather Panchali revised")
     label.blur()
+
+
+def test_context_page_links_project_nodes(page: Page) -> None:
+    """Link two project-scoped creative-context nodes through the React page."""
+    nodes = [
+        {"id": 40, "project_id": 9001, "kind": "film", "label": "Pather Panchali", "description": None, "node_metadata": {}, "version": 1},
+        {"id": 41, "project_id": 9001, "kind": "character", "label": "Apu", "description": None, "node_metadata": {}, "version": 1},
+    ]
+    graph = {"nodes": nodes, "edges": []}
+
+    def graph_request(route: Route) -> None:
+        """Return the current mocked graph for the project."""
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(graph))
+
+    def create_edge(route: Route) -> None:
+        """Validate and persist the mocked relationship."""
+        assert route.request.post_data_json == {"source_node_id": 40, "target_node_id": 41, "relation": "inspires"}
+        edge = {"id": 70, "project_id": 9001, "source_node_id": 40, "target_node_id": 41, "relation": "inspires", "edge_metadata": {}}
+        graph["edges"].append(edge)
+        route.fulfill(status=201, content_type="application/json", body=json.dumps(edge))
+
+    page.route("**/api/v1/projects/9001/knowledge-graph", graph_request)
+    page.route("**/api/v1/projects/9001/knowledge-graph/edges", create_edge)
+    page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.goto("/projects/9001/context")
+    page.get_by_label("Relationship source").select_option("40")
+    page.get_by_label("Relationship type").fill("inspires")
+    page.get_by_label("Relationship target").select_option("41")
+    page.get_by_role("button", name="Link nodes").click()
+    relationship = page.locator(".graph-edge")
+    expect(relationship).to_contain_text("Pather Panchali")
+    expect(relationship).to_contain_text("inspires")
+    expect(relationship).to_contain_text("Apu")
