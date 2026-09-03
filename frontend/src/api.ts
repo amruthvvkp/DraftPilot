@@ -101,6 +101,18 @@ export type DialogueTranslation = {
   status: string
 }
 
+export type StoryArtifact = {
+  id: number
+  project_id: number
+  kind: string
+  title: string
+  content: string
+  version: number
+  stale: boolean
+  depends_on: number[]
+  artifact_metadata: Record<string, unknown>
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -159,4 +171,16 @@ export function saveDialogueTranslation(projectId: number, sceneId: number, bloc
   return request<DialogueTranslation>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}/translations/${encodeURIComponent(language)}`, {
     method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify({ text }),
   })
+}
+
+export function listArtifacts(projectId: number): Promise<StoryArtifact[]> {
+  return request<StoryArtifact[]>(`/api/v1/projects/${projectId}/artifacts`)
+}
+
+export function createArtifact(projectId: number, kind: string, title: string): Promise<StoryArtifact> {
+  return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts`, { method: 'POST', body: JSON.stringify({ kind, title }) })
+}
+
+export function updateArtifact(projectId: number, artifactId: number, version: number, changes: { title?: string; content?: string }): Promise<StoryArtifact> {
+  return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts/${artifactId}`, { method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes) })
 }

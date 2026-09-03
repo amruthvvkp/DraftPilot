@@ -55,3 +55,17 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(editor).to_have_value("The house breathes in the dark.")
     editor.fill("The house exhales in the dark.")
     editor.blur()
+
+
+def test_story_artifact_workspace_is_editable(page: Page) -> None:
+    """Edit a persisted story artifact through the project-scoped studio."""
+    artifact = {"id": 31, "project_id": 9001, "kind": "brief", "title": "First pass", "content": "A family returns.", "version": 2, "stale": True, "depends_on": [], "artifact_metadata": {}}
+    page.route("**/api/v1/projects/9001/artifacts", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([artifact])))
+    page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9001/artifacts/31", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact)))
+    page.goto("/projects/9001/studio")
+    expect(page.get_by_role("heading", name="Creative artifacts")).to_be_visible()
+    expect(page.get_by_role("button", name="brief First pass STALE")).to_be_visible()
+    content = page.get_by_label("Artifact content")
+    content.fill("A family returns to a house that remembers.")
+    content.blur()
