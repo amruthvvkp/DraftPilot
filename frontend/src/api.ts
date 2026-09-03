@@ -163,6 +163,8 @@ export type AgentRole = { key: string; label: string; description: string; defau
 
 export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null }
 
+export type EvaluationResult = { id: number; project_id: number; target_kind: string; target_id: number | null; evaluator: string; score: number | null; summary: string; findings: Record<string, unknown>; created_at: string }
+
 export type CopilotRunResponse = { message: CopilotMessage; run: WorkflowRun }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -255,6 +257,10 @@ export function restoreSceneRevision(projectId: number, sceneId: number, revisio
 
 export function listArtifacts(projectId: number): Promise<StoryArtifact[]> {
   return request<StoryArtifact[]>(`/api/v1/projects/${projectId}/artifacts`)
+}
+
+export function listEvaluations(projectId: number): Promise<EvaluationResult[]> {
+  return request<EvaluationResult[]>(`/api/v1/projects/${projectId}/evaluations`)
 }
 
 export function createArtifact(projectId: number, kind: string, title: string): Promise<StoryArtifact> {

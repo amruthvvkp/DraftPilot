@@ -25,6 +25,11 @@ from draftpilot.models.dialogue_translation import (
     DialogueTranslationCreate,
     DialogueTranslationRead,
 )
+from draftpilot.models.evaluation import (
+    EvaluationResult,
+    EvaluationResultCreate,
+    EvaluationResultRead,
+)
 from draftpilot.models.project import (
     Project,
     ProjectBase,
@@ -84,6 +89,9 @@ __all__ = [
     "DialogueTranslationBase",
     "DialogueTranslationCreate",
     "DialogueTranslationRead",
+    "EvaluationResult",
+    "EvaluationResultCreate",
+    "EvaluationResultRead",
     "Project",
     "ProjectBase",
     "ProjectCreate",

@@ -7,6 +7,7 @@ from draftpilot.api.runs import router as runs_router
 from draftpilot.api.timeline import router as timeline_router
 from draftpilot.api.artifacts import router as artifacts_router
 from draftpilot.api.exports import router as exports_router
+from draftpilot.api.evaluations import router as evaluations_router
 from draftpilot.api.agent import router as agent_router
 from draftpilot.api.mcp_access import router as mcp_access_router
 from draftpilot.api.backups import router as backups_router
@@ -21,6 +22,7 @@ router.include_router(runs_router)
 router.include_router(timeline_router)
 router.include_router(artifacts_router)
 router.include_router(exports_router)
+router.include_router(evaluations_router)
 router.include_router(agent_router)
 router.include_router(mcp_access_router)
 router.include_router(backups_router)
