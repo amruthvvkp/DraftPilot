@@ -58,6 +58,12 @@ from draftpilot.models.screenplay import (
     ScreenplayRead,
     ScreenplayUpdate,
 )
+from draftpilot.models.workflow_run import (
+    WorkflowRun,
+    WorkflowRunBase,
+    WorkflowRunCreate,
+    WorkflowRunRead,
+)
 
 __all__ = [
     "BlockType",
@@ -100,4 +106,8 @@ __all__ = [
     "SceneRevision",
     "SceneRevisionBase",
     "SceneRevisionRead",
+    "WorkflowRun",
+    "WorkflowRunBase",
+    "WorkflowRunCreate",
+    "WorkflowRunRead",
 ]
