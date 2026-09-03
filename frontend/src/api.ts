@@ -7,6 +7,16 @@ export type Project = {
   languages: string[]
   primary_language: string
   artwork_url: string | null
+  references?: ProjectReference[]
+}
+
+export type ProjectReference = {
+  id?: number
+  project_id?: number
+  kind: string
+  label: string
+  url?: string | null
+  note?: string | null
 }
 
 export type ProjectCreatePayload = {
@@ -21,7 +31,10 @@ export type ProjectCreatePayload = {
   genres: string[]
   languages: string[]
   primary_language: string
+  references?: ProjectReferenceInput[]
 }
+
+export type ProjectReferenceInput = Omit<ProjectReference, 'id' | 'project_id'>
 
 export type Scene = {
   id: number

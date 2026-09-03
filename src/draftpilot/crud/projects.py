@@ -1,5 +1,7 @@
 """CRUD operations for Project."""
 
+from collections.abc import Sequence
+
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -7,7 +9,7 @@ from draftpilot.models import (
     Project,
     ProjectCreate,
     ProjectReference,
-    ProjectReferenceCreate,
+    ProjectReferenceBase,
     ProjectUpdate,
 )
 
@@ -24,7 +26,7 @@ async def create(session: AsyncSession, data: ProjectCreate) -> Project:
 async def create_with_references(
     session: AsyncSession,
     data: ProjectCreate,
-    references: list[ProjectReferenceCreate],
+    references: Sequence[ProjectReferenceBase],
 ) -> Project:
     """Create a project and its references in one transaction."""
     project = Project.model_validate(data)
@@ -33,9 +35,7 @@ async def create_with_references(
     assert project.id is not None
     for reference_data in references:
         session.add(
-            ProjectReference.model_validate(
-                reference_data.model_copy(update={"project_id": project.id})
-            )
+            ProjectReference(project_id=project.id, **reference_data.model_dump())
         )
     await session.commit()
     await session.refresh(project)

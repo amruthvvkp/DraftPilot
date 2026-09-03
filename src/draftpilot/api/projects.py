@@ -1,15 +1,24 @@
 """Project resource endpoints for the DraftPilot API."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.crud import acts as acts_crud
+from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
-from draftpilot.models import ActRead, ProjectCreate, ProjectRead, SceneRead, ScreenplayRead
+from draftpilot.models import (
+    ActRead,
+    ProjectCreate,
+    ProjectRead,
+    ProjectReferenceBase,
+    ProjectReferenceRead,
+    SceneRead,
+    ScreenplayRead,
+)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -23,6 +32,27 @@ class ProjectWorkspaceRead(BaseModel):
     scenes: list[SceneRead]
 
 
+class ProjectReferenceInput(BaseModel):
+    """Capture a typed reference before the server assigns its project."""
+
+    kind: str = "other"
+    label: str = Field(min_length=1, max_length=300)
+    url: str | None = Field(default=None, max_length=1000)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class ProjectCreateRequest(ProjectCreate):
+    """Accept a project brief together with typed creative references."""
+
+    references: list[ProjectReferenceInput] = Field(default_factory=list)
+
+
+class ProjectReadWithReferences(ProjectRead):
+    """Return project metadata and its persisted creative references."""
+
+    references: list[ProjectReferenceRead] = Field(default_factory=list)
+
+
 @router.get("", response_model=list[ProjectRead])
 async def list_projects(session: AsyncSession = Depends(async_get_db)) -> list[ProjectRead]:
     """Return all projects ordered by title."""
@@ -30,13 +60,21 @@ async def list_projects(session: AsyncSession = Depends(async_get_db)) -> list[P
     return [ProjectRead.model_validate(project) for project in projects]
 
 
-@router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ProjectReadWithReferences, status_code=status.HTTP_201_CREATED)
 async def create_project(
-    data: ProjectCreate, session: AsyncSession = Depends(async_get_db)
-) -> ProjectRead:
+    data: ProjectCreateRequest, session: AsyncSession = Depends(async_get_db)
+) -> ProjectReadWithReferences:
     """Create and return a project from the submitted creative brief."""
-    project = await projects_crud.create(session, data)
-    return ProjectRead.model_validate(project)
+    project = await projects_crud.create_with_references(
+        session,
+        ProjectCreate.model_validate(data),
+        [ProjectReferenceBase.model_validate(reference) for reference in data.references],
+    )
+    references = await references_crud.list_for_project(session, project.id or 0)
+    return ProjectReadWithReferences(
+        **ProjectRead.model_validate(project).model_dump(),
+        references=[ProjectReferenceRead.model_validate(reference) for reference in references],
+    )
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspaceRead)

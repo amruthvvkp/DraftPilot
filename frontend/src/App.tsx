@@ -5,7 +5,7 @@ import Workspace from './Workspace'
 const genres = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'Historical', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western', 'Experimental']
 const languages = ['English', 'Hindi', 'Bengali', 'Telugu', 'Marathi', 'Tamil', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Odia', 'Assamese', 'Urdu', 'Kashmiri', 'Konkani', 'Nepali', 'Sindhi', 'Maithili', 'Sanskrit', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Korean', 'Mandarin', 'Arabic']
 
-type FormState = ProjectCreatePayload & { references: string; artwork_url: string }
+type FormState = Omit<ProjectCreatePayload, 'references'> & { references: string; artwork_url: string }
 
 const emptyForm: FormState = {
   title: '', logline: '', description: '', story_outline: '', visual_style: '',
@@ -15,7 +15,7 @@ const emptyForm: FormState = {
 
 function App() {
   const workspaceMatch = window.location.pathname.match(/^\/projects\/(\d+)$/)
-  if (workspaceMatch) return <Workspace projectId={Number(workspaceMatch[1])} />
+  const workspaceId = workspaceMatch ? Number(workspaceMatch[1]) : null
 
   const [projects, setProjects] = useState<Project[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
@@ -24,7 +24,9 @@ function App() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    if (workspaceId === null) void refresh()
+  }, [workspaceId])
 
   async function refresh() {
     try { setProjects(await listProjects()) } catch (e) { setError(e instanceof Error ? e.message : 'Unable to load projects') }
@@ -40,13 +42,18 @@ function App() {
     if (!form.title.trim()) { setError('Give your project a title before continuing.'); setStep(0); return }
     setSaving(true); setError('')
     try {
-      const { references: _references, ...payload } = form
-      const created = await createProject(payload)
+      const { references, ...payload } = form
+      const typedReferences = references.trim()
+        ? [{ kind: 'other', label: references.trim() }]
+        : []
+      const created = await createProject({ ...payload, references: typedReferences })
       setProjects(current => [...current, created].sort((a, b) => a.title.localeCompare(b.title)))
       setWizardOpen(false)
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to create project') }
     finally { setSaving(false) }
   }
+
+  if (workspaceId !== null) return <Workspace projectId={workspaceId} />
 
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span className="wordmark"><em>Draft</em><b>Pilot</b></span></div><p className="eyebrow">Story studio</p><nav><a className="active">Projects <span>{projects.length}</span></a><a>Studio</a><a>Settings</a></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace<br /><small>Your drafts stay close.</small></div></aside>
