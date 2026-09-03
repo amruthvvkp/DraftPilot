@@ -9,6 +9,7 @@ from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain
+from draftpilot.core.screenplay.adapters.pdf import parse_pdf
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.crud import projects as projects_crud
@@ -66,7 +67,7 @@ async def import_screenplay(
     session: AsyncSession = Depends(async_get_db),
 ) -> ScreenplayRead:
     """Import Fountain or FDX into a new screenplay without replacing existing data."""
-    if file_format not in {"fountain", "fdx"}:
+    if file_format not in {"fountain", "fdx", "pdf"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unsupported import format")
     project = await projects_crud.get(session, project_id)
     source = await screenplays_crud.get(session, screenplay_id)
@@ -84,7 +85,7 @@ async def import_screenplay(
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Import is too large")
     try:
         text = raw.decode("utf-8-sig")
-        document = parse_fountain(text) if file_format == "fountain" else parse_fdx(text)
+        document = parse_pdf(raw) if file_format == "pdf" else parse_fountain(text) if file_format == "fountain" else parse_fdx(text)
     except (UnicodeDecodeError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Malformed screenplay import") from exc
     imported = await screenplays_crud.create(

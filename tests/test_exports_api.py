@@ -9,6 +9,7 @@ import pytest
 from draftpilot.api.exports import router
 from draftpilot.core.db import async_get_db
 from draftpilot.models import Project, Screenplay, ScreenplayCreate
+from draftpilot.core.screenplay.adapters.pdf import parse_pdf
 
 
 class _Session:
@@ -60,11 +61,52 @@ def test_fountain_import_creates_a_new_screenplay(
     assert saved == [3]
 
 
-def test_import_rejects_unsupported_format() -> None:
-    """Reject unknown import formats at the HTTP boundary."""
+def test_import_rejects_malformed_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject malformed PDF content at the HTTP boundary."""
     app = FastAPI()
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
     app.include_router(router, prefix="/api/v1")
+    project = Project(id=9, title="Story")
+    source = Screenplay(id=2, project_id=9, title="Draft", format="feature")
+
+    async def get(_session: _Session, item_id: int) -> Project | Screenplay | None:
+        """Return the project and source screenplay fixture."""
+        return project if item_id == 9 else source if item_id == 2 else None
+
+    monkeypatch.setattr("draftpilot.api.exports.projects_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.screenplays_crud.get", get)
     response = TestClient(app).post(
         "/api/v1/projects/9/screenplays/2/imports/pdf", content=b"not a screenplay"
     )
     assert response.status_code == 422
+
+
+def test_pdf_parser_recovers_scene_and_dialogue() -> None:
+    """Recover conservative scene semantics from a rendered PDF."""
+    from draftpilot.core.screenplay.pdf import render_pdf
+    from draftpilot.core.screenplay.schema import ActDoc, BlockDoc, SceneDoc, ScreenplayDoc
+    from draftpilot.models.enums import BlockType
+
+    document = ScreenplayDoc(
+        acts=[
+            ActDoc(
+                scenes=[
+                    SceneDoc(
+                        heading="INT. HOUSE - DAY",
+                        blocks=[
+                            BlockDoc(element_type=BlockType.ACTION, text="A quiet room."),
+                            BlockDoc(element_type=BlockType.CHARACTER, text="MAYA"),
+                            BlockDoc(element_type=BlockType.DIALOGUE, text="Hello."),
+                        ],
+                    )
+                ]
+            )
+        ]
+    )
+    recovered = parse_pdf(render_pdf(document))
+    assert recovered.acts[0].scenes[0].heading == "INT. HOUSE - DAY"
+    assert [block.element_type for block in recovered.acts[0].scenes[0].blocks][-2:] == [BlockType.CHARACTER, BlockType.DIALOGUE]
