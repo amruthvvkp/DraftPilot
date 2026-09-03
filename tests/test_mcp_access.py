@@ -1,9 +1,8 @@
 """Test durable MCP invocation authorization and audit redaction."""
 
-import asyncio
-
 import pytest
 
+from _async import run_async
 from draftpilot.crud import mcp_access
 from draftpilot.models import MCPAuditEvent, MCPGrant
 
@@ -40,4 +39,4 @@ def test_denied_invocation_is_audited_without_sensitive_text(
             )
         assert session.events[0].allowed is False
         assert session.events[0].payload["text"] == "[REDACTED]"
-    asyncio.run(run())
+    run_async(run())

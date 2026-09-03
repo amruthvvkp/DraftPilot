@@ -1,8 +1,8 @@
 """Test the discoverable FastMCP prompt, resource, and tool surface."""
 
-import asyncio
-
 import pytest
+
+from _async import run_async
 
 
 def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
@@ -17,7 +17,7 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
         tools = [item.name for item in await mcp.list_tools()]
         return prompts, resources, tools
 
-    prompts, resources, tools = asyncio.run(inspect_surface())
+    prompts, resources, tools = run_async(inspect_surface())
     assert "workflow_turn" in prompts
     assert "draftpilot://projects/{project_id}/knowledge-graph" in resources
     assert "retrieve_project_context" in tools
