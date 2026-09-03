@@ -1,5 +1,8 @@
 """Project resource endpoints for the DraftPilot API."""
 
+import difflib
+import json
+
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -60,6 +63,12 @@ class SceneRevisionDetail(SceneRevisionRead):
     """Return revision metadata and its immutable screenplay snapshot."""
 
     snapshot: dict[str, object]
+
+
+class SceneRevisionRestoreRequest(BaseModel):
+    """Select which scene sections a writer wants to restore."""
+
+    sections: list[str] = Field(default_factory=lambda: ["heading", "blocks"])
 
 
 class ProjectReferenceInput(BaseModel):
@@ -332,6 +341,7 @@ async def restore_scene_revision(
     project_id: int,
     scene_id: int,
     revision_id: int,
+    data: SceneRevisionRestoreRequest | None = None,
     session: AsyncSession = Depends(async_get_db),
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> SceneRead:
@@ -352,5 +362,50 @@ async def restore_scene_revision(
         raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
     if if_match != scene.version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
-    await revisions_crud.restore(session, scene, revision)
+    sections = set((data or SceneRevisionRestoreRequest()).sections)
+    if not sections or sections - {"heading", "blocks"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid revision sections")
+    await revisions_crud.restore(session, scene, revision, sections)
     return SceneRead.model_validate(scene)
+
+
+@router.get(
+    "/{project_id}/scenes/{scene_id}/revisions/{revision_id}/diff/{other_revision_id}",
+    response_model=dict[str, object],
+)
+async def diff_scene_revisions(
+    project_id: int,
+    scene_id: int,
+    revision_id: int,
+    other_revision_id: int,
+    session: AsyncSession = Depends(async_get_db),
+) -> dict[str, object]:
+    """Return a bounded unified diff between two revisions of one project scene."""
+    scene = await scenes_crud.get(session, scene_id)
+    first = await revisions_crud.get(session, revision_id)
+    second = await revisions_crud.get(session, other_revision_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if (
+        scene is None
+        or first is None
+        or second is None
+        or first.scene_id != scene_id
+        or second.scene_id != scene_id
+        or screenplay is None
+        or screenplay.project_id != project_id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Revision not found")
+    before = json.dumps(first.snapshot, ensure_ascii=False, indent=2, sort_keys=True).splitlines()
+    after = json.dumps(second.snapshot, ensure_ascii=False, indent=2, sort_keys=True).splitlines()
+    changes = "\n".join(
+        difflib.unified_diff(
+            before,
+            after,
+            fromfile=f"revision-{revision_id}",
+            tofile=f"revision-{other_revision_id}",
+        )
+    )
+    if len(changes) > 100_000:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Revision diff is too large")
+    return {"scene_id": scene_id, "from_revision": revision_id, "to_revision": other_revision_id, "diff": changes}

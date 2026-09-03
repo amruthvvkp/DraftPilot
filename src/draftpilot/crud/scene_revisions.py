@@ -52,9 +52,19 @@ async def list_for_scene(session: AsyncSession, scene_id: int) -> list[SceneRevi
 
 
 async def restore(
-    session: AsyncSession, scene: Scene, revision: SceneRevision
+    session: AsyncSession,
+    scene: Scene,
+    revision: SceneRevision,
+    sections: set[str] | None = None,
 ) -> None:
-    """Restore a scene's heading and blocks from a stored revision snapshot."""
+    """Restore selected scene sections from a stored revision snapshot."""
     doc = SceneDoc.model_validate(revision.snapshot)
+    selected = sections or {"heading", "blocks"}
     scene.version += 1
-    await replace_scene_blocks(session, scene, doc)
+    if "heading" in selected:
+        scene.heading = doc.heading
+    if "blocks" in selected:
+        await replace_scene_blocks(session, scene, doc, update_heading="heading" in selected)
+    else:
+        session.add(scene)
+        await session.commit()

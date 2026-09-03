@@ -29,11 +29,6 @@ diff and rollback planning. `render_screenplay_export` renders bounded Fountain 
 state. Backup creation, restore, export artifacts, and run control remain approval-gated and are not
 performed implicitly by an external client.
 
-`read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
-source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
-than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
-diff and rollback planning.
-
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
 in the server environment or encrypted storage and must not be sent to an MCP client. Streamable HTTP

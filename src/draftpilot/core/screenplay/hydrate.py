@@ -52,12 +52,15 @@ async def scene_to_doc(session: AsyncSession, scene: Scene) -> SceneDoc:
     return SceneDoc(heading=scene.heading, blocks=[block_to_doc(b) for b in blocks])
 
 
-async def replace_scene_blocks(session: AsyncSession, scene: Scene, doc: SceneDoc) -> None:
-    """Replace a scene's heading and blocks with the contents of a ``SceneDoc``."""
+async def replace_scene_blocks(
+    session: AsyncSession, scene: Scene, doc: SceneDoc, *, update_heading: bool = True
+) -> None:
+    """Replace scene blocks and optionally its heading with a ``SceneDoc``."""
     assert scene.id is not None
     for existing in await _blocks_for_scene(session, scene.id):
         await session.delete(existing)
-    scene.heading = doc.heading
+    if update_heading:
+        scene.heading = doc.heading
     session.add(scene)
     for position, block_doc in enumerate(doc.blocks):
         session.add(block_from_doc(block_doc, scene.id, position))

@@ -12,6 +12,7 @@ from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.schema import SceneDoc
 from draftpilot.models.enums import BlockType
 from draftpilot.models import Block, DialogueTranslationCreate
+from draftpilot.models.scene_revision import SceneRevision
 
 SAMPLE = """Title: Test Script
 Author: Jane
@@ -103,3 +104,16 @@ def test_editor_suggestions_and_tab_transitions_are_typed() -> None:
 def test_dual_dialogue_groups_are_positive_and_new() -> None:
     """Allocate a group that cannot collide with either paired block."""
     assert dual_dialogue_group(4, 7) == 8
+
+
+def test_revision_snapshot_contains_selectable_scene_sections() -> None:
+    """Represent named revision content as independently restorable sections."""
+    revision = SceneRevision(
+        id=9,
+        scene_id=3,
+        rev_number=2,
+        message="Before the reveal",
+        snapshot={"heading": "INT. HOUSE - NIGHT", "blocks": []},
+    )
+    assert revision.message == "Before the reveal"
+    assert set(revision.snapshot) == {"heading", "blocks"}
