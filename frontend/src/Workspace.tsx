@@ -1,5 +1,5 @@
-import { type KeyboardEvent, useEffect, useState } from 'react'
-import { createProjectBackup, getDialogueTranslations, getProjectWorkspace, ProjectWorkspace, saveDialogueTranslation, Scene, ScreenplayBlock, updateProjectBlock } from './api'
+import { type ChangeEvent, type KeyboardEvent, useEffect, useState } from 'react'
+import { createProjectBackup, getDialogueTranslations, getProjectWorkspace, importScreenplay, ProjectWorkspace, saveDialogueTranslation, Scene, ScreenplayBlock, updateProjectBlock } from './api'
 import Timeline from './Timeline'
 import CopilotPanel from './CopilotPanel'
 
@@ -24,6 +24,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   const [drafts, setDrafts] = useState<Record<number, string>>({})
   const [translationDraft, setTranslationDraft] = useState('')
   const [backupStatus, setBackupStatus] = useState('')
+  const [importStatus, setImportStatus] = useState('')
 
   useEffect(() => {
     void getProjectWorkspace(projectId).then(data => {
@@ -75,6 +76,20 @@ export default function Workspace({ projectId }: WorkspaceProps) {
       setBackupStatus(reason instanceof Error ? reason.message : 'Backup failed')
     }
   }
+  async function importFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0]
+    const screenplayId = workspace?.screenplay?.id
+    if (!file || !screenplayId) return
+    const format = file.name.toLowerCase().endsWith('.fdx') ? 'fdx' : 'fountain'
+    try {
+      const imported = await importScreenplay(projectId, screenplayId, format, await file.text())
+      setImportStatus(`Imported as ${imported.title}`)
+    } catch (reason) {
+      setImportStatus(reason instanceof Error ? reason.message : 'Import failed')
+    } finally {
+      event.target.value = ''
+    }
+  }
   if (error) return <main className="workspace-error"><p>{error}</p><button className="button primary" onClick={() => window.location.assign('/projects')}>Back to projects</button></main>
   if (!workspace) return <main className="workspace-loading"><span className="status-dot" /> Opening your workspace…</main>
 
@@ -82,7 +97,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
     <header className="workspace-topbar">
       <button className="back-link" onClick={() => window.location.assign('/projects')}>← Projects</button>
       <div><p className="eyebrow warm">SCREENPLAY / {workspace.screenplay?.status ?? 'DRAFT'}</p><h1>{workspace.project.title}</h1><p className="workspace-language">Writing language: {workspace.project.primary_language} · Dialogue translations: {workspace.project.languages.length || 'none'} enabled</p></div>
-      <div className="save-state"><button className="button quiet" onClick={() => void backupProject()}>Backup</button>{backupStatus && <small>{backupStatus}</small>}<span className="status-dot" /> All changes local</div>
+      <div className="save-state"><label className="button quiet import-button">Import<input type="file" accept=".fountain,.fdx,text/plain,application/xml" onChange={event => void importFile(event)} /></label><button className="button quiet" onClick={() => void backupProject()}>Backup</button>{backupStatus && <small>{backupStatus}</small>}{importStatus && <small>{importStatus}</small>}<span className="status-dot" /> All changes local</div>
     </header>
     {timelineOpen ? <Timeline projectId={projectId} screenplayId={workspace.screenplay?.id ?? 0} workspace={workspace} /> : <div className="workspace-grid">
       <aside className="navigator"><div className="panel-label"><span>Navigator</span><span>{workspace.scenes.length.toString().padStart(2, '0')} scenes</span></div>
