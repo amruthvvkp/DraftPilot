@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.core.db import async_get_db
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
 from draftpilot.core.capabilities import capabilities_for_page
-from draftpilot.core.copilot import generate_reply
+from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.config import LLMSettings
 from draftpilot.core.providers import settings_from_profile
 from draftpilot.core.queue import get_arq_pool
@@ -107,6 +107,11 @@ async def respond_to_message(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     data = _server_context(data)
     _, profile_config = await _selected_profile_config(data, session)
+    retrieved_context = await retrieve_context(project_id, data.content)
+    citations = data.citations + [
+        item["citation"] for item in retrieved_context if isinstance(item.get("citation"), dict)
+    ]
+    data = data.model_copy(update={"citations": citations})
     await messages_crud.create(session, CopilotMessageCreate(project_id=project_id, **data.model_dump()))
     history = [
         {"role": message.role, "content": message.content}
@@ -115,7 +120,8 @@ async def respond_to_message(
     role = normalize_agent_role(data.instruction_layers.get("agent_role"))
     try:
         reply = await generate_reply(
-            data.content, data.page, data.artifact, data.selection, role, history, profile_config
+            data.content, data.page, data.artifact, data.selection, role, history, profile_config,
+            retrieved_context,
         )
     except Exception as exc:
         logfire.warning("Copilot response unavailable: {exc}", exc=str(exc))
@@ -133,7 +139,7 @@ async def respond_to_message(
             artifact=data.artifact,
             selection=data.selection,
             instruction_layers=data.instruction_layers,
-            citations=data.citations,
+            citations=citations,
             active_tools=data.active_tools,
         ),
     )
@@ -152,6 +158,12 @@ async def start_async_response(
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
     data = _server_context(data)
+    retrieved_context = await retrieve_context(project_id, data.content)
+    data = data.model_copy(update={
+        "citations": data.citations + [
+            item["citation"] for item in retrieved_context if isinstance(item.get("citation"), dict)
+        ]
+    })
     message = await messages_crud.create(
         session,
         CopilotMessageCreate(project_id=project_id, **data.model_dump()),
@@ -178,6 +190,7 @@ async def start_async_response(
                 "instruction_layers": data.instruction_layers,
                 "citations": data.citations,
                 "active_tools": data.active_tools,
+                "retrieved_context": retrieved_context,
                 "provider_profile_id": profile_id,
             },
             agent_role=role,

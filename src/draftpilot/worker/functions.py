@@ -15,7 +15,7 @@ from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
 from draftpilot.core.providers import create_chat_model
 from draftpilot.core.agent_roles import normalize_agent_role
-from draftpilot.core.copilot import generate_reply
+from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.providers import settings_from_profile
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import scenes as scenes_crud
@@ -155,6 +155,9 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
                 if profile is None:
                     raise ValueError("Provider profile not found")
                 llm_settings = settings_from_profile(profile)
+        retrieved_context = await retrieve_context(run.project_id, content)
+        raw_citations = data.get("citations")
+        citations = raw_citations if isinstance(raw_citations, list) else []
         reply = await generate_reply(
             content,
             page,
@@ -163,6 +166,7 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
             normalize_agent_role(run.agent_role),
             history,
             llm_settings,
+            retrieved_context,
         )
     except Exception as exc:  # pragma: no cover - provider/network dependent
         async with session_scope() as session:
@@ -184,7 +188,8 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
                 artifact=data.get("artifact") if isinstance(data.get("artifact"), str) else None,
                 selection=data.get("selection") if isinstance(data.get("selection"), str) else None,
                 instruction_layers=data.get("instruction_layers") if isinstance(data.get("instruction_layers"), dict) else {"agent_role": current.agent_role, "permission_mode": current.permission_mode},
-                citations=data.get("citations") if isinstance(data.get("citations"), list) else [],
+                citations=citations
+                + [item["citation"] for item in retrieved_context if isinstance(item.get("citation"), dict)],
                 active_tools=data.get("active_tools") if isinstance(data.get("active_tools"), list) else [],
             ),
         )

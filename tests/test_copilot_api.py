@@ -7,12 +7,50 @@ from fastapi.testclient import TestClient
 import pytest
 
 from draftpilot.api.copilot import router
+from draftpilot.core.copilot import retrieve_context
 from draftpilot.core.db import async_get_db
 from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project
+from _async import run_async
 
 
 class _Session:
     """Stand in for an isolated database session."""
+
+
+def test_retrieve_context_returns_bounded_citations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Translate the RAG response into project-scoped provider context."""
+    class Response:
+        """Return a deterministic RAG payload."""
+
+        def raise_for_status(self) -> None:
+            """Accept the fixture response."""
+
+        def json(self) -> dict[str, object]:
+            """Return one citation-bearing result."""
+            return {"results": [{"text": "The reveal is seeded.", "citation": {"source_id": "artifact:3"}}]}
+
+    class Client:
+        """Capture one isolated RAG request."""
+
+        def __init__(self, **kwargs: object) -> None:
+            """Accept the bounded client configuration."""
+            assert kwargs["timeout"] == 3.0
+
+        async def __aenter__(self) -> "Client":
+            """Enter the HTTP fixture context."""
+            return self
+
+        async def __aexit__(self, _type: object, _value: object, _traceback: object) -> None:
+            """Leave the HTTP fixture context."""
+
+        async def post(self, url: str, **kwargs: object) -> Response:
+            """Return the fixture payload for the expected project query."""
+            assert url.endswith("/projects/7/search")
+            assert kwargs["json"] == {"query": "Find the reveal", "limit": 8}
+            return Response()
+
+    monkeypatch.setattr("draftpilot.core.copilot.httpx.AsyncClient", Client)
+    assert run_async(retrieve_context(7, "Find the reveal"))[0]["citation"] == {"source_id": "artifact:3"}
 
 
 def test_copilot_message_persists_full_context_envelope(
@@ -51,6 +89,11 @@ def test_copilot_message_persists_full_context_envelope(
         return stored
 
     monkeypatch.setattr("draftpilot.api.copilot.projects_crud.get", get_project)
+    async def retrieve(_project_id: int, _query: str) -> list[dict[str, object]]:
+        """Return one bounded retrieval fixture."""
+        return [{"text": "The reveal is seeded.", "citation": {"source_id": "artifact:3"}}]
+
+    monkeypatch.setattr("draftpilot.api.copilot.retrieve_context", retrieve)
     monkeypatch.setattr("draftpilot.api.copilot.messages_crud.create", create)
     response = TestClient(app).post(
         "/api/v1/projects/7/copilot/messages",
