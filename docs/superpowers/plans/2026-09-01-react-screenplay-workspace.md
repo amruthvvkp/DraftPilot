@@ -14,6 +14,8 @@ the visual anchors; the other views show the intended information hierarchy for 
 story development, agents/review, and settings/export. Every workflow view now includes the same
 right-side Copilot rail: conversation history, available agents, active run state, scoped context,
 and a turn input. The assistant is persistent across stage changes, not an editor-only feature.
+The DraftPilot wordmark uses an amber star with an editorial serif “Draft” and precise sans-serif
+“Pilot” treatment as the premium shell identity.
 
 ## Scope
 

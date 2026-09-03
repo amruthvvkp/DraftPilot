@@ -49,7 +49,7 @@ function App() {
   }
 
   return <div className="app-shell">
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span>DraftPilot</span></div><p className="eyebrow">Story studio</p><nav><a className="active">Projects <span>{projects.length}</span></a><a>Studio</a><a>Settings</a></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace<br /><small>Your drafts stay close.</small></div></aside>
+    <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span className="wordmark"><em>Draft</em><b>Pilot</b></span></div><p className="eyebrow">Story studio</p><nav><a className="active">Projects <span>{projects.length}</span></a><a>Studio</a><a>Settings</a></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace<br /><small>Your drafts stay close.</small></div></aside>
     <main className="main"><header className="topbar"><div><p className="eyebrow">Your workspace</p><h1>Projects</h1></div><button className="button primary" onClick={openWizard}>New project <span>＋</span></button></header>
       {error && <div className="notice">{error}<button onClick={() => setError('')}>×</button></div>}
       <section className="hero"><div><p className="eyebrow warm">MAKE SOMETHING WORTH WATCHING</p><h2>A clear desk for<br /><em>big stories.</em></h2><p>Build a world, shape its rhythm, and write the version only you can see.</p></div><div className="hero-orbit"><span>✦</span><span>SCENE / 01</span></div></section>
