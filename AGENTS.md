@@ -2,12 +2,12 @@
 
 > This file mirrors `CLAUDE.md` for Codex / other agent runtimes. Keep the two in sync.
 
-Open-source, agentic screenplay & story-development studio. A NiceGUI web app where writers build,
-research, co-write, and evaluate screenplays alongside AI agents.
+Open-source, agentic screenplay & story-development studio. A local-first React/Vite web app where
+writers build, research, co-write, and evaluate screenplays alongside AI agents.
 
 ## Stack
 
-- **UI**: NiceGUI (`from nicegui import app` IS the FastAPI app — one web process)
+- **UI**: React/Vite SPA served by the FastAPI API; NiceGUI remains only for legacy surfaces
 - **Agents**: PydanticAI (provider-agnostic: self-hosted or cloud LLMs)
 - **Data**: Postgres via SQLModel + asyncpg; Alembic migrations
 - **Cache / queue**: Redis; ARQ background worker (separate process)
@@ -29,6 +29,7 @@ src/draftpilot/
   ui/          theme/ (design tokens + layout), components/ (reusable library), pages/, main.py
   worker/      ARQ WorkerSettings + task functions
   mcp/         FastMCP server
+frontend/      React/Vite application
 migrations/    Alembic (env.py reads settings sync DSN; SQLModel.metadata is the target)
 ```
 
@@ -41,7 +42,8 @@ docker compose up --build         # UI :9000 · MCP :9001 · Langfuse :3300
 # Local dev (needs local Postgres + Redis)
 uv sync --group ui
 uv run alembic upgrade head
-uv run python -m draftpilot.ui.main
+uv run python -m draftpilot.ui.main  # API and legacy surfaces
+npm --prefix frontend run dev         # React UI
 uv run arq draftpilot.worker.settings.WorkerSettings
 
 # Debug stack (debugpy + live source mount + hot reload)
@@ -63,7 +65,8 @@ docker compose -f compose.yml -f compose.dev.yml up --build
   `UI__`, `OTEL__`). Nested env uses the `__` delimiter. Never read bare env names — they collide
   with system vars (e.g. `$USER`).
 - Add UI building blocks to `ui/components/` and showcase them in `ui/components/design_system.py`.
-- Pages are `content()` builders wrapped by `ui.theme.with_layout`; register routes in `ui/main.py`.
+- React workflow pages live in `frontend/src`; register API routes under `/api/v1`.
+- Legacy NiceGUI pages are `content()` builders wrapped by `ui.theme.with_layout`; register routes in `ui/main.py`.
 - After model changes: `uv run alembic revision --autogenerate -m "..."` then `upgrade head`.
 - Branches follow the repo's GitHub-issue convention (e.g. `amruthvvkp/issueN`). Reference the issue
   in commits. (This repo is not on Jira; the global Jira branch rule does not apply here.)
