@@ -142,6 +142,11 @@ export type CopilotMessage = {
   created_at: string
 }
 
+export type KnowledgeGraph = {
+  nodes: Array<{ id: number; project_id: number; kind: string; label: string; description: string | null; node_metadata: Record<string, unknown>; version: number }>
+  edges: Array<{ id: number; project_id: number; source_node_id: number; target_node_id: number; relation: string; edge_metadata: Record<string, unknown> }>
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -248,4 +253,8 @@ export function getCopilotMessages(projectId: number): Promise<CopilotMessage[]>
 
 export function sendCopilotMessage(projectId: number, payload: Pick<CopilotMessage, 'content' | 'page' | 'artifact' | 'selection' | 'instruction_layers' | 'citations' | 'active_tools'>): Promise<CopilotMessage> {
   return request<CopilotMessage>(`/api/v1/projects/${projectId}/copilot/messages`, { method: 'POST', body: JSON.stringify({ ...payload, role: 'user' }) })
+}
+
+export function getKnowledgeGraph(projectId: number): Promise<KnowledgeGraph> {
+  return request<KnowledgeGraph>(`/api/v1/projects/${projectId}/knowledge-graph`)
 }

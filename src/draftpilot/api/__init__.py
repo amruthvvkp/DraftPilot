@@ -12,6 +12,7 @@ from draftpilot.api.mcp_access import router as mcp_access_router
 from draftpilot.api.backups import router as backups_router
 from draftpilot.api.providers import router as providers_router
 from draftpilot.api.copilot import router as copilot_router
+from draftpilot.api.knowledge_graph import router as knowledge_graph_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(projects_router)
@@ -24,5 +25,6 @@ router.include_router(mcp_access_router)
 router.include_router(backups_router)
 router.include_router(providers_router)
 router.include_router(copilot_router)
+router.include_router(knowledge_graph_router)
 
 __all__ = ["router"]

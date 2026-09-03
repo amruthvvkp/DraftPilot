@@ -35,3 +35,22 @@ nav { display: grid; gap: 7px; } nav a { color: #8f8b81; padding: 11px 12px; bor
 .copilot-compose { display: flex; gap: 6px; }
 .copilot-compose input { min-width: 0; flex: 1; padding: 9px; border: 1px solid #dcd6cd; border-radius: 4px; background: #fffdf9; color: #35312c; font-size: 11px; }
 .copilot-compose .button { padding: 9px 11px; font-size: 10px; }
+.context-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: calc(100vh - 92px); }
+.graph-canvas { padding: 54px max(28px, 8vw); background: #e7e3dc; }
+.graph-intro { max-width: 680px; margin: 0 auto 32px; }
+.graph-intro h2 { margin: 10px 0; font-size: 38px; letter-spacing: -.07em; }
+.graph-intro p:not(.eyebrow) { color: #777168; font-size: 13px; line-height: 1.6; }
+.graph-nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-width: 760px; margin: auto; }
+.graph-node { padding: 16px; min-height: 125px; background: #fffdf9; border: 1px solid #ded8cf; border-radius: 7px; box-shadow: 0 4px 14px #514a3c0c; }
+.graph-node > span { color: #a56736; text-transform: uppercase; font: 9px 'DM Mono'; }
+.graph-node h3 { margin: 9px 0 6px; font-size: 16px; }
+.graph-node p { margin: 0 0 8px; color: #777168; font-size: 11px; line-height: 1.45; }
+.graph-node small { color: #aaa39a; font: 9px 'DM Mono'; }
+.graph-edges { max-width: 760px; margin: 34px auto 0; }
+.graph-edge { display: flex; gap: 8px; align-items: center; padding: 11px 0; border-bottom: 1px solid #d3cdc4; color: #777168; font-size: 11px; }
+.graph-edge strong { color: #403b35; }
+.graph-edge span { color: #a56736; }
+.graph-empty { max-width: 760px; margin: auto; padding: 32px; background: #fffdf9; border: 1px dashed #cfc6b9; color: #777168; display: grid; gap: 8px; }
+.graph-empty strong { color: #403b35; }
+.context-links a { display: block; padding: 8px 0; color: #6e675e; font-size: 11px; text-decoration: none; }
+@media(max-width:980px){.context-grid{grid-template-columns:1fr}.context-grid>.context-panel{display:none}}

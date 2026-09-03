@@ -3,6 +3,7 @@ import { createProject, listProjects, Project, ProjectCreatePayload } from './ap
 import Workspace from './Workspace'
 import ArtifactStudio from './ArtifactStudio'
 import ProviderSettings from './ProviderSettings'
+import KnowledgeGraphPage from './KnowledgeGraph'
 
 const genres = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'Historical', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western', 'Experimental']
 const languages = ['English', 'Hindi', 'Bengali', 'Telugu', 'Marathi', 'Tamil', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Odia', 'Assamese', 'Urdu', 'Kashmiri', 'Konkani', 'Nepali', 'Sindhi', 'Maithili', 'Sanskrit', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Korean', 'Mandarin', 'Arabic']
@@ -20,6 +21,8 @@ function App() {
   const workspaceId = workspaceMatch ? Number(workspaceMatch[1]) : null
   const artifactMatch = window.location.pathname.match(/^\/projects\/(\d+)\/studio$/)
   const artifactProjectId = artifactMatch ? Number(artifactMatch[1]) : null
+  const contextMatch = window.location.pathname.match(/^\/projects\/(\d+)\/context$/)
+  const contextProjectId = contextMatch ? Number(contextMatch[1]) : null
   const settingsPage = window.location.pathname === '/settings'
 
   const [projects, setProjects] = useState<Project[]>([])
@@ -60,6 +63,7 @@ function App() {
 
   if (workspaceId !== null) return <Workspace projectId={workspaceId} />
   if (artifactProjectId !== null) return <ArtifactStudio projectId={artifactProjectId} />
+  if (contextProjectId !== null) return <KnowledgeGraphPage projectId={contextProjectId} />
   if (settingsPage) return <ProviderSettings />
 
   return <div className="app-shell">

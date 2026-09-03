@@ -74,6 +74,7 @@ from draftpilot.models.agent_proposal import AgentProposal, AgentProposalBase, A
 from draftpilot.models.mcp_access import MCPAuditEvent, MCPClient, MCPClientBase, MCPGrant, MCPGrantBase, MCPGrantCreate, MCPGrantRead
 from draftpilot.models.provider_profile import ProviderProfile, ProviderProfileBase, ProviderProfileCreate, ProviderProfileRead, ProviderProfileUpdate
 from draftpilot.models.copilot_message import CopilotMessage, CopilotMessageBase, CopilotMessageCreate, CopilotMessageRead
+from draftpilot.models.knowledge_graph import KnowledgeEdge, KnowledgeEdgeBase, KnowledgeEdgeCreate, KnowledgeEdgeRead, KnowledgeNode, KnowledgeNodeBase, KnowledgeNodeCreate, KnowledgeNodeRead
 
 __all__ = [
     "BlockType",
@@ -145,4 +146,12 @@ __all__ = [
     "CopilotMessageBase",
     "CopilotMessageCreate",
     "CopilotMessageRead",
+    "KnowledgeNode",
+    "KnowledgeNodeBase",
+    "KnowledgeNodeCreate",
+    "KnowledgeNodeRead",
+    "KnowledgeEdge",
+    "KnowledgeEdgeBase",
+    "KnowledgeEdgeCreate",
+    "KnowledgeEdgeRead",
 ]
