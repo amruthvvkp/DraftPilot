@@ -142,6 +142,14 @@ class SecretsSettings(BaseSettings):
     master_key: SecretStr = SecretStr("")
 
 
+class MCPSettings(BaseSettings):
+    """MCP transport authentication settings."""
+
+    model_config = SettingsConfigDict(env_prefix="MCP__")
+
+    auth_token: SecretStr = SecretStr("draftpilot-local-token")
+
+
 class UISettings(BaseSettings):
     """NiceGUI web interface settings."""
 
@@ -166,6 +174,7 @@ class Settings(BaseSettings):
     queue: QueueSettings = QueueSettings()
     llm: LLMSettings = LLMSettings()
     secrets: SecretsSettings = SecretsSettings()
+    mcp: MCPSettings = MCPSettings()
     ui: UISettings = UISettings()
 
 

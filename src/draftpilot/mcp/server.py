@@ -4,15 +4,32 @@ import json
 
 import logfire
 from fastmcp import FastMCP
+from fastmcp.server.auth import AccessToken, TokenVerifier
 
 from draftpilot.core import telemetry
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
+from draftpilot.core.mcp_auth import valid_static_token
 
 telemetry.setup(mcp=True)
 
-mcp = FastMCP(f"{settings.metadata.name.title()} MCP Server")
+
+class StaticTokenVerifier(TokenVerifier):
+    """Verify the configured DraftPilot MCP bearer token."""
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Return scoped access metadata for a valid configured token."""
+        expected = settings.mcp.auth_token.get_secret_value()
+        if not valid_static_token(token, expected):
+            return None
+        return AccessToken(token=token, client_id="mcp-client", scopes=["draftpilot"])
+
+
+mcp = FastMCP(
+    f"{settings.metadata.name.title()} MCP Server",
+    auth=StaticTokenVerifier(required_scopes=["draftpilot"]),
+)
 
 logfire.info("Telemetry setup complete")
 

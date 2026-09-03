@@ -12,5 +12,10 @@ in the server environment or encrypted storage and must not be sent to an MCP cl
 is available on `http://localhost:9001` in local Compose; configure the client for the server's MCP
 endpoint rather than the root health URL.
 
+The Streamable HTTP transport requires `Authorization: Bearer <MCP__AUTH_TOKEN>`. Compose uses
+`draftpilot-local-token` for local development; replace it before exposing port 9001 outside the
+local machine. Local stdio transport is intended for a process launched by the same user and does
+not need an HTTP bearer header.
+
 Mutation tools will be added only through the same capability service, with audit records, redaction,
 timeouts, output limits, and explicit consent.
