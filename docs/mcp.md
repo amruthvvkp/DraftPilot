@@ -56,11 +56,14 @@ not need an HTTP bearer header.
 
 Mutation tools are added only through the same capability service, with audit records, redaction,
 timeouts, output limits, and explicit consent. Project evaluations are available through the
-`read_project_evaluations` tool; evaluation execution remains a planned extension to the catalog.
+`read_project_evaluations` tool, while deterministic evaluation runs persist through the same
+durable workflow-run service.
 
 The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
 `/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker
-checks the persisted state before recording success.
+checks the persisted state before recording success. On worker startup, runs left in `running` are
+marked queued and re-enqueued, allowing browser-disconnected or interrupted Copilot/evaluation
+work to resume without direct database intervention.
 
 Copilot turns are persisted at `/api/v1/projects/{project_id}/copilot/messages`. Each message
 records its page, artifact, selection, instruction layers, retrieved citations, and active typed
@@ -80,7 +83,9 @@ the requested project and records the invocation in the redacted MCP audit log.
 
 DraftPilot also provides the `DraftPilotMCPClient` outbound adapter for built-in agents and
 workflow integrations. It supports authenticated Streamable HTTP (`list_tools` and `call_tool`)
-and explicitly configured local stdio (`call_stdio_tool`), validates endpoints against embedded
-credentials and cloud metadata targets, and rejects responses beyond its configured output limit.
-External MCP results must still be translated into typed DraftPilot operations before any project
-mutation; the client never receives database credentials or a database connection.
+and explicitly configured local stdio (`call_stdio_tool`). HTTP endpoints reject embedded
+credentials, cloud metadata targets, private/link-local/reserved IP literals, and multicast
+addresses; loopback endpoints remain available for local-first services. Responses are bounded by
+the configured output limit. External MCP results must still be translated into typed DraftPilot
+operations before any project mutation; the client never receives database credentials or a database
+connection.
