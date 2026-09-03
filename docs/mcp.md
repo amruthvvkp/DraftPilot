@@ -21,6 +21,11 @@ project.
 reviewable agent proposal using the scene's current server-derived version. It never applies the
 operation; approval and optimistic-concurrency checks remain on the DraftPilot approval boundary.
 
+`read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
+source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
+than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
+diff and rollback planning.
+
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
 in the server environment or encrypted storage and must not be sent to an MCP client. Streamable HTTP

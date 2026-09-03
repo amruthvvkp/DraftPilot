@@ -16,6 +16,8 @@ from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import valid_static_token
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import blocks as blocks_crud
+from draftpilot.crud import dialogue_translations as translations_crud
+from draftpilot.crud import scene_revisions as revisions_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
@@ -196,6 +198,127 @@ async def read_screenplay_scenes(
     result = {"project_id": project_id, "screenplay_id": screenplay_id, "scenes": payload}
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Screenplay response exceeds MCP output limit")
+    return result
+
+
+@mcp.tool
+async def read_dialogue_translations(
+    project_id: int, scene_id: int, block_id: int, ctx: Context
+) -> dict[str, object]:
+    """Read linked dialogue translations without exposing unrelated project data."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session, client_id, project_id, "screenplay.read", "read", {"block_id": block_id}
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        scene = await scenes_crud.get(session, scene_id)
+        block = await blocks_crud.get(session, block_id)
+        act = await acts_crud.get(session, scene.act_id) if scene else None
+        screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+        if (
+            scene is None
+            or block is None
+            or block.scene_id != scene_id
+            or screenplay is None
+            or screenplay.project_id != project_id
+        ):
+            raise ValueError("Dialogue block is not in the requested project")
+        translations = await translations_crud.list_for_block(session, block_id)
+    result = {
+        "project_id": project_id,
+        "scene_id": scene_id,
+        "block_id": block_id,
+        "source_version": scene.version,
+        "translations": [item.model_dump(mode="json") for item in translations],
+    }
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Translation response exceeds MCP output limit")
+    return result
+
+
+@mcp.tool
+async def propose_dialogue_translation(
+    project_id: int,
+    scene_id: int,
+    block_id: int,
+    language: str,
+    text: str,
+    ctx: Context,
+) -> dict[str, object]:
+    """Persist a reviewable translation proposal while preserving source dialogue."""
+    if not language.strip() or len(language) > 50:
+        raise ValueError("Translation language is invalid")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "translation.propose",
+                "propose",
+                {"scene_id": scene_id, "block_id": block_id, "language": language},
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        scene = await scenes_crud.get(session, scene_id)
+        block = await blocks_crud.get(session, block_id)
+        act = await acts_crud.get(session, scene.act_id) if scene else None
+        screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+        if (
+            scene is None
+            or block is None
+            or block.scene_id != scene_id
+            or block.element_type.value != "dialogue"
+            or screenplay is None
+            or screenplay.project_id != project_id
+        ):
+            raise ValueError("Dialogue block is not in the requested project")
+        proposal = await proposals_crud.create(
+            session,
+            AgentProposal(
+                project_id=project_id,
+                target_kind="dialogue_translation",
+                target_id=block_id,
+                operation={"language": language, "text": text, "status": "draft"},
+                diff={"source": block.text, "translation": text},
+                before={"source_text": block.text, "source_version": scene.version},
+                base_version=scene.version,
+            ),
+        )
+    return AgentProposalRead.model_validate(proposal).model_dump(mode="json")
+
+
+@mcp.tool
+async def read_scene_revisions(project_id: int, scene_id: int, ctx: Context) -> dict[str, object]:
+    """Read immutable scene snapshots for review and rollback planning."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session, client_id, project_id, "revisions.read", "read", {"scene_id": scene_id}
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        scene = await scenes_crud.get(session, scene_id)
+        act = await acts_crud.get(session, scene.act_id) if scene else None
+        screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+        if scene is None or screenplay is None or screenplay.project_id != project_id:
+            raise ValueError("Scene is not in the requested project")
+        revisions = await revisions_crud.list_for_scene(session, scene_id)
+    result = {
+        "project_id": project_id,
+        "scene_id": scene_id,
+        "revisions": [
+            {**revision.model_dump(mode="json"), "snapshot": revision.snapshot}
+            for revision in revisions
+        ],
+    }
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Revision response exceeds MCP output limit")
     return result
 
 
