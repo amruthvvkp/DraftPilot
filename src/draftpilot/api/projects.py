@@ -8,6 +8,7 @@ from draftpilot.core.db import async_get_db
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
+from draftpilot.crud import scene_revisions as revisions_crud
 from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
@@ -22,6 +23,7 @@ from draftpilot.models import (
     ProjectReferenceBase,
     ProjectReferenceRead,
     SceneRead,
+    SceneRevisionRead,
     SceneUpdate,
     ScreenplayRead,
 )
@@ -44,6 +46,12 @@ class TranslationInput(BaseModel):
 
     text: str
     status: str = Field(default="draft", max_length=30)
+
+
+class SceneRevisionDetail(SceneRevisionRead):
+    """Return revision metadata and its immutable screenplay snapshot."""
+
+    snapshot: dict[str, object]
 
 
 class ProjectReferenceInput(BaseModel):
@@ -185,3 +193,67 @@ async def save_dialogue_translation(
         ),
     )
     return DialogueTranslationRead.model_validate(translation)
+
+
+@router.get("/{project_id}/scenes/{scene_id}/revisions", response_model=list[SceneRevisionRead])
+async def list_scene_revisions(
+    project_id: int, scene_id: int, session: AsyncSession = Depends(async_get_db)
+) -> list[SceneRevisionRead]:
+    """List revisions only when the scene belongs to the requested project."""
+    scene = await scenes_crud.get(session, scene_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if scene is None or screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    revisions = await revisions_crud.list_for_scene(session, scene_id)
+    return [SceneRevisionRead.model_validate(revision) for revision in revisions]
+
+
+@router.post(
+    "/{project_id}/scenes/{scene_id}/revisions",
+    response_model=SceneRevisionDetail,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_scene_revision(
+    project_id: int,
+    scene_id: int,
+    data: dict[str, str] | None = None,
+    session: AsyncSession = Depends(async_get_db),
+) -> SceneRevisionDetail:
+    """Capture an immutable scene snapshot for diff, rollback, or naming."""
+    scene = await scenes_crud.get(session, scene_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if scene is None or screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    revision = await revisions_crud.snapshot(session, scene, (data or {}).get("message"))
+    return SceneRevisionDetail.model_validate(revision)
+
+
+@router.post("/{project_id}/scenes/{scene_id}/revisions/{revision_id}/restore", response_model=SceneRead)
+async def restore_scene_revision(
+    project_id: int,
+    scene_id: int,
+    revision_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> SceneRead:
+    """Restore a revision only when the caller holds the current scene version."""
+    scene = await scenes_crud.get(session, scene_id)
+    revision = await revisions_crud.get(session, revision_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if (
+        scene is None
+        or revision is None
+        or revision.scene_id != scene_id
+        or screenplay is None
+        or screenplay.project_id != project_id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Revision not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != scene.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
+    await revisions_crud.restore(session, scene, revision)
+    return SceneRead.model_validate(scene)

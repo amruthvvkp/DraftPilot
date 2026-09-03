@@ -56,4 +56,5 @@ async def restore(
 ) -> None:
     """Restore a scene's heading and blocks from a stored revision snapshot."""
     doc = SceneDoc.model_validate(revision.snapshot)
+    scene.version += 1
     await replace_scene_blocks(session, scene, doc)
