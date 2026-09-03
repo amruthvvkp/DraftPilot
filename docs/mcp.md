@@ -25,3 +25,7 @@ not need an HTTP bearer header.
 
 Mutation tools will be added only through the same capability service, with audit records, redaction,
 timeouts, output limits, and explicit consent.
+
+The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
+`/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker
+checks the persisted state before recording success.

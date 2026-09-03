@@ -118,6 +118,7 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
             raise
         async with session_scope() as session:
             run = await workflow_runs_crud.get(session, run_id)
-            if run is not None:
+            if run is not None and run.status != "cancelled":
                 await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
-        return result
+                return result
+        return {"status": "cancelled"}

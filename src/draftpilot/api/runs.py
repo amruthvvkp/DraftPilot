@@ -82,3 +82,17 @@ async def resume_run(
     await session.refresh(run)
     await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
     return WorkflowRunRead.model_validate(run)
+
+
+@router.post("/{run_id}/cancel", response_model=WorkflowRunRead)
+async def cancel_run(
+    project_id: int, run_id: int, session: AsyncSession = Depends(async_get_db)
+) -> WorkflowRunRead:
+    """Cancel a queued or running project workflow without deleting its history."""
+    run = await runs_crud.get(session, run_id)
+    if run is None or run.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    if run.status in {"succeeded", "failed", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is already terminal")
+    await runs_crud.update_status(session, run, "cancelled")
+    return WorkflowRunRead.model_validate(run)

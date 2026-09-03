@@ -214,3 +214,25 @@ def test_start_run_persists_before_enqueue(
     assert response.status_code == 202
     assert response.json()["id"] == 31
     assert enqueued == [("execute_workflow", 31)]
+
+
+def test_cancel_run_preserves_durable_history(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Transition a queued run to cancelled without deleting its record."""
+    run = WorkflowRun(id=31, project_id=9, status="queued")
+
+    async def get_run(_session: _Session, _run_id: int) -> WorkflowRun:
+        """Return the queued run fixture."""
+        return run
+
+    async def update_status(_session: _Session, value: WorkflowRun, status: str) -> WorkflowRun:
+        """Apply the cancellation transition in memory."""
+        value.status = status
+        return value
+
+    monkeypatch.setattr("draftpilot.api.runs.runs_crud.get", get_run)
+    monkeypatch.setattr("draftpilot.api.runs.runs_crud.update_status", update_status)
+    response = client.post("/api/v1/projects/9/runs/31/cancel")
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
