@@ -64,6 +64,11 @@ from draftpilot.models.workflow_run import (
     WorkflowRunCreate,
     WorkflowRunRead,
 )
+from draftpilot.models.timeline_proposal import (
+    TimelineProposalBase,
+    TimelineProposalRead,
+    TimelineProposalRecord,
+)
 
 __all__ = [
     "BlockType",
@@ -110,4 +115,7 @@ __all__ = [
     "WorkflowRunBase",
     "WorkflowRunCreate",
     "WorkflowRunRead",
+    "TimelineProposalBase",
+    "TimelineProposalRead",
+    "TimelineProposalRecord",
 ]
