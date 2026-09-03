@@ -53,8 +53,9 @@ Local stdio transport is intended for a process launched by the same user and do
 not need an HTTP bearer header.
 
 Mutation tools are added only through the same capability service, with audit records, redaction,
-timeouts, output limits, and explicit consent. Export-artifact creation and evaluations remain
-planned additions to the catalog.
+timeouts, output limits, and explicit consent. Project evaluations are available through the
+`read_project_evaluations` tool; evaluation execution and export-artifact creation remain planned
+extensions to the catalog.
 
 The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
 `/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker
