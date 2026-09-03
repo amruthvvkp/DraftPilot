@@ -42,6 +42,7 @@ export type Scene = {
   heading: string
   position: number
   body: string
+  version: number
 }
 
 export type ScreenplayBlock = {
@@ -133,4 +134,10 @@ export function approveAgentProposal(projectId: number, proposalId: number): Pro
 
 export function rollbackAgentProposal(projectId: number, proposalId: number): Promise<AgentProposal> {
   return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals/${proposalId}/rollback`, { method: 'POST' })
+}
+
+export function updateProjectBlock(projectId: number, sceneId: number, blockId: number, version: number, text: string): Promise<ScreenplayBlock> {
+  return request<ScreenplayBlock>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}`, {
+    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify({ text }),
+  })
 }
