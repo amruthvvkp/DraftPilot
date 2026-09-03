@@ -6,5 +6,19 @@ Expose document, adapter, and timeline services.
 """
 
 from draftpilot.core.screenplay.timeline import SceneTiming, TimelineProposal, propose_reorder
+from draftpilot.core.screenplay.editor import (
+    autocomplete_characters,
+    autocomplete_elements,
+    dual_dialogue_group,
+    next_element,
+)
 
-__all__ = ["SceneTiming", "TimelineProposal", "propose_reorder"]
+__all__ = [
+    "SceneTiming",
+    "TimelineProposal",
+    "autocomplete_characters",
+    "autocomplete_elements",
+    "dual_dialogue_group",
+    "next_element",
+    "propose_reorder",
+]

@@ -2,6 +2,12 @@
 
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx, render_fdx
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain, render_fountain
+from draftpilot.core.screenplay.editor import (
+    autocomplete_characters,
+    autocomplete_elements,
+    dual_dialogue_group,
+    next_element,
+)
 from draftpilot.core.screenplay.schema import SceneDoc
 from draftpilot.models.enums import BlockType
 from draftpilot.models import Block, DialogueTranslationCreate
@@ -76,3 +82,15 @@ def test_dialogue_translation_keeps_source_block_unchanged() -> None:
     )
     assert translation.text != source.text
     assert source.text == "We should go."
+
+
+def test_editor_suggestions_and_tab_transitions_are_typed() -> None:
+    """Offer deterministic screenplay element and character suggestions."""
+    assert autocomplete_elements("dia") == [BlockType.DIALOGUE]
+    assert autocomplete_characters("al", ["ALICE", "ALICE", "BOB"]) == ["ALICE"]
+    assert next_element(BlockType.CHARACTER) is BlockType.PARENTHETICAL
+
+
+def test_dual_dialogue_groups_are_positive_and_new() -> None:
+    """Allocate a group that cannot collide with either paired block."""
+    assert dual_dialogue_group(4, 7) == 8
