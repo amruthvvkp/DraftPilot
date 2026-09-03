@@ -75,6 +75,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New scene heading")).to_have_value("INT. - DAY")
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
+    expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
     page.get_by_role("button", name="Run review").click()
     editor = page.get_by_label("Edit action")
     expect(editor).to_have_value("The house breathes in the dark.")

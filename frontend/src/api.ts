@@ -291,9 +291,9 @@ export function createProjectBackup(projectId: number): Promise<ProjectBackup> {
   return request<ProjectBackup>(`/api/v1/projects/${projectId}/backups`, { method: 'POST' })
 }
 
-export async function importScreenplay(projectId: number, screenplayId: number, format: 'fountain' | 'fdx' | 'pdf', content: string): Promise<{ id: number; title: string; format: string; status: string; project_id: number }> {
+export async function importScreenplay(projectId: number, screenplayId: number, format: 'fountain' | 'fdx' | 'pdf', content: string | ArrayBuffer): Promise<{ id: number; title: string; format: string; status: string; project_id: number }> {
   const response = await fetch(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/imports/${format}`, {
-    method: 'POST', headers: { 'Content-Type': format === 'fdx' ? 'application/xml' : 'text/plain' }, body: content,
+    method: 'POST', headers: { 'Content-Type': format === 'fdx' ? 'application/xml' : format === 'pdf' ? 'application/pdf' : 'text/plain' }, body: content,
   })
   if (!response.ok) throw new Error(`Import failed (${response.status})`)
   return response.json() as Promise<{ id: number; title: string; format: string; status: string; project_id: number }>
