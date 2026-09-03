@@ -83,3 +83,30 @@ def test_story_artifact_workspace_is_editable(page: Page) -> None:
     content = page.get_by_label("Artifact content")
     content.fill("A family returns to a house that remembers.")
     content.blur()
+
+
+def test_copilot_turn_polls_durable_run(page: Page) -> None:
+    """Submit a Copilot turn and reload its persisted assistant response."""
+    artifact = {"id": 31, "project_id": 9001, "kind": "brief", "title": "First pass", "content": "A family returns.", "version": 2, "stale": False, "depends_on": [], "artifact_metadata": {}}
+    assistant = {"id": 32, "project_id": 9001, "role": "assistant", "content": "The reveal needs a setup.", "page": "studio", "artifact": None, "selection": None, "instruction_layers": {}, "citations": [], "active_tools": [], "created_at": "2026-01-01T00:00:00Z"}
+    message_reads = 0
+
+    page.route("**/api/v1/projects/9001/artifacts", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([artifact])))
+    page.route("**/api/v1/projects/9001/artifacts/31", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact)))
+    page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+
+    def messages(route: Route) -> None:
+        """Return the assistant only after the durable run completes."""
+        nonlocal message_reads
+        message_reads += 1
+        route.fulfill(status=200, content_type="application/json", body=json.dumps([assistant] if message_reads > 1 else []))
+
+    page.route("**/api/v1/projects/9001/copilot/messages", messages)
+    page.route("**/api/v1/projects/9001/copilot/messages/respond-async", lambda route: route.fulfill(status=202, content_type="application/json", body=json.dumps({"message": {"id": 30, "project_id": 9001, "role": "user", "content": "Find the gap.", "page": "studio", "artifact": None, "selection": None, "instruction_layers": {"agent_role": "story_architect", "permission_mode": "chat_only", "provider_profile_id": None}, "citations": [], "active_tools": [], "created_at": "2026-01-01T00:00:00Z"}, "run": {"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "queued", "result": None, "error": None}})))
+    page.route("**/api/v1/projects/9001/runs/44", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "succeeded", "result": {"assistant_message_id": 32}, "error": None})))
+    page.goto("/projects/9001/studio")
+    page.get_by_label("Copilot message").fill("Find the gap.")
+    page.get_by_role("button", name="Send").click()
+    expect(page.get_by_text("The reveal needs a setup.")).to_be_visible()
