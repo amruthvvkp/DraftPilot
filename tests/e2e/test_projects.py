@@ -55,3 +55,19 @@ def test_create_project_from_react_wizard(page: Page) -> None:
     expect(wizard.get_by_text("READY TO BEGIN")).to_be_visible()
     wizard.get_by_role("button", name="Create project", exact=False).click()
     expect(page.get_by_role("heading", name="Playwright story")).to_be_visible()
+
+
+def test_primary_language_is_not_a_translation_target(page: Page) -> None:
+    """Keep the primary screenplay language separate from dialogue translations."""
+    mock_projects_api(page)
+    page.goto("/projects")
+    page.get_by_role("button", name="New project").first.click()
+    wizard = page.locator(".wizard")
+    wizard.get_by_label("Project title").fill("Hindi story")
+    wizard.get_by_role("button", name="Continue").click()
+    primary = wizard.get_by_label("Primary screenplay language")
+    primary.select_option(label="Hindi")
+    hindi = wizard.get_by_role("button", name="Hindi", exact=True)
+    expect(hindi).not_to_have_class("choice on")
+    wizard.get_by_role("button", name="Bengali", exact=True).click()
+    expect(wizard.get_by_role("button", name="Bengali", exact=True)).to_have_class("choice on")

@@ -42,9 +42,14 @@ function App() {
 
   function openWizard() { setForm(emptyForm); setStep(0); setError(''); setWizardOpen(true) }
   function toggle(field: 'genres' | 'languages', value: string) {
+    if (field === 'languages' && value === form.primary_language) return
     setForm(current => ({ ...current, [field]: current[field].includes(value) ? current[field].filter(item => item !== value) : [...current[field], value] }))
   }
-  function update(name: keyof FormState, value: string) { setForm(current => ({ ...current, [name]: value })) }
+  function update(name: keyof FormState, value: string) {
+    setForm(current => name === 'primary_language'
+      ? { ...current, primary_language: value, languages: current.languages.filter(item => item !== value) }
+      : { ...current, [name]: value })
+  }
 
   async function submit() {
     if (!form.title.trim()) { setError('Give your project a title before continuing.'); setStep(0); return }
