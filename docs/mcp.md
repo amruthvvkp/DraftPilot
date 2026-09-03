@@ -26,6 +26,8 @@ source version. `propose_dialogue_translation` is approval-gated and stores a ty
 than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
 diff and rollback planning. `render_screenplay_export` renders bounded Fountain, FDX, or PDF
 content (PDF is returned as base64),
+and `create_screenplay_export` persists an approved, checksummed export beneath the configured
+backup volume without changing canonical screenplay data.
 `list_project_backups` lists validated backup manifests, `create_project_backup` creates an approved
 archive, `restore_project_backup` restores it into a new project, and `read_workflow_run` reads
 durable run state. Backup creation and restore require both the project grant and
@@ -54,8 +56,7 @@ not need an HTTP bearer header.
 
 Mutation tools are added only through the same capability service, with audit records, redaction,
 timeouts, output limits, and explicit consent. Project evaluations are available through the
-`read_project_evaluations` tool; evaluation execution and export-artifact creation remain planned
-extensions to the catalog.
+`read_project_evaluations` tool; evaluation execution remains a planned extension to the catalog.
 
 The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
 `/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker

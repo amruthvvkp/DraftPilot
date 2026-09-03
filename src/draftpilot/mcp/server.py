@@ -13,6 +13,7 @@ from draftpilot.core import telemetry
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
+from draftpilot.core.exports import ExportError, write_export
 from draftpilot.core.db import session_scope
 from draftpilot.core.mcp_auth import client_id_for_token
 from draftpilot.core.queue import get_arq_pool
@@ -445,6 +446,59 @@ async def render_screenplay_export(
         "format": file_format,
         "content": content,
     }
+
+
+@mcp.tool
+async def create_screenplay_export(
+    project_id: int,
+    screenplay_id: int,
+    file_format: str,
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Persist an approved, bounded screenplay export artifact without changing its source."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    if file_format not in {"fountain", "fdx", "pdf"}:
+        raise ValueError("Only Fountain, FDX, and PDF exports are available through MCP")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "exports.create",
+                "create",
+                {"screenplay_id": screenplay_id, "format": file_format},
+                approved=approved,
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        project = await projects_crud.get(session, project_id)
+        screenplay = await screenplays_crud.get(session, screenplay_id)
+        if project is None or screenplay is None or screenplay.project_id != project_id:
+            raise ValueError("Screenplay is not in the requested project")
+        document = await load_screenplay_doc(session, screenplay_id)
+    if file_format == "pdf":
+        content = render_pdf(document)
+    elif file_format == "fountain":
+        content = render_fountain(document).encode()
+    else:
+        content = render_fdx(document).encode()
+    try:
+        artifact = write_export(
+            settings.backup.root,
+            project_id,
+            screenplay_id,
+            screenplay.title,
+            file_format,
+            content,
+            settings.mcp.max_output_chars * 4,
+        )
+    except ExportError as exc:
+        raise ValueError(str(exc)) from exc
+    return {"project_id": project_id, "screenplay_id": screenplay_id, **artifact.__dict__}
 
 
 @mcp.tool
