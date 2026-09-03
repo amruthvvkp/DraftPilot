@@ -8,6 +8,7 @@ from draftpilot.core.screenplay.editor import (
     dual_dialogue_group,
     next_element,
 )
+from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.schema import SceneDoc
 from draftpilot.models.enums import BlockType
 from draftpilot.models import Block, DialogueTranslationCreate
@@ -72,6 +73,14 @@ def test_scene_doc_snapshot_roundtrip() -> None:
     scene = parse_fountain(SAMPLE).acts[0].scenes[0]
     restored = SceneDoc.model_validate(scene.model_dump(mode="json"))
     assert restored == scene
+
+
+def test_pdf_rendering_returns_a_valid_pdf_document() -> None:
+    """Render canonical screenplay semantics to a PDF document."""
+    document = parse_fountain(SAMPLE)
+    rendered = render_pdf(document)
+    assert rendered.startswith(b"%PDF-")
+    assert len(rendered) > 500
 
 
 def test_dialogue_translation_keeps_source_block_unchanged() -> None:

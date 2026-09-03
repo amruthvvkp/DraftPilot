@@ -63,6 +63,7 @@ ui = [
   "psycopg[binary]>=3.2.0",
   "pydantic-ai>=2.0.0",
   "pydantic-monty>=0.0.21",
+  "reportlab>=4.4.0",
   "redis>=5.2.0",
   "screenplay-tools>=0.0.10",
   "sqlmodel>=0.0.39",

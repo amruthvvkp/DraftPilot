@@ -1,7 +1,7 @@
 """Canonical screenplay export endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
@@ -10,6 +10,7 @@ from draftpilot.core.screenplay.adapters.fdx import parse_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
+from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.models import ScreenplayCreate, ScreenplayRead
@@ -24,23 +25,29 @@ async def export_screenplay(
     screenplay_id: int,
     file_format: str,
     session: AsyncSession = Depends(async_get_db),
-) -> PlainTextResponse:
-    """Export canonical screenplay data as Fountain or FDX without mutation."""
+) -> Response:
+    """Export canonical screenplay data as Fountain, FDX, or PDF without mutation."""
     project = await projects_crud.get(session, project_id)
     screenplay = await screenplays_crud.get(session, screenplay_id)
     if project is None or screenplay is None or screenplay.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
-    if file_format not in {"fountain", "fdx"}:
+    if file_format not in {"fountain", "fdx", "pdf"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unsupported export format")
     document = await load_screenplay_doc(session, screenplay_id)
     if file_format == "fountain":
         content = render_fountain(document)
         media_type = "text/plain"
         filename = f"{screenplay.title}.fountain"
-    else:
+    elif file_format == "fdx":
         content = render_fdx(document)
         media_type = "application/xml"
         filename = f"{screenplay.title}.fdx"
+    else:
+        return Response(
+            render_pdf(document),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{screenplay.title}.pdf"'},
+        )
     return PlainTextResponse(
         content,
         media_type=media_type,

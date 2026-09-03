@@ -24,3 +24,7 @@ The local retrieval service is also portable: `docker compose up --build rag` ex
 endpoint at `http://localhost:9010/health`. It uses the same bearer token convention as MCP and
 keeps search partitions project-scoped and persists its initial lexical store in the `rag_data`
 volume. The lexical implementation is intentionally replaceable with a vector-store adapter.
+
+Screenplay exports are non-mutating: use `/api/v1/projects/{project_id}/screenplays/{screenplay_id}/exports/fountain`,
+`.../fdx`, or `.../pdf`. PDF is best-effort and uses ReportLab's installed fonts; deployments that
+need Indian-language or other non-Latin glyphs should add and register a suitable Unicode font.
