@@ -73,6 +73,7 @@ from draftpilot.models.story_artifact import StoryArtifact, StoryArtifactBase, S
 from draftpilot.models.agent_proposal import AgentProposal, AgentProposalBase, AgentProposalRead
 from draftpilot.models.mcp_access import MCPAuditEvent, MCPClient, MCPClientBase, MCPGrant, MCPGrantBase, MCPGrantCreate, MCPGrantRead
 from draftpilot.models.provider_profile import ProviderProfile, ProviderProfileBase, ProviderProfileCreate, ProviderProfileRead, ProviderProfileUpdate
+from draftpilot.models.copilot_message import CopilotMessage, CopilotMessageBase, CopilotMessageCreate, CopilotMessageRead
 
 __all__ = [
     "BlockType",
@@ -140,4 +141,8 @@ __all__ = [
     "ProviderProfileCreate",
     "ProviderProfileRead",
     "ProviderProfileUpdate",
+    "CopilotMessage",
+    "CopilotMessageBase",
+    "CopilotMessageCreate",
+    "CopilotMessageRead",
 ]

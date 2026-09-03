@@ -128,6 +128,20 @@ export type ProviderProfile = {
   has_api_key: boolean
 }
 
+export type CopilotMessage = {
+  id: number
+  project_id: number
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  page: string
+  artifact: string | null
+  selection: string | null
+  instruction_layers: Record<string, unknown>
+  citations: Array<Record<string, unknown>>
+  active_tools: string[]
+  created_at: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -226,4 +240,12 @@ export function updateProviderProfile(profileId: number, payload: { provider?: s
 
 export function cancelWorkflowRun(projectId: number, runId: number): Promise<{ id: number; project_id: number; status: string }> {
   return request<{ id: number; project_id: number; status: string }>(`/api/v1/projects/${projectId}/runs/${runId}/cancel`, { method: 'POST' })
+}
+
+export function getCopilotMessages(projectId: number): Promise<CopilotMessage[]> {
+  return request<CopilotMessage[]>(`/api/v1/projects/${projectId}/copilot/messages`)
+}
+
+export function sendCopilotMessage(projectId: number, payload: Pick<CopilotMessage, 'content' | 'page' | 'artifact' | 'selection' | 'instruction_layers' | 'citations' | 'active_tools'>): Promise<CopilotMessage> {
+  return request<CopilotMessage>(`/api/v1/projects/${projectId}/copilot/messages`, { method: 'POST', body: JSON.stringify({ ...payload, role: 'user' }) })
 }

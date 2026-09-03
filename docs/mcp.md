@@ -29,3 +29,7 @@ timeouts, output limits, and explicit consent.
 The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
 `/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker
 checks the persisted state before recording success.
+
+Copilot turns are persisted at `/api/v1/projects/{project_id}/copilot/messages`. Each message
+records its page, artifact, selection, instruction layers, retrieved citations, and active typed
+tools so a reconnecting client can restore context without direct database access.
