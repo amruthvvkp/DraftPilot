@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
+from draftpilot.core.capabilities import capabilities_for_page
 from draftpilot.core.copilot import generate_reply
 from draftpilot.core.config import LLMSettings
 from draftpilot.core.providers import settings_from_profile
@@ -32,6 +33,11 @@ class CopilotMessageRequest(BaseModel):
     instruction_layers: dict[str, object] = Field(default_factory=dict)
     citations: list[dict[str, object]] = Field(default_factory=list)
     active_tools: list[str] = Field(default_factory=list)
+
+
+def _server_context(data: CopilotMessageRequest) -> CopilotMessageRequest:
+    """Replace client-supplied active tools with the page-scoped server catalog."""
+    return data.model_copy(update={"active_tools": capabilities_for_page(data.page)})
 
 
 async def _selected_profile_config(
@@ -77,6 +83,7 @@ async def create_message(
     """Persist one Copilot turn with its supplied context envelope."""
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    data = _server_context(data)
     message = await messages_crud.create(
         session,
         CopilotMessageCreate(
@@ -98,6 +105,7 @@ async def respond_to_message(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Response input must be a user turn")
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    data = _server_context(data)
     _, profile_config = await _selected_profile_config(data, session)
     await messages_crud.create(session, CopilotMessageCreate(project_id=project_id, **data.model_dump()))
     history = [
@@ -143,6 +151,7 @@ async def start_async_response(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Response input must be a user turn")
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    data = _server_context(data)
     message = await messages_crud.create(
         session,
         CopilotMessageCreate(project_id=project_id, **data.model_dump()),

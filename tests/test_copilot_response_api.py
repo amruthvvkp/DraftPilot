@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.api.copilot import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project, WorkflowRun
+from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project, WorkflowRun, WorkflowRunCreate
 
 
 class _Session:
@@ -92,8 +92,9 @@ def test_async_copilot_response_enqueues_durable_run(monkeypatch) -> None:
         """Return no prior turns for the fixture."""
         return []
 
-    async def create_run(_session: _Session, _data: object) -> WorkflowRun:
+    async def create_run(_session: _Session, _data: WorkflowRunCreate) -> WorkflowRun:
         """Return a queued durable run fixture."""
+        assert _data.input["active_tools"] == ["screenplay.read", "context.read", "revisions.read"]
         return WorkflowRun(id=44, project_id=7, kind="copilot_response")
 
     class Pool:

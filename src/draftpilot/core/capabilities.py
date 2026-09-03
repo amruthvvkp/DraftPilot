@@ -34,6 +34,20 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="runs.control", description="Inspect, pause, resume, or cancel a workflow run.", scope="run", mutates=True, approval_required=True),
 )
 
+_PAGE_CAPABILITIES: dict[str, tuple[str, ...]] = {
+    "studio": ("outline.read", "context.read", "knowledge_graph.read", "revisions.read"),
+    "timeline": ("timeline.propose", "screenplay.read", "context.read", "revisions.read"),
+    "review": ("evaluations.read", "screenplay.read", "context.read", "revisions.read"),
+    "settings": ("context.read",),
+    "workspace": ("screenplay.read", "context.read", "revisions.read"),
+}
+
+
+def capabilities_for_page(page: str) -> list[str]:
+    """Return the server-authoritative capability bundle for a workflow page."""
+    normalized = page.casefold().strip().strip("/").split("/")[-1] or "workspace"
+    return list(_PAGE_CAPABILITIES.get(normalized, _PAGE_CAPABILITIES["workspace"]))
+
 
 def capability_catalog() -> list[Capability]:
     """Return a copy of the public capability catalog."""
