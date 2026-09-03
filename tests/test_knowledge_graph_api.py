@@ -56,3 +56,28 @@ def test_graph_rejects_cross_project_edge(
         json={"source_node_id": 1, "target_node_id": 2, "relation": "knows"},
     )
     assert edge_response.status_code == 404
+
+
+def test_graph_node_update_rejects_stale_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject an outdated canonical-node edit before persistence."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated session marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+    node = KnowledgeNode(id=1, project_id=5, kind="character", label="Mira", version=3)
+
+    async def get_node(_session: _Session, _node_id: int) -> KnowledgeNode:
+        """Return the current node version."""
+        return node
+
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.graph_crud.get_node", get_node)
+    response = TestClient(app).patch(
+        "/api/v1/projects/5/knowledge-graph/nodes/1",
+        headers={"If-Match": "2"},
+        json={"label": "Mira revised"},
+    )
+    assert response.status_code == 409

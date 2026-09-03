@@ -347,6 +347,10 @@ export function createKnowledgeNode(projectId: number, kind: string, label: stri
   return request<KnowledgeGraph['nodes'][number]>(`/api/v1/projects/${projectId}/knowledge-graph/nodes`, { method: 'POST', body: JSON.stringify({ kind, label, description: description || null }) })
 }
 
+export function updateKnowledgeNode(projectId: number, nodeId: number, version: number, changes: { label?: string; description?: string | null }): Promise<KnowledgeGraph['nodes'][number]> {
+  return request<KnowledgeGraph['nodes'][number]>(`/api/v1/projects/${projectId}/knowledge-graph/nodes/${nodeId}`, { method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes) })
+}
+
 export function getAgentRoles(): Promise<AgentRole[]> {
   return request<AgentRole[]>('/api/v1/agents/roles')
 }

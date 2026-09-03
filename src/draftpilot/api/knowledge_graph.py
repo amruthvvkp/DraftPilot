@@ -1,6 +1,6 @@
 """Project-scoped knowledge graph REST endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -32,6 +32,14 @@ class NodeRequest(KnowledgeNodeBase):
     """Accept a graph node while taking project scope from the URL."""
 
 
+class NodeUpdate(BaseModel):
+    """Describe an optimistic edit to one canonical graph node."""
+
+    label: str | None = Field(default=None, min_length=1, max_length=300)
+    description: str | None = Field(default=None, max_length=4000)
+    node_metadata: dict[str, object] | None = None
+
+
 @router.get("", response_model=GraphRead)
 async def get_graph(
     project_id: int, session: AsyncSession = Depends(async_get_db)
@@ -59,6 +67,31 @@ async def create_node(
     node = await graph_crud.create_node(
         session, KnowledgeNodeCreate(project_id=project_id, **data.model_dump())
     )
+    return KnowledgeNodeRead.model_validate(node)
+
+
+@router.patch("/nodes/{node_id}", response_model=KnowledgeNodeRead)
+async def update_node(
+    project_id: int,
+    node_id: int,
+    data: NodeUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> KnowledgeNodeRead:
+    """Update a project node only when its version is current."""
+    node = await graph_crud.get_node(session, node_id)
+    if node is None or node.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Graph node not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != node.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Graph node has changed")
+    for key, value in data.model_dump(exclude_unset=True).items():
+        setattr(node, key, value)
+    node.version += 1
+    session.add(node)
+    await session.commit()
+    await session.refresh(node)
     return KnowledgeNodeRead.model_validate(node)
 
 

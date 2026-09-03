@@ -46,7 +46,7 @@ nav { display: grid; gap: 7px; } nav a { color: #8f8b81; padding: 11px 12px; bor
 .graph-nodes { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; max-width: 760px; margin: auto; }
 .graph-node { padding: 16px; min-height: 125px; background: #fffdf9; border: 1px solid #ded8cf; border-radius: 7px; box-shadow: 0 4px 14px #514a3c0c; }
 .graph-node > span { color: #a56736; text-transform: uppercase; font: 9px 'DM Mono'; }
-.graph-node h3 { margin: 9px 0 6px; font-size: 16px; }
+.graph-node h3 { margin: 9px 0 6px; font-size: 16px; }.graph-node input,.graph-node textarea{width:100%;box-sizing:border-box;padding:4px 0;border:0;border-bottom:1px solid #ded8cf;background:transparent;color:#403b35;font:600 16px Inter,sans-serif;outline:0}.graph-node textarea{margin-top:8px;color:#777168;font:11px/1.45 Inter,sans-serif;resize:vertical}
 .graph-node p { margin: 0 0 8px; color: #777168; font-size: 11px; line-height: 1.45; }
 .graph-node small { color: #aaa39a; font: 9px 'DM Mono'; }
 .graph-edges { max-width: 760px; margin: 34px auto 0; }

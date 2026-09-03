@@ -152,8 +152,14 @@ def test_context_page_creates_typed_knowledge_node(page: Page) -> None:
         graph["nodes"].append(created)
         route.fulfill(status=201, content_type="application/json", body=json.dumps(created))
 
+    def update_node(route: Route) -> None:
+        """Validate the optimistic canonical-node update."""
+        assert route.request.headers.get("if-match") == "1"
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({**created, "label": "Pather Panchali revised", "version": 2}))
+
     page.route("**/api/v1/projects/9001/knowledge-graph", graph_request)
     page.route("**/api/v1/projects/9001/knowledge-graph/nodes", create_node)
+    page.route("**/api/v1/projects/9001/knowledge-graph/nodes/40", update_node)
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
     page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
@@ -162,4 +168,7 @@ def test_context_page_creates_typed_knowledge_node(page: Page) -> None:
     page.get_by_label("Context node label").fill("Pather Panchali")
     page.get_by_label("Context node description").fill("Textured rural reference.")
     page.get_by_role("button", name="Add context").click()
-    expect(page.get_by_role("heading", name="Pather Panchali")).to_be_visible()
+    expect(page.get_by_label("Edit Pather Panchali label")).to_have_value("Pather Panchali")
+    label = page.get_by_label("Edit Pather Panchali label")
+    label.fill("Pather Panchali revised")
+    label.blur()
