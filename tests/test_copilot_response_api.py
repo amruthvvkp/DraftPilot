@@ -43,8 +43,9 @@ def test_copilot_response_persists_user_and_assistant_turns(monkeypatch) -> None
             *[CopilotMessage(id=index + 2, **message.model_dump()) for index, message in enumerate(captured)],
         ]
 
-    async def reply(content, page, artifact, selection, role, history) -> str:
+    async def reply(content, page, artifact, selection, role, history, llm_settings=None) -> str:
         """Return a deterministic provider fixture response."""
+        assert llm_settings is None
         assert (content, page, artifact, selection, role) == ("Find the causal gap.", "timeline", "outline", "Beat 4", "continuity_supervisor")
         assert history[-1]["content"] == "Find the causal gap."
         return "The reveal needs a stronger setup."
