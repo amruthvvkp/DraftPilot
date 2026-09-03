@@ -10,6 +10,12 @@
 
 **Spec:** `docs/roadmap.md` and the approved DraftPilot modernization plan.
 
+**Status (2026-09-04):** The planned React project-studio slice is implemented and has since
+expanded into the screenplay workspace, context graph, timeline, Copilot, export, backup, and
+MCP surfaces. Verification uses Python Playwright with mocked API responses in the portable
+Compose `e2e` service; the original Vitest-only steps below are retained as historical design
+intent and are not a release gate.
+
 ## Global Constraints
 
 - Keep the application local-first and single-user.

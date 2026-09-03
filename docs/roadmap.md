@@ -52,6 +52,19 @@ format fidelity, export fidelity, and writer usefulness. This benchmark becomes 
 for the editor, context-generation workflows, agent permissions, revision/rollback behavior, and
 FDX import/export rather than relying only on synthetic fixtures.
 
+## Implementation checkpoint — 2026-09-04
+
+The React/Vite studio now covers the project vault and multilingual creation flow, screenplay
+workspace, semantic editor blocks, dialogue translations, revisions, timeline proposals, durable
+Copilot turns, evaluations, typed agent proposals, creative-context nodes and relationships,
+project-scoped RAG retrieval, MCP prompts/resources/tools, provider settings, exports, and backups.
+The browser suite runs in the pinned `e2e` Playwright Compose service with mocked API responses and
+no test writes to the developer database. PDF imports preserve binary bytes at the React boundary,
+FDX export is exposed in the workspace, and the API rejects a primary screenplay language reused as
+a dialogue-translation target. Phases A, B, D, E, and F remain in progress because the remaining
+work includes broader end-to-end smoke coverage, richer typed story operations, complete external
+MCP client workflows, and production hardening of deployment and recovery paths.
+
 ## Phases
 
 Phases are dependency-ordered. Each gets its own spec → implementation; A+B ship together
