@@ -224,6 +224,33 @@ async def update_project_block(
     return BlockRead.model_validate(updated)
 
 
+@router.get(
+    "/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations",
+    response_model=list[DialogueTranslationRead],
+)
+async def list_dialogue_translations(
+    project_id: int,
+    scene_id: int,
+    block_id: int,
+    session: AsyncSession = Depends(async_get_db),
+) -> list[DialogueTranslationRead]:
+    """List linked translations for a dialogue block within its project."""
+    scene = await scenes_crud.get(session, scene_id)
+    block = await blocks_crud.get(session, block_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if (
+        scene is None
+        or block is None
+        or block.scene_id != scene_id
+        or screenplay is None
+        or screenplay.project_id != project_id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dialogue block not found")
+    translations = await translations_crud.list_for_block(session, block_id)
+    return [DialogueTranslationRead.model_validate(item) for item in translations]
+
+
 @router.put(
     "/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations/{language}",
     response_model=DialogueTranslationRead,

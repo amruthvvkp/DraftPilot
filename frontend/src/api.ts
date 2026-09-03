@@ -92,6 +92,15 @@ export type AgentProposal = {
   status: string
 }
 
+export type DialogueTranslation = {
+  id: number
+  block_id: number
+  language: string
+  text: string
+  source_version: number
+  status: string
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -139,5 +148,15 @@ export function rollbackAgentProposal(projectId: number, proposalId: number): Pr
 export function updateProjectBlock(projectId: number, sceneId: number, blockId: number, version: number, text: string): Promise<ScreenplayBlock> {
   return request<ScreenplayBlock>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}`, {
     method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify({ text }),
+  })
+}
+
+export function getDialogueTranslations(projectId: number, sceneId: number, blockId: number): Promise<DialogueTranslation[]> {
+  return request<DialogueTranslation[]>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}/translations`)
+}
+
+export function saveDialogueTranslation(projectId: number, sceneId: number, blockId: number, language: string, version: number, text: string): Promise<DialogueTranslation> {
+  return request<DialogueTranslation>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}/translations/${encodeURIComponent(language)}`, {
+    method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify({ text }),
   })
 }
