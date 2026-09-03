@@ -27,6 +27,8 @@ redevelopment and production import/interoperability paths.
 
 - Store artifact manifests, model/provider settings, instruction layers, workflow runs, and named
   snapshots for every stage.
+- Record each Copilot turn with its active workflow stage, selected artifact scope, retrieved
+  citations, participating agents, MCP calls, proposal, approval, and resulting graph/index refresh.
 - Use mocked/fixture-backed browser tests; never use the developer's live Compose database as test
   state.
 - Score story beats, character arcs, pacing, tone, visual language, continuity, format fidelity,

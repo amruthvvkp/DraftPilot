@@ -11,7 +11,9 @@ scene-aware editing, layered instructions, and future creative-context workflows
 Use the page wireframes in [`draftpilot-pages.html`](../wireframes/draftpilot-pages.html) as the
 layout reference for the next surfaces. The existing project vault and screenplay workspace are
 the visual anchors; the other views show the intended information hierarchy for project overview,
-story development, agents/review, and settings/export.
+story development, agents/review, and settings/export. Every workflow view now includes the same
+right-side Copilot rail: conversation history, available agents, active run state, scoped context,
+and a turn input. The assistant is persistent across stage changes, not an editor-only feature.
 
 ## Scope
 
@@ -25,6 +27,16 @@ story development, agents/review, and settings/export.
 - Reserve the first end-to-end screenplay benchmark for two isolated tracks: rebuild the writer's
   feature from high-level inputs without screenplay text, then import the immutable Final Draft
   13 FDX control and compare structure, fidelity, context, and revisions.
+- Treat the guided workflow as a loop rather than a one-way wizard: logline → outline → character
+  stories → timeline → scenes → screenplay → review, with every artifact editable and every turn
+  able to send its current scoped context to the Copilot and selected agents.
+- Add a local-first RAG service to Compose for indexing project artifacts, imported screenplay
+  chunks, references, and knowledge-graph edges. Retrieval must be citation-bearing, project-scoped,
+  refreshable after each approved change, and replaceable without coupling the editor to one vector
+  database or embedding provider.
+- Keep MCP as the typed capability boundary for agents. The UI subscribes to persisted run events,
+  tool results, and artifact changes, then refreshes visible panels from the server rather than
+  rendering hidden agent state.
 
 ## Exit criteria
 
@@ -34,3 +46,6 @@ story development, agents/review, and settings/export.
 - API and browser tests pass, frontend builds, and the existing Python gates remain green.
 - The benchmark contract is documented before using the real screenplay: source control project,
   from-scratch project, artifact manifests, rubric, snapshots, and comparison outputs.
+- The wireframe contract shows a Copilot rail on every workflow page and a visible path from
+  conversation turn to scoped artifact proposal, approval, persistence, retrieval refresh, and UI
+  update.

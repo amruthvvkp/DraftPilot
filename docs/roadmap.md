@@ -22,6 +22,12 @@ Tracking epic: [#13](https://github.com/amruthvvkp/DraftPilot/issues/13).
 - **Agent context** — instructions are layered and overridable: installation defaults, project
   instructions, artifact/outline/timeline instructions, scene instructions, and run/task
   instructions. Creative context is first-class structured data, not only prompt text.
+- **Assistant presence** — the Copilot conversation and agent rail is a persistent right-side
+  surface on every workflow page. Each turn is scoped to the current artifact/selection and can
+  propose a typed change, ask a question, or advance a workflow decision; it never silently edits.
+- **Retrieval** — Compose includes a replaceable local-first RAG service for project-scoped
+  retrieval over artifacts, screenplay chunks, references, and knowledge-graph edges. Approved
+  changes trigger incremental re-indexing and visible citation refresh.
 
 ## Ground-test screenplay benchmark
 
@@ -70,7 +76,9 @@ project cards on `/projects`. Depends on B.
 
 ### Phase D — Editor workspace · [#16](https://github.com/amruthvvkp/DraftPilot/issues/16) · status: planned
 3-pane editor — left Navigator (scenes), center script (element-typed, screenplay fonts,
-top element selector + bottom bold/italic/underline/color toolbar), right agent chat panel.
+top element selector + bottom bold/italic/underline/color toolbar), right persistent Copilot and
+agent panel. The same assistant panel appears in project, outline, timeline, context, review, and
+settings workflow views.
 Beat-board drag-drop (NiceGUI trello example) with timeline/act view toggle; per-section
 context refs (camera, palette, location, characters, reference scenes, directors, films,
 styles, lighting plans, and color palettes); smart typing; dual + translated dialogue editing;
@@ -91,6 +99,12 @@ when a run needs generated code to compose or filter those capabilities, execute
 the Monty adapter rather than an unrestricted shell or Python subprocess. PDF/HTML export folds
 in here. Depends on B + D.
 
+The guided interaction is turn-based: the user states or confirms a decision, the Copilot retrieves
+relevant project context and proposes the next artifact or change, agents can collaborate through
+MCP, and the UI renders persisted results as they arrive. Users can move backward to revise a
+logline, character, beat, timeline event, or scene; dependent artifacts become visibly stale and
+can be regenerated rather than being silently overwritten.
+
 ### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: planned
 Persist workflows, runs, tasks, instruction resolution, context artifacts, approvals, Monty
 execution records, MCP tool calls, evaluator results, and reversible change sets. Support
@@ -98,3 +112,11 @@ resumable snapshots, cancellation, bounded retries, per-tool grants, SSRF protec
 limits, and conflict-aware application of story operations. Monty host functions are narrow,
 typed adapters over DraftPilot services; filesystem, network, command, and destructive access
 remain separate grants and are never implied by an agent's edit permission.
+
+The default Compose profile also includes a local-first RAG subsystem: an indexing/retrieval API,
+an asynchronous indexing worker, a replaceable vector store, and an embedding adapter that can
+use a local model or a configured provider. It indexes approved project artifacts, screenplay
+blocks, references, instructions, and knowledge-graph edges with project/permission boundaries;
+each result carries source citations and a content version. The editor and Copilot consume this
+through typed services/MCP rather than talking directly to the vector store, so the stack can
+change providers without changing workflow UX.
