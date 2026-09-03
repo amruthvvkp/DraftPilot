@@ -1,6 +1,7 @@
 """Python Playwright journeys for the React screenplay workspace."""
 
 import json
+import re
 
 from playwright.sync_api import Page, Route, expect
 
@@ -33,9 +34,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
 
     page.route("**/api/v1/projects", projects)
     page.route("**/api/v1/projects/9001/workspace", workspace_request)
-    page.goto("http://localhost:9000/projects")
+    page.goto("/projects")
     page.get_by_role("heading", name="The Lantern House").click()
 
-    expect(page).to_have_url("http://localhost:9000/projects/9001")
+    expect(page).to_have_url(re.compile(r"/projects/9001$"))
     expect(page.get_by_role("heading", name="The Lantern House")).to_be_visible()
     expect(page.get_by_role("article").get_by_text("INT. LANTERN HOUSE - NIGHT")).to_be_visible()

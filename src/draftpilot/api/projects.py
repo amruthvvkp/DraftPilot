@@ -6,12 +6,14 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.crud import acts as acts_crud
+from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.models import (
     ActRead,
+    BlockRead,
     ProjectCreate,
     ProjectRead,
     ProjectReferenceBase,
@@ -30,6 +32,7 @@ class ProjectWorkspaceRead(BaseModel):
     screenplay: ScreenplayRead | None
     acts: list[ActRead]
     scenes: list[SceneRead]
+    blocks: dict[int, list[BlockRead]] = Field(default_factory=dict)
 
 
 class ProjectReferenceInput(BaseModel):
@@ -89,12 +92,18 @@ async def get_project_workspace(
     screenplay = screenplays[0] if screenplays else None
     acts = []
     scenes = []
+    blocks: dict[int, list[BlockRead]] = {}
     if screenplay is not None and screenplay.id is not None:
         acts = await acts_crud.list_for_screenplay(session, screenplay.id)
         scenes = await scenes_crud.list_for_screenplay(session, screenplay.id)
+        for scene in scenes:
+            if scene.id is not None:
+                scene_blocks = await blocks_crud.list_for_scene(session, scene.id)
+                blocks[scene.id] = [BlockRead.model_validate(block) for block in scene_blocks]
     return ProjectWorkspaceRead(
         project=ProjectRead.model_validate(project),
         screenplay=ScreenplayRead.model_validate(screenplay) if screenplay else None,
         acts=[ActRead.model_validate(act) for act in acts],
         scenes=[SceneRead.model_validate(scene) for scene in scenes],
+        blocks=blocks,
     )

@@ -31,7 +31,7 @@ def mock_projects_api(page: Page) -> None:
 def test_project_vault_requires_title_before_creation(page: Page) -> None:
     """Show the project wizard and reject an empty title."""
     mock_projects_api(page)
-    page.goto("http://localhost:9000/projects")
+    page.goto("/projects")
     expect(page.get_by_role("heading", name="Projects")).to_be_visible()
     page.get_by_role("button", name="New project").first.click()
     expect(page.get_by_role("heading", name="Find the shape of your story.")).to_be_visible()
@@ -42,7 +42,7 @@ def test_project_vault_requires_title_before_creation(page: Page) -> None:
 def test_create_project_from_react_wizard(page: Page) -> None:
     """Create a project through the visible React workflow."""
     mock_projects_api(page)
-    page.goto("http://localhost:9000/projects")
+    page.goto("/projects")
     page.get_by_role("button", name="New project").first.click()
     wizard = page.locator(".wizard")
     page.get_by_label("Project title").fill("Playwright story")

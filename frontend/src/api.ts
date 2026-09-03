@@ -44,6 +44,19 @@ export type Scene = {
   body: string
 }
 
+export type ScreenplayBlock = {
+  id: number
+  scene_id: number
+  position: number
+  element_type: string
+  text: string
+  character_extension: string | null
+  is_dual: boolean
+  dual_group: number | null
+  translation: string | null
+  translation_lang: string | null
+}
+
 export type Act = { id: number; screenplay_id: number; title: string | null; position: number }
 
 export type ProjectWorkspace = {
@@ -51,6 +64,7 @@ export type ProjectWorkspace = {
   screenplay: { id: number; project_id: number; title: string; format: string; status: string } | null
   acts: Act[]
   scenes: Scene[]
+  blocks: Record<number, ScreenplayBlock[]>
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

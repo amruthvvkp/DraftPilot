@@ -88,6 +88,16 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  e2e:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: ./Dockerfile.e2e
+    command: ["pytest", "-q", "tests/e2e", "--browser", "chromium", "--base-url", "http://ui:8000"]
+    depends_on:
+      ui:
+        condition: service_started
+
   worker:
     image: draftpilot-worker
     build:
