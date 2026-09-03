@@ -148,6 +148,7 @@ class MCPSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP__")
 
     auth_token: SecretStr = SecretStr("draftpilot-local-token")
+    admin_token: SecretStr = SecretStr("draftpilot-local-admin-token")
     request_timeout_seconds: float = 10.0
     max_output_chars: int = 100_000
 

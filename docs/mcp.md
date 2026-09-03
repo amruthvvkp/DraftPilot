@@ -23,6 +23,10 @@ in the server environment or encrypted storage and must not be sent to an MCP cl
 is available on `http://localhost:9001` in local Compose; configure the client for the server's MCP
 endpoint rather than the root health URL.
 
+Client registration and grant administration are protected separately from MCP invocation with
+`Authorization: Bearer <MCP__ADMIN_TOKEN>`. Keep this token server-side and use a distinct value from
+`MCP__AUTH_TOKEN`; the local default is only for development.
+
 The Streamable HTTP transport requires `Authorization: Bearer <MCP__AUTH_TOKEN>`. Compose uses
 `draftpilot-local-token` for local development; replace it before exposing port 9001 outside the
 local machine. Local stdio transport is intended for a process launched by the same user and does

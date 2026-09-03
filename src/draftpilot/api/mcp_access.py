@@ -1,16 +1,28 @@
 """Project-scoped MCP client and capability grant administration endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from datetime import datetime
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.config import settings
 from draftpilot.crud import mcp_access as access_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import MCPClient, MCPGrant, MCPGrantRead
 
 router = APIRouter(prefix="/mcp", tags=["mcp-access"])
+_admin_bearer = HTTPBearer(auto_error=False)
+
+
+async def require_mcp_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_admin_bearer),
+) -> None:
+    """Require the separate server-side bearer token for grant administration."""
+    expected = settings.mcp.admin_token.get_secret_value()
+    if credentials is None or credentials.scheme.casefold() != "bearer" or credentials.credentials != expected:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="MCP administration authorization required")
 
 
 class ClientCreateRequest(BaseModel):
@@ -39,7 +51,9 @@ class GrantRequest(BaseModel):
 
 @router.post("/clients", response_model=ClientRead, status_code=status.HTTP_201_CREATED)
 async def register_client(
-    data: ClientCreateRequest, session: AsyncSession = Depends(async_get_db)
+    data: ClientCreateRequest,
+    session: AsyncSession = Depends(async_get_db),
+    _admin: None = Depends(require_mcp_admin),
 ) -> ClientRead:
     """Register a client without accepting or returning bearer secrets."""
     existing = await access_crud.get_client(session, data.client_id)
@@ -54,7 +68,10 @@ async def register_client(
 
 @router.get("/projects/{project_id}/grants", response_model=list[MCPGrantRead])
 async def list_project_grants(
-    project_id: int, client_id: str, session: AsyncSession = Depends(async_get_db)
+    project_id: int,
+    client_id: str,
+    session: AsyncSession = Depends(async_get_db),
+    _admin: None = Depends(require_mcp_admin),
 ) -> list[MCPGrantRead]:
     """List active grants for one client in one project."""
     if await projects_crud.get(session, project_id) is None:
@@ -65,7 +82,10 @@ async def list_project_grants(
 
 @router.post("/projects/{project_id}/grants", response_model=MCPGrantRead, status_code=status.HTTP_201_CREATED)
 async def create_project_grant(
-    project_id: int, data: GrantRequest, session: AsyncSession = Depends(async_get_db)
+    project_id: int,
+    data: GrantRequest,
+    session: AsyncSession = Depends(async_get_db),
+    _admin: None = Depends(require_mcp_admin),
 ) -> MCPGrantRead:
     """Create a project grant only for a registered client."""
     if await projects_crud.get(session, project_id) is None:
