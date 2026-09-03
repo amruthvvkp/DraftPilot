@@ -47,6 +47,7 @@ nav = [
   { "Get started" = "index.md" },
   { "Roadmap" = "roadmap.md" },
   { "Backups & recovery" = "backups.md" },
+  { "Provider setup" = "providers.md" },
   { "References & credits" = "references.md" },
   { "Markdown in 5min" = "markdown.md" },
 ]

@@ -6,6 +6,7 @@ from draftpilot.crud import (
     project_references,
     projects,
     scene_revisions,
+    provider_profiles,
     scenes,
     screenplays,
 )
@@ -18,4 +19,5 @@ __all__ = [
     "blocks",
     "project_references",
     "scene_revisions",
+    "provider_profiles",
 ]

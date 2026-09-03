@@ -72,6 +72,7 @@ from draftpilot.models.timeline_proposal import (
 from draftpilot.models.story_artifact import StoryArtifact, StoryArtifactBase, StoryArtifactRead
 from draftpilot.models.agent_proposal import AgentProposal, AgentProposalBase, AgentProposalRead
 from draftpilot.models.mcp_access import MCPAuditEvent, MCPClient, MCPClientBase, MCPGrant, MCPGrantBase, MCPGrantCreate, MCPGrantRead
+from draftpilot.models.provider_profile import ProviderProfile, ProviderProfileBase, ProviderProfileCreate, ProviderProfileRead, ProviderProfileUpdate
 
 __all__ = [
     "BlockType",
@@ -134,4 +135,9 @@ __all__ = [
     "MCPGrantBase",
     "MCPGrantCreate",
     "MCPGrantRead",
+    "ProviderProfile",
+    "ProviderProfileBase",
+    "ProviderProfileCreate",
+    "ProviderProfileRead",
+    "ProviderProfileUpdate",
 ]
