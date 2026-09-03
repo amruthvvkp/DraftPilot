@@ -351,6 +351,10 @@ export function updateKnowledgeNode(projectId: number, nodeId: number, version: 
   return request<KnowledgeGraph['nodes'][number]>(`/api/v1/projects/${projectId}/knowledge-graph/nodes/${nodeId}`, { method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes) })
 }
 
+export function createKnowledgeEdge(projectId: number, sourceNodeId: number, targetNodeId: number, relation: string): Promise<KnowledgeGraph['edges'][number]> {
+  return request<KnowledgeGraph['edges'][number]>(`/api/v1/projects/${projectId}/knowledge-graph/edges`, { method: 'POST', body: JSON.stringify({ source_node_id: sourceNodeId, target_node_id: targetNodeId, relation }) })
+}
+
 export function getAgentRoles(): Promise<AgentRole[]> {
   return request<AgentRole[]>('/api/v1/agents/roles')
 }
