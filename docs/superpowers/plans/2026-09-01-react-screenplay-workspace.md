@@ -29,6 +29,9 @@ be applied. The Copilot rail exposes the page-aware tools available for the curr
 - Render a three-pane workspace shell: scene navigator, screenplay canvas, and context/instructions.
 - Treat scene time as a first-class screenplay property: estimated duration, cumulative start/end
   offsets, overall runtime, and pacing/readiness drift indicators.
+- Add a timeline board where writers can drag scenes to refactor screenplay order. Reordering must
+  recalculate scene numbers and offsets, preserve beat/character links, mark dependent artifacts
+  stale, and remain a reviewable reversible proposal until approved.
 - Make editor transitions semantic: autocomplete for elements, characters, and headings; Tab moves
   to the next valid element; dual dialogue is represented as a paired structure.
 - Make project and scene context buttons open expanded instruction editors. AI formatting creates a

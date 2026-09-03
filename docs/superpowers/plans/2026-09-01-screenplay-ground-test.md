@@ -35,6 +35,8 @@ redevelopment and production import/interoperability paths.
   export fidelity, runtime/pacing accuracy, context retrieval quality, and writer usefulness.
 - Exercise editor interaction contracts: autocomplete, Tab element transitions, dual dialogue,
   project/scene context switching, AI formatting diffs, and approval/rollback behavior.
+- Exercise timeline contracts: drag and keyboard scene reorder, act/character lane visibility,
+  recalculated runtime offsets, linked-beat preservation, stale dependent artifacts, and rollback.
 - Require explicit approval before applying agent changes and preserve rollback to the prior
   snapshot.
 
