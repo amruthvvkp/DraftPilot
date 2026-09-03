@@ -26,13 +26,20 @@ async def list_for_project(session: AsyncSession, project_id: int) -> list[Story
 async def mark_dependents_stale(
     session: AsyncSession, project_id: int, changed_ids: Sequence[int]
 ) -> list[int]:
-    """Mark artifacts depending on changed artifacts as stale."""
-    changed = set(changed_ids)
+    """Mark direct and transitive dependents of changed artifacts as stale."""
+    invalidated = set(changed_ids)
     artifacts = await list_for_project(session, project_id)
     stale_ids: list[int] = []
-    for artifact in artifacts:
-        if artifact.id not in changed and changed.intersection(artifact.depends_on):
-            artifact.stale = True
-            stale_ids.append(artifact.id or 0)
-            session.add(artifact)
-    return stale_ids
+    while True:
+        newly_invalidated: set[int] = set()
+        for artifact in artifacts:
+            if artifact.id is None or artifact.id in invalidated:
+                continue
+            if invalidated.intersection(artifact.depends_on):
+                artifact.stale = True
+                stale_ids.append(artifact.id)
+                newly_invalidated.add(artifact.id)
+                session.add(artifact)
+        if not newly_invalidated:
+            return stale_ids
+        invalidated.update(newly_invalidated)

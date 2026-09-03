@@ -53,6 +53,50 @@ class ArtifactUpdateRequest(BaseModel):
     stale: bool | None = None
 
 
+async def _validate_dependencies(
+    session: AsyncSession,
+    project_id: int,
+    artifact_id: int | None,
+    dependencies: list[int],
+) -> None:
+    """Reject missing, cross-project, self-referential, or cyclic dependencies."""
+    if len(dependencies) != len(set(dependencies)):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Artifact dependencies must be unique",
+        )
+    artifacts = await artifacts_crud.list_for_project(session, project_id)
+    by_id = {artifact.id: artifact for artifact in artifacts if artifact.id is not None}
+    missing = set(dependencies) - set(by_id)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Artifact dependencies must belong to this project",
+        )
+    if artifact_id is not None and artifact_id in dependencies:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="An artifact cannot depend on itself",
+        )
+    if artifact_id is None:
+        return
+    graph = {identifier: list(artifact.depends_on) for identifier, artifact in by_id.items()}
+    graph[artifact_id] = dependencies
+    pending = list(dependencies)
+    visited: set[int] = set()
+    while pending:
+        dependency_id = pending.pop()
+        if dependency_id == artifact_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Artifact dependencies cannot contain cycles",
+            )
+        if dependency_id in visited:
+            continue
+        visited.add(dependency_id)
+        pending.extend(graph.get(dependency_id, []))
+
+
 @router.get("", response_model=list[StoryArtifactRead])
 async def list_artifacts(
     project_id: int, session: AsyncSession = Depends(async_get_db)
@@ -73,6 +117,7 @@ async def create_artifact(
     """Create an editable project artifact without overwriting another artifact."""
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    await _validate_dependencies(session, project_id, None, data.depends_on)
     values = data.model_dump()
     values["artifact_metadata"] = values.pop("metadata")
     artifact = StoryArtifact(project_id=project_id, **values)
@@ -100,6 +145,8 @@ async def update_artifact(
     if if_match != artifact.version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Artifact has changed")
     changes = data.model_dump(exclude_unset=True)
+    if "depends_on" in changes:
+        await _validate_dependencies(session, project_id, artifact_id, changes["depends_on"])
     if "metadata" in changes:
         changes["artifact_metadata"] = changes.pop("metadata")
     for key, value in changes.items():
