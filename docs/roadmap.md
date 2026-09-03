@@ -79,7 +79,7 @@ outline, visual style, camera type, screening type, typed references — add mul
 artwork upload or weblink render; navigate to the opened project on create; clickable
 project cards on `/projects`. Depends on B.
 
-### Phase D — Editor workspace · [#16](https://github.com/amruthvvkp/DraftPilot/issues/16) · status: planned
+### Phase D — Editor workspace · [#16](https://github.com/amruthvvkp/DraftPilot/issues/16) · status: in progress
 3-pane editor — left Navigator (scenes), center script (element-typed, screenplay fonts,
 top element selector + bottom bold/italic/underline/color toolbar), right persistent Copilot and
 agent panel. The same assistant panel appears in project, outline, timeline, context, review, and
@@ -98,7 +98,7 @@ override indicators. Project and scene context are opened through two explicit c
 formatting produces a diff proposal before application. Wires when `SceneRevision` snapshots fire.
 Depends on B + C.
 
-### Phase E — Agentic layer · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: planned
+### Phase E — Agentic layer · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: in progress
 Provider-agnostic PydanticAI across all supported providers; agent roles (researcher,
 script assistant, associate director, audience evaluator); model switching in the agent
 panel; settings provider config; MCP tools exposing project actions to external clients;
@@ -125,7 +125,7 @@ MCP, and the UI renders persisted results as they arrive. Users can move backwar
 logline, character, beat, timeline event, or scene; dependent artifacts become visibly stale and
 can be regenerated rather than being silently overwritten.
 
-### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: planned
+### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: in progress
 Persist workflows, runs, tasks, instruction resolution, context artifacts, approvals, Monty
 execution records, MCP client registrations, capability discovery, prompt/resource/tool
 invocations, evaluator results, and reversible change sets. Support

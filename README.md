@@ -55,6 +55,13 @@ uv run arq draftpilot.worker.settings.WorkerSettings   # worker (separate shell)
 Connection settings are overridable via prefixed environment variables — e.g. `POSTGRES__HOST`,
 `REDIS__HOST`, `QUEUE__DB`, `UI__PORT`, `OTEL__ENABLED`, `LLM__*`.
 
+## Browser tests
+
+Browser journeys mock the API and do not use live Compose database state. Run them portably in the
+pinned Playwright container with `docker compose --profile test run --rm e2e`; see `docs/testing.md`.
+Provider credentials should be encrypted with a valid Fernet key in `SECRETS__MASTER_KEY` before
+being persisted. See `docs/mcp.md` for the external MCP capability boundary.
+
 ## Try the vertical slice
 
 Open the UI, create a **Project**, add a **Screenplay**, write a few **Scenes**, then click
