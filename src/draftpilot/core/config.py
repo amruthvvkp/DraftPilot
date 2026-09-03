@@ -134,6 +134,14 @@ class LLMSettings(BaseSettings):
     enabled: bool = False
 
 
+class SecretsSettings(BaseSettings):
+    """Encryption configuration for credentials stored by DraftPilot."""
+
+    model_config = SettingsConfigDict(env_prefix="SECRETS__")
+
+    master_key: SecretStr = SecretStr("")
+
+
 class UISettings(BaseSettings):
     """NiceGUI web interface settings."""
 
@@ -157,6 +165,7 @@ class Settings(BaseSettings):
     redis: RedisSettings = RedisSettings()
     queue: QueueSettings = QueueSettings()
     llm: LLMSettings = LLMSettings()
+    secrets: SecretsSettings = SecretsSettings()
     ui: UISettings = UISettings()
 
 
