@@ -45,6 +45,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
+    page.route("**/api/v1/projects/9001/evaluations", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
