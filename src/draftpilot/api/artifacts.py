@@ -2,16 +2,35 @@
 
 from datetime import datetime, timezone
 
+import logfire
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.models import StoryArtifact, StoryArtifactRead
 
 router = APIRouter(prefix="/projects/{project_id}/artifacts", tags=["artifacts"])
+
+
+async def _enqueue_index(project_id: int, artifact: StoryArtifact) -> None:
+    """Queue an artifact refresh without rolling back the committed artifact."""
+    try:
+        await (await get_arq_pool()).enqueue_job(
+            "index_rag_document",
+            {
+                "project_id": project_id,
+                "source_id": f"artifact:{artifact.id}",
+                "source_kind": artifact.kind,
+                "text": artifact.content,
+                "content_version": artifact.version,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+        logfire.warning("RAG indexing enqueue skipped: {exc}", exc=str(exc))
 
 
 class ArtifactCreateRequest(BaseModel):
@@ -60,6 +79,7 @@ async def create_artifact(
     session.add(artifact)
     await session.commit()
     await session.refresh(artifact)
+    await _enqueue_index(project_id, artifact)
     return StoryArtifactRead.model_validate(artifact)
 
 
@@ -91,4 +111,5 @@ async def update_artifact(
     await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
     await session.commit()
     await session.refresh(artifact)
+    await _enqueue_index(project_id, artifact)
     return StoryArtifactRead.model_validate(artifact)
