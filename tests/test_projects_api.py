@@ -206,7 +206,6 @@ def test_project_instruction_update_requires_matching_if_match(
     assert response.json()["project_instruction"] == "Keep it intimate."
     assert response.json()["version"] == 5
     assert len(calls) == 1
-
     stale = client.patch(
         "/api/v1/projects/9",
         headers={"If-Match": "3"},
@@ -214,6 +213,33 @@ def test_project_instruction_update_requires_matching_if_match(
     )
     assert stale.status_code == 409
     assert len(calls) == 1
+
+
+def test_project_metadata_update_rejects_primary_translation_overlap(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject a metadata edit that makes the primary language a translation target."""
+    project = Project(id=9, title="Story", version=4, primary_language="English", languages=["Hindi"])
+    calls: list[object] = []
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the current project metadata."""
+        return project
+
+    async def update_project(_session: _Session, _project: Project, data: object) -> Project:
+        """Capture updates that should not be reached for invalid metadata."""
+        calls.append(data)
+        return project
+
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.update", update_project)
+    response = client.patch(
+        "/api/v1/projects/9",
+        headers={"If-Match": "4"},
+        json={"languages": ["Hindi", "English"]},
+    )
+    assert response.status_code == 422
+    assert calls == []
 
 
 def test_translation_update_is_scoped_and_preserves_source(

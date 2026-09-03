@@ -32,6 +32,14 @@ class ProjectBase(SQLModel):
     project_instruction: str = Field(default="")
 
 
+def validate_language_separation(primary_language: str, languages: list[str]) -> None:
+    """Reject a primary screenplay language listed among dialogue translations."""
+    if primary_language.strip().casefold() in {
+        language.strip().casefold() for language in languages
+    }:
+        raise ValueError("primary_language cannot also be a dialogue translation language")
+
+
 class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg]
     """Persisted project table — top-level container for a creator's work."""
 
@@ -55,10 +63,7 @@ class ProjectCreate(ProjectBase):
     @model_validator(mode="after")
     def validate_translation_languages(self) -> "ProjectCreate":
         """Reject the primary screenplay language as a translation target."""
-        if self.primary_language.strip().casefold() in {
-            language.strip().casefold() for language in self.languages
-        }:
-            raise ValueError("primary_language cannot also be a dialogue translation language")
+        validate_language_separation(self.primary_language, self.languages)
         return self
 
 

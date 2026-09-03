@@ -35,6 +35,7 @@ from draftpilot.models import (
     SceneRevisionRead,
     SceneUpdate,
     ScreenplayRead,
+    validate_language_separation,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -154,6 +155,15 @@ async def update_project(
         raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
     if if_match != project.version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project has changed")
+    changes = data.model_dump(exclude_unset=True)
+    primary_language = changes.get("primary_language", project.primary_language)
+    languages = changes.get("languages", project.languages)
+    try:
+        validate_language_separation(primary_language, languages)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+        ) from exc
     return ProjectRead.model_validate(await projects_crud.update(session, project, data))
 
 

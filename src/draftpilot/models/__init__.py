@@ -36,6 +36,7 @@ from draftpilot.models.project import (
     ProjectCreate,
     ProjectRead,
     ProjectUpdate,
+    validate_language_separation,
 )
 from draftpilot.models.project_reference import (
     ProjectReference,
@@ -97,6 +98,7 @@ __all__ = [
     "ProjectCreate",
     "ProjectRead",
     "ProjectUpdate",
+    "validate_language_separation",
     "ProjectReference",
     "ProjectReferenceBase",
     "ProjectReferenceCreate",
