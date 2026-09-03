@@ -67,6 +67,17 @@ export type ProjectWorkspace = {
   blocks: Record<number, ScreenplayBlock[]>
 }
 
+export type TimelineProposal = {
+  id: number
+  project_id: number
+  screenplay_id: number
+  status: string
+  original_scene_ids: number[]
+  proposed_scene_ids: number[]
+  timings: Array<{ scene_id: number; position: number; start_seconds: number; end_seconds: number }>
+  total_runtime_seconds: number
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -89,4 +100,12 @@ export function createProject(payload: ProjectCreatePayload): Promise<Project> {
 
 export function getProjectWorkspace(projectId: number): Promise<ProjectWorkspace> {
   return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace`)
+}
+
+export function createTimelineProposal(projectId: number, screenplayId: number, sceneIds: number[], durations: Record<number, number>): Promise<TimelineProposal> {
+  return request<TimelineProposal>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals`, { method: 'POST', body: JSON.stringify({ scene_ids: sceneIds, durations }) })
+}
+
+export function approveTimelineProposal(projectId: number, screenplayId: number, proposalId: number): Promise<TimelineProposal> {
+  return request<TimelineProposal>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals/${proposalId}/approve`, { method: 'POST' })
 }
