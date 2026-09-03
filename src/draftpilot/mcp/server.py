@@ -2,6 +2,7 @@
 
 import json
 
+import httpx
 import logfire
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
@@ -49,6 +50,28 @@ def capabilities_resource() -> str:
     return json.dumps([capability.model_dump(mode="json") for capability in capability_catalog()])
 
 
+@mcp.resource("draftpilot://schemas/context")
+def context_schema_resource() -> str:
+    """Publish the citation-bearing context response schema."""
+    return json.dumps(
+        {
+            "query": "string",
+            "results": [
+                {
+                    "text": "string",
+                    "score": "number",
+                    "citation": {
+                        "project_id": "integer",
+                        "source_id": "string",
+                        "source_kind": "string",
+                        "content_version": "integer",
+                    },
+                }
+            ],
+        }
+    )
+
+
 @mcp.prompt
 def workflow_turn(page: str, artifact: str = "", selection: str = "") -> str:
     """Build a page-aware workflow prompt without exposing credentials."""
@@ -56,6 +79,44 @@ def workflow_turn(page: str, artifact: str = "", selection: str = "") -> str:
         f"DraftPilot workflow page: {page}. Artifact: {artifact or 'none'}. "
         f"Selection: {selection or 'none'}. Propose typed changes for writer approval."
     )
+
+
+@mcp.tool
+async def retrieve_project_context(
+    project_id: int,
+    query: str,
+    limit: int = 8,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Retrieve citation-bearing project context through the RAG service."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "context.read",
+                "retrieve",
+                {"query_length": len(query), "limit": limit},
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+    if not 1 <= limit <= 50 or not query.strip():
+        raise ValueError("Query and limit are invalid")
+    url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}/search"
+    headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
+    async with httpx.AsyncClient(timeout=settings.mcp.request_timeout_seconds) as client:
+        response = await client.post(url, json={"query": query, "limit": limit}, headers=headers)
+        response.raise_for_status()
+        if len(response.content) > settings.mcp.max_output_chars:
+            raise ValueError("RAG response exceeds MCP output limit")
+        result = response.json()
+    if not isinstance(result, dict):
+        raise ValueError("RAG response is invalid")
+    return result
 
 
 @mcp.tool

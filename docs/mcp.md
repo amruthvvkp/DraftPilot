@@ -6,6 +6,12 @@ mutation requires writer approval. The `workflow_turn` prompt carries page, arti
 scope without exposing credentials. `propose_timeline_reorder` is read-safe and returns a reversible
 proposal; it does not modify screenplay data.
 
+The `retrieve_project_context` tool uses the server-side RAG service and returns project-scoped
+results with source identifiers and content versions. Clients can inspect the response contract at
+`draftpilot://schemas/context`; clients never receive vector-store credentials or direct database
+access. Retrieval requires the `context.read` grant for the requested project and is bounded by the
+MCP request timeout and output limit.
+
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
 in the server environment or encrypted storage and must not be sent to an MCP client. Streamable HTTP
