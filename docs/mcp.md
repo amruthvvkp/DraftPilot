@@ -25,9 +25,10 @@ operation; approval and optimistic-concurrency checks remain on the DraftPilot a
 source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
 than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
 diff and rollback planning. `render_screenplay_export` renders bounded Fountain or FDX content,
-`list_project_backups` lists validated backup manifests, and `read_workflow_run` reads durable run
-state. Backup creation, restore, export artifacts, and run control remain approval-gated and are not
-performed implicitly by an external client.
+`list_project_backups` lists validated backup manifests, `create_project_backup` creates an approved
+archive, `restore_project_backup` restores it into a new project, and `read_workflow_run` reads
+durable run state. Backup creation and restore require both the project grant and
+`approved: true`; they never overwrite the source project.
 
 `control_workflow_run` exposes explicit `resume` and `cancel` actions. It requires the client grant
 for `runs.control` and an `approved: true` writer-consent value; every attempt is audited, and resume
@@ -50,8 +51,9 @@ client ids to distinct bearer tokens; those identities are used for project gran
 Local stdio transport is intended for a process launched by the same user and does
 not need an HTTP bearer header.
 
-Mutation tools will be added only through the same capability service, with audit records, redaction,
-timeouts, output limits, and explicit consent.
+Mutation tools are added only through the same capability service, with audit records, redaction,
+timeouts, output limits, and explicit consent. Export-artifact creation and evaluations remain
+planned additions to the catalog.
 
 The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
 `/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker
