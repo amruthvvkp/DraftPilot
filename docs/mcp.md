@@ -52,7 +52,8 @@ PydanticAI provider, and persists the assistant reply. If `LLM__ENABLED` is fals
 unavailable, it returns `503` after retaining the user turn; the UI does not fabricate a response.
 The React rail uses `/copilot/messages/respond-async`: it returns the persisted user message and a
 workflow run, polls the project-scoped run endpoint, and reloads messages after worker completion.
-This keeps the turn recoverable after a browser disconnect or worker restart.
+The run stores the full instruction, citation, tool, page, artifact, and selection envelope, keeping
+the turn recoverable after a browser disconnect or worker restart.
 
 Canonical graph data is discoverable at `draftpilot://projects/{project_id}/knowledge-graph` and
 requires the `knowledge_graph.read` project grant. The resource returns only nodes and edges for

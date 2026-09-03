@@ -172,7 +172,9 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
                 page=page,
                 artifact=data.get("artifact") if isinstance(data.get("artifact"), str) else None,
                 selection=data.get("selection") if isinstance(data.get("selection"), str) else None,
-                instruction_layers={"agent_role": current.agent_role, "permission_mode": current.permission_mode},
+                instruction_layers=data.get("instruction_layers") if isinstance(data.get("instruction_layers"), dict) else {"agent_role": current.agent_role, "permission_mode": current.permission_mode},
+                citations=data.get("citations") if isinstance(data.get("citations"), list) else [],
+                active_tools=data.get("active_tools") if isinstance(data.get("active_tools"), list) else [],
             ),
         )
         await workflow_runs_crud.update_status(
