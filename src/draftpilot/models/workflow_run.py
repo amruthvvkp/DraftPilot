@@ -17,6 +17,8 @@ class WorkflowRunBase(SQLModel):
     input: dict[str, Any] = Field(default_factory=dict, sa_type=JSON)
     result: dict[str, Any] | None = Field(default=None, sa_type=JSON)
     error: str | None = Field(default=None, max_length=1000)
+    agent_role: str = Field(default="story_architect", max_length=60)
+    permission_mode: str = Field(default="chat_only", max_length=30)
 
 
 class WorkflowRun(WorkflowRunBase, table=True):  # type: ignore[call-arg]

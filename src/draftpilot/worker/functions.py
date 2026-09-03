@@ -21,7 +21,7 @@ from draftpilot.crud import workflow_runs as workflow_runs_crud
 ANALYSIS_CACHE_KEY = "analysis:{id}"
 
 
-async def _llm_note(title: str, scene_count: int, word_count: int) -> str | None:
+async def _llm_note(title: str, scene_count: int, word_count: int, agent_role: str) -> str | None:
     """Optional one-line qualitative note from a PydanticAI agent."""
     if not settings.llm.enabled:
         return None
@@ -31,7 +31,7 @@ async def _llm_note(title: str, scene_count: int, word_count: int) -> str | None
         agent = Agent(
             model,
             system_prompt=(
-                "You are a script consultant. Given basic stats about a screenplay, "
+                f"You are the {agent_role.replace('_', ' ')}. Given basic stats about a screenplay, "
                 "reply with a single concise sentence of constructive feedback."
             ),
         )
@@ -44,7 +44,7 @@ async def _llm_note(title: str, scene_count: int, word_count: int) -> str | None
         return None
 
 
-async def analyze_screenplay(ctx: dict, screenplay_id: int) -> dict:
+async def analyze_screenplay(ctx: dict, screenplay_id: int, agent_role: str = "story_architect") -> dict:
     """Compute metrics for a screenplay and cache the result in Redis."""
     with logfire.span("analyze_screenplay", screenplay_id=screenplay_id):
         async with session_scope() as session:
@@ -66,7 +66,7 @@ async def analyze_screenplay(ctx: dict, screenplay_id: int) -> dict:
             "estimated_pages": round(word_count / 190, 1),  # ~190 words/page heuristic
         }
 
-        note = await _llm_note(title, scene_count, word_count)
+        note = await _llm_note(title, scene_count, word_count, agent_role)
         if note:
             result["note"] = note
 
@@ -109,7 +109,7 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
                 )
                 return {"error": "invalid_input"}
         try:
-            result = await analyze_screenplay(ctx, screenplay_id)
+            result = await analyze_screenplay(ctx, screenplay_id, run.agent_role)
         except Exception as exc:  # pragma: no cover - worker failure boundary
             async with session_scope() as session:
                 run = await workflow_runs_crud.get(session, run_id)

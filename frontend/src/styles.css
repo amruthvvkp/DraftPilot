@@ -35,6 +35,9 @@ nav { display: grid; gap: 7px; } nav a { color: #8f8b81; padding: 11px 12px; bor
 .copilot-compose { display: flex; gap: 6px; }
 .copilot-compose input { min-width: 0; flex: 1; padding: 9px; border: 1px solid #dcd6cd; border-radius: 4px; background: #fffdf9; color: #35312c; font-size: 11px; }
 .copilot-compose .button { padding: 9px 11px; font-size: 10px; }
+.copilot-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.copilot-controls label { color: #918a81; font: 9px 'DM Mono'; text-transform: uppercase; }
+.copilot-controls select { display: block; width: 100%; margin-top: 4px; padding: 6px; border: 1px solid #dcd6cd; border-radius: 4px; background: #fffdf9; color: #403b35; font-size: 10px; }
 .context-grid { display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: calc(100vh - 92px); }
 .graph-canvas { padding: 54px max(28px, 8vw); background: #e7e3dc; }
 .graph-intro { max-width: 680px; margin: 0 auto 32px; }

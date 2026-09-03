@@ -147,6 +147,8 @@ export type KnowledgeGraph = {
   edges: Array<{ id: number; project_id: number; source_node_id: number; target_node_id: number; relation: string; edge_metadata: Record<string, unknown> }>
 }
 
+export type AgentRole = { key: string; label: string; description: string; default_permission: 'chat_only' | 'suggest' | 'scoped_edit' | 'project_edit' }
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -257,4 +259,8 @@ export function sendCopilotMessage(projectId: number, payload: Pick<CopilotMessa
 
 export function getKnowledgeGraph(projectId: number): Promise<KnowledgeGraph> {
   return request<KnowledgeGraph>(`/api/v1/projects/${projectId}/knowledge-graph`)
+}
+
+export function getAgentRoles(): Promise<AgentRole[]> {
+  return request<AgentRole[]>('/api/v1/agents/roles')
 }

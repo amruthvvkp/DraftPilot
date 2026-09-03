@@ -6,6 +6,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.agent_roles import AgentRoleKey, PermissionMode
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import WorkflowRunCreate, WorkflowRunRead
@@ -18,6 +19,8 @@ class RunCreateRequest(BaseModel):
 
     kind: str = Field(default="screenplay_analysis", max_length=80)
     screenplay_id: int
+    agent_role: AgentRoleKey = "story_architect"
+    permission_mode: PermissionMode = "chat_only"
 
 
 @router.post("", response_model=WorkflowRunRead, status_code=status.HTTP_202_ACCEPTED)
@@ -36,6 +39,8 @@ async def start_run(
             project_id=project_id,
             kind=data.kind,
             input={"screenplay_id": data.screenplay_id},
+            agent_role=data.agent_role,
+            permission_mode=data.permission_mode,
         ),
     )
     await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
