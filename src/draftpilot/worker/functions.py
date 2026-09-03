@@ -18,11 +18,13 @@ from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.providers import settings_from_profile
 from draftpilot.crud import copilot_messages as messages_crud
+from draftpilot.crud import evaluations as evaluations_crud
+from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as workflow_runs_crud
 from draftpilot.crud import provider_profiles as profiles_crud
-from draftpilot.models import CopilotMessageCreate, WorkflowRun
+from draftpilot.models import CopilotMessageCreate, EvaluationResult, WorkflowRun
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
 
@@ -109,6 +111,7 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
                 return {"error": "not_found"}
             await workflow_runs_crud.update_status(session, run, "running")
             copilot_run = run.kind == "copilot_response"
+            evaluation_run = run.kind == "evaluation"
             screenplay_id = run.input.get("screenplay_id")
             if not copilot_run and not isinstance(screenplay_id, int):
                 await workflow_runs_crud.update_status(
@@ -119,7 +122,7 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
             return await _execute_copilot_run(ctx, run)
         assert isinstance(screenplay_id, int)
         try:
-            result = await analyze_screenplay(ctx, screenplay_id, run.agent_role)
+            result = await evaluate_screenplay(ctx, run) if evaluation_run else await analyze_screenplay(ctx, screenplay_id, run.agent_role)
         except Exception as exc:  # pragma: no cover - worker failure boundary
             async with session_scope() as session:
                 run = await workflow_runs_crud.get(session, run_id)
@@ -132,6 +135,52 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
                 await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
                 return result
         return {"status": "cancelled"}
+
+
+async def evaluate_screenplay(ctx: dict, run: WorkflowRun) -> dict[str, object]:
+    """Compute and persist deterministic screenplay quality findings for one durable run."""
+    screenplay_id = run.input.get("screenplay_id")
+    if not isinstance(screenplay_id, int):
+        raise ValueError("screenplay_id is required")
+    async with session_scope() as session:
+        scenes = await scenes_crud.list_for_screenplay(session, screenplay_id)
+        empty_scenes: list[int] = []
+        dialogue_count = 0
+        character_count = 0
+        for scene in scenes:
+            blocks = await blocks_crud.list_for_scene(session, scene.id or 0)
+            scene_text = scene.body.strip() or " ".join(block.text for block in blocks).strip()
+            if not scene.heading.strip() or not scene_text:
+                empty_scenes.append(scene.id or 0)
+            dialogue_count += sum(block.element_type.value == "dialogue" for block in blocks)
+            character_count += sum(block.element_type.value == "character" for block in blocks)
+        scene_count = len(scenes)
+        penalties = (len(empty_scenes) / scene_count if scene_count else 1.0) * 0.6
+        if dialogue_count and not character_count:
+            penalties += 0.2
+        score = round(max(0.0, min(1.0, 1.0 - penalties)), 3)
+        findings: dict[str, object] = {
+            "scene_count": scene_count,
+            "dialogue_count": dialogue_count,
+            "character_count": character_count,
+            "empty_scene_ids": empty_scenes,
+        }
+        evaluation = await evaluations_crud.create(
+            session,
+            EvaluationResult(
+                project_id=run.project_id,
+                target_kind="screenplay",
+                target_id=screenplay_id,
+                evaluator=str(run.input.get("evaluator", "deterministic_review")),
+                score=score,
+                summary=(
+                    f"Reviewed {scene_count} scenes; "
+                    f"{len(empty_scenes)} need content attention."
+                ),
+                findings=findings,
+            ),
+        )
+    return {"evaluation_id": evaluation.id or 0, **findings, "score": score}
 
 
 async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]:

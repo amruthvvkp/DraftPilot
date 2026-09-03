@@ -275,6 +275,10 @@ export function listEvaluations(projectId: number): Promise<EvaluationResult[]> 
   return request<EvaluationResult[]>(`/api/v1/projects/${projectId}/evaluations`)
 }
 
+export function startEvaluation(projectId: number, screenplayId: number, evaluator = 'deterministic_review'): Promise<WorkflowRun> {
+  return request<WorkflowRun>(`/api/v1/projects/${projectId}/evaluations/runs`, { method: 'POST', body: JSON.stringify({ screenplay_id: screenplayId, evaluator }) })
+}
+
 export function createArtifact(projectId: number, kind: string, title: string): Promise<StoryArtifact> {
   return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts`, { method: 'POST', body: JSON.stringify({ kind, title }) })
 }

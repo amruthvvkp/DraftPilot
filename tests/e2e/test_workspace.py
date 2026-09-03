@@ -48,6 +48,14 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/projects/9001/evaluations", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
+
+    def start_review(route: Route) -> None:
+        """Validate the screenplay-scoped evaluation run request."""
+        assert route.request.post_data_json == {"screenplay_id": 12, "evaluator": "deterministic_review"}
+        route.fulfill(status=202, content_type="application/json", body=json.dumps({"id": 55, "project_id": 9001, "kind": "evaluation", "status": "queued", "result": None, "error": None}))
+
+    page.route("**/api/v1/projects/9001/evaluations/runs", start_review)
+    page.route("**/api/v1/projects/9001/runs/55", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 55, "project_id": 9001, "kind": "evaluation", "status": "succeeded", "result": {"evaluation_id": 3}, "error": None})))
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
@@ -67,6 +75,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New scene heading")).to_have_value("INT. - DAY")
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
+    page.get_by_role("button", name="Run review").click()
     editor = page.get_by_label("Edit action")
     expect(editor).to_have_value("The house breathes in the dark.")
     editor.fill("The house exhales in the dark.")

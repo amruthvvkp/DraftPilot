@@ -1,14 +1,51 @@
 """Project-scoped evaluation result endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import evaluations as evaluations_crud
 from draftpilot.crud import projects as projects_crud
-from draftpilot.models import EvaluationResult, EvaluationResultCreate, EvaluationResultRead
+from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.crud import workflow_runs as runs_crud
+from draftpilot.models import EvaluationResult, EvaluationResultCreate, EvaluationResultRead, WorkflowRunCreate, WorkflowRunRead
 
 router = APIRouter(prefix="/projects/{project_id}/evaluations", tags=["evaluations"])
+
+
+class EvaluationRunRequest(BaseModel):
+    """Describe a deterministic evaluation run for one project screenplay."""
+
+    screenplay_id: int = Field(ge=1)
+    evaluator: str = Field(default="deterministic_review", min_length=1, max_length=100)
+
+
+@router.post("/runs", response_model=WorkflowRunRead, status_code=status.HTTP_202_ACCEPTED)
+async def start_evaluation(
+    project_id: int,
+    data: EvaluationRunRequest,
+    session: AsyncSession = Depends(async_get_db),
+) -> WorkflowRunRead:
+    """Persist and enqueue a project-scoped screenplay evaluation."""
+    project = await projects_crud.get(session, project_id)
+    screenplay = await screenplays_crud.get(session, data.screenplay_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
+    run = await runs_crud.create(
+        session,
+        WorkflowRunCreate(
+            project_id=project_id,
+            kind="evaluation",
+            input={"screenplay_id": data.screenplay_id, "evaluator": data.evaluator},
+            agent_role="audience_evaluator",
+        ),
+    )
+    await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    return WorkflowRunRead.model_validate(run)
 
 
 @router.get("", response_model=list[EvaluationResultRead])
