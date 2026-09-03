@@ -8,6 +8,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [projectInstruction, setProjectInstruction] = useState('')
   const [sceneInstruction, setSceneInstruction] = useState('')
+  const [translationLanguage, setTranslationLanguage] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -24,7 +25,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   return <div className="workspace-shell">
     <header className="workspace-topbar">
       <button className="back-link" onClick={() => window.location.assign('/projects')}>← Projects</button>
-      <div><p className="eyebrow warm">SCREENPLAY / {workspace.screenplay?.status ?? 'DRAFT'}</p><h1>{workspace.project.title}</h1></div>
+      <div><p className="eyebrow warm">SCREENPLAY / {workspace.screenplay?.status ?? 'DRAFT'}</p><h1>{workspace.project.title}</h1><p className="workspace-language">Writing language: {workspace.project.primary_language} · Dialogue translations: {workspace.project.languages.length || 'none'} enabled</p></div>
       <div className="save-state"><span className="status-dot" /> All changes local</div>
     </header>
     <div className="workspace-grid">
@@ -33,7 +34,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
         {workspace.acts.map(act => <div className="act-group" key={act.id}><p className="act-title">{act.title || `Act ${act.position + 1}`}</p>{workspace.scenes.filter(scene => scene.act_id === act.id).map(scene => <button className={scene.id === selectedId ? 'scene-link selected' : 'scene-link'} key={scene.id} onClick={() => setSelectedId(scene.id)}><span>{String(scene.position + 1).padStart(2, '0')}</span><strong>{scene.heading}</strong></button>)}</div>)}
       </aside>
       <main className="script-canvas"><div className="canvas-toolbar"><span>{workspace.screenplay?.format ?? 'feature'} draft</span><span>Continuous view <i className="toggle on" /></span></div>{selectedScene ? <article className="script-page"><p className="script-heading">{selectedScene.heading}</p><p className="script-body">{selectedScene.body || 'Begin writing this scene…'}</p><div className="script-cursor" /></article> : <article className="script-page empty-script"><span>✦</span><h2>Your first scene starts here.</h2><p>Create a scene to begin shaping the screenplay.</p></article>}</main>
-      <aside className="context-panel"><div className="panel-label"><span>Context</span><span className="context-badge">Inherited</span></div><section className="context-card"><p className="eyebrow warm">PROJECT INSTRUCTION</p><textarea value={projectInstruction} onChange={event => setProjectInstruction(event.target.value)} placeholder="What should every scene remember?" /><small>Applies to the whole project</small></section><section className="context-card"><p className="eyebrow warm">SCENE INSTRUCTION</p><textarea value={sceneInstruction} onChange={event => setSceneInstruction(event.target.value)} placeholder="Tone, camera, light, or blocking for this scene…" /><small>{selectedScene ? 'Applies to the selected scene' : 'Select a scene to scope this instruction'}</small></section><div className="context-links"><p className="eyebrow">Creative context</p><button>＋ Reference scene</button><button>＋ Color palette</button><button>＋ Camera & lighting</button><button>＋ Film / director / style</button></div></aside>
+      <aside className="context-panel"><div className="panel-label"><span>Context</span><span className="context-badge">Inherited</span></div><section className="context-card"><p className="eyebrow warm">PROJECT INSTRUCTION</p><textarea value={projectInstruction} onChange={event => setProjectInstruction(event.target.value)} placeholder="What should every scene remember?" /><small>Applies to the whole project</small></section><section className="context-card"><p className="eyebrow warm">SCENE INSTRUCTION</p><textarea value={sceneInstruction} onChange={event => setSceneInstruction(event.target.value)} placeholder="Tone, camera, light, or blocking for this scene…" /><small>{selectedScene ? 'Applies to the selected scene' : 'Select a scene to scope this instruction'}</small></section><section className="context-card translation-card"><p className="eyebrow warm">DIALOGUE TRANSLATION</p><select value={translationLanguage} onChange={event => setTranslationLanguage(event.target.value)}><option value="">Choose a language</option>{workspace.project.languages.filter(language => language !== workspace.project.primary_language).map(language => <option key={language}>{language}</option>)}</select><small>Only dialogue changes language. Headings and action remain in {workspace.project.primary_language}.</small></section><div className="context-links"><p className="eyebrow">Creative context</p><button>＋ Reference scene</button><button>＋ Color palette</button><button>＋ Camera & lighting</button><button>＋ Film / director / style</button></div></aside>
     </div>
   </div>
 }

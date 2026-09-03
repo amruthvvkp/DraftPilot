@@ -16,6 +16,7 @@ def test_build_project_create_normalizes_optional_values_and_lists() -> None:
         description="  A contained thriller. ",
         genres=["Thriller", " thriller ", ""],
         languages=["English", " English "],
+        primary_language="  Hindi ",
         story_outline="  Three strangers wait out a storm. ",
         screening_type=ScreeningType.FLAT_1_85,
     )
@@ -26,6 +27,7 @@ def test_build_project_create_normalizes_optional_values_and_lists() -> None:
     assert payload.description == "A contained thriller."
     assert payload.genres == ["Thriller"]
     assert payload.languages == ["English"]
+    assert payload.primary_language == "Hindi"
     assert payload.story_outline == "Three strangers wait out a storm."
     assert payload.screening_type is ScreeningType.FLAT_1_85
 

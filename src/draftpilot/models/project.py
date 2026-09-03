@@ -27,6 +27,7 @@ class ProjectBase(SQLModel):
     artwork_path: str | None = Field(default=None, max_length=1000)
     genres: list[str] = Field(default_factory=list, sa_type=JSON)
     languages: list[str] = Field(default_factory=list, sa_type=JSON)
+    primary_language: str = Field(default="English", max_length=50)
 
 
 class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg]
@@ -65,6 +66,7 @@ class ProjectUpdate(SQLModel):
     artwork_path: str | None = None
     genres: list[str] | None = None
     languages: list[str] | None = None
+    primary_language: str | None = None
 
 
 class ProjectRead(ProjectBase):

@@ -5,6 +5,7 @@ export type Project = {
   description: string | null
   genres: string[]
   languages: string[]
+  primary_language: string
   artwork_url: string | null
 }
 
@@ -19,6 +20,7 @@ export type ProjectCreatePayload = {
   artwork_url?: string | null
   genres: string[]
   languages: string[]
+  primary_language: string
 }
 
 export type Scene = {

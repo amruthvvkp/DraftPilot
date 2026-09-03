@@ -35,6 +35,7 @@ class ProjectWizardData(BaseModel):
     description: str | None = None
     genres: list[str] = Field(default_factory=list)
     languages: list[str] = Field(default_factory=list)
+    primary_language: str = "English"
     story_outline: str | None = None
     visual_style: str | None = None
     camera_type: str | None = None
@@ -84,6 +85,7 @@ def build_project_create(data: ProjectWizardData) -> ProjectCreate:
         description=data.description,
         genres=_unique_text(data.genres),
         languages=_unique_text(data.languages),
+        primary_language=data.primary_language.strip() or "English",
         story_outline=data.story_outline,
         visual_style=data.visual_style,
         camera_type=data.camera_type,

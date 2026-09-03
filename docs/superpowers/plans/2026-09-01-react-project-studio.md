@@ -84,7 +84,9 @@
 - Modify: `README.md`
 
 **Interfaces:**
-- Produces a React wizard collecting title, story metadata, typed references, artwork URL, and upload metadata.
+- Produces a React wizard collecting title, story metadata, all supported genres, a primary
+  screenplay language, multiple dialogue-translation languages (including Indian languages),
+  typed references, artwork URL, and upload metadata.
 
 - [ ] **Step 1: Write failing component tests for required title validation, step navigation, and submitted payload.**
 - [ ] **Step 2: Run the focused component tests and verify failure.**

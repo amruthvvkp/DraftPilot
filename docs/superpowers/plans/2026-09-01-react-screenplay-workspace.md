@@ -34,6 +34,9 @@ be applied. The Copilot rail exposes the page-aware tools available for the curr
   stale, and remain a reviewable reversible proposal until approved.
 - Make editor transitions semantic: autocomplete for elements, characters, and headings; Tab moves
   to the next valid element; dual dialogue is represented as a paired structure.
+- Keep the screenplay's primary language authoritative for scene headings and action. Store
+  translated dialogue per language as linked variants of the original dialogue block, with the
+  source text preserved and translation approval/refresh state visible.
 - Make project and scene context buttons open expanded instruction editors. AI formatting creates a
   typed proposal and visible diff that requires writer approval.
 - Add project and scene instruction fields to the UI state without inventing persistence before

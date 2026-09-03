@@ -64,12 +64,13 @@ Profile/Settings popups (persisted to `app.storage.user`; no auth yet), `docs/re
 dialogue, parenthetical, transition, lyric, note, section, synopsis, shot, page_break);
 dialogue extras (dual dialogue + per-line translation); rich project metadata (description,
 story outline, visual style, camera type, screening type, artwork, `genres[]`,
-`languages[]`); typed repeatable `ProjectReference`; nested Pydantic `ScreenplayDoc`
+`languages[]`, `primary_language`); typed repeatable `ProjectReference`; nested Pydantic `ScreenplayDoc`
 ground-truth with Fountain/FDX adapters; `SceneRevision` snapshot/restore; CRUD + Alembic
 migration with data backfill.
 
 ### Phase C — Project-creation wizard · [#15](https://github.com/amruthvvkp/DraftPilot/issues/15) · status: complete
-Multi-step New-Project popup (title, description, genres, languages multi-select, story
+Multi-step New-Project popup (title, description, all supported genres, primary screenplay
+language, dialogue-translation languages multi-select including Indian languages, story
 outline, visual style, camera type, screening type, typed references — add multiple);
 artwork upload or weblink render; navigate to the opened project on create; clickable
 project cards on `/projects`. Depends on B.

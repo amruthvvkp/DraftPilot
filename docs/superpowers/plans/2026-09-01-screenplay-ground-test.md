@@ -37,6 +37,9 @@ redevelopment and production import/interoperability paths.
   project/scene context switching, AI formatting diffs, and approval/rollback behavior.
 - Exercise timeline contracts: drag and keyboard scene reorder, act/character lane visibility,
   recalculated runtime offsets, linked-beat preservation, stale dependent artifacts, and rollback.
+- Exercise multilingual contracts: create projects with multiple genres and languages, select an
+  Indian language as primary or translation target, preserve primary-language headings/action,
+  and compare approved per-dialogue translations without mutating the source dialogue.
 - Require explicit approval before applying agent changes and preserve rollback to the prior
   snapshot.
 
