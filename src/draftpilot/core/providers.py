@@ -1,6 +1,7 @@
 """Build PydanticAI models from server-side provider configuration."""
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import SecretStr
 
@@ -9,6 +10,7 @@ from draftpilot.core.security import decrypt_secret
 from draftpilot.models import ProviderProfile
 
 _DEFAULT_BASE_URLS = {
+    "openai": "https://api.openai.com/v1",
     "ollama": "http://localhost:11434/v1",
     "lm_studio": "http://localhost:1234/v1",
     "lm-studio": "http://localhost:1234/v1",
@@ -21,6 +23,19 @@ def provider_base_url(config: LLMSettings) -> str | None:
     if config.base_url:
         return config.base_url.rstrip("/")
     return _DEFAULT_BASE_URLS.get(config.provider.casefold().replace(" ", "_"))
+
+
+def validate_provider_url(url: str | None) -> str:
+    """Validate an OpenAI-compatible URL before making an outbound request."""
+    if not url:
+        raise ValueError("Provider URL is not configured")
+    parsed = urlsplit(url)
+    blocked_hosts = {"169.254.169.254", "metadata.google.internal", "metadata.google.com"}
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError("Provider URL must be an HTTP(S) URL without embedded credentials")
+    if parsed.hostname.casefold() in blocked_hosts:
+        raise ValueError("Provider metadata endpoints are not allowed")
+    return url.rstrip("/")
 
 
 def create_chat_model(config: LLMSettings) -> Any:

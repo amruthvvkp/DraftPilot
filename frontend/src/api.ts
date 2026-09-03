@@ -280,6 +280,10 @@ export function updateProviderProfile(profileId: number, payload: { provider?: s
   return request<ProviderProfile>(`/api/v1/settings/providers/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
+export function testProviderProfile(profileId: number): Promise<{ ok: boolean; message: string; latency_ms: number | null }> {
+  return request<{ ok: boolean; message: string; latency_ms: number | null }>(`/api/v1/settings/providers/${profileId}/test`, { method: 'POST' })
+}
+
 export function cancelWorkflowRun(projectId: number, runId: number): Promise<{ id: number; project_id: number; status: string }> {
   return request<{ id: number; project_id: number; status: string }>(`/api/v1/projects/${projectId}/runs/${runId}/cancel`, { method: 'POST' })
 }
