@@ -1,8 +1,9 @@
 import { type ChangeEvent, type KeyboardEvent, useEffect, useState } from 'react'
-import { createProjectBackup, getDialogueTranslations, getProjectWorkspace, importScreenplay, ProjectWorkspace, saveDialogueTranslation, Scene, ScreenplayBlock, updateProject, updateProjectBlock, updateProjectScene } from './api'
+import { createProjectBackup, getDialogueTranslations, getProjectWorkspace, importScreenplay, listProjectBackups, ProjectBackup, ProjectWorkspace, restoreProjectBackup, saveDialogueTranslation, Scene, ScreenplayBlock, updateProject, updateProjectBlock, updateProjectScene } from './api'
 import Timeline from './Timeline'
 import CopilotPanel from './CopilotPanel'
 import RevisionPanel from './RevisionPanel'
+import './backup.css'
 
 type WorkspaceProps = { projectId: number }
 
@@ -25,6 +26,8 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   const [drafts, setDrafts] = useState<Record<number, string>>({})
   const [translationDraft, setTranslationDraft] = useState('')
   const [backupStatus, setBackupStatus] = useState('')
+  const [backups, setBackups] = useState<ProjectBackup[]>([])
+  const [backupsOpen, setBackupsOpen] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [sceneHeading, setSceneHeading] = useState('')
 
@@ -99,10 +102,24 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   async function backupProject(): Promise<void> {
     try {
       const backup = await createProjectBackup(projectId)
+      setBackups(current => [backup, ...current.filter(item => item.filename !== backup.filename)])
       setBackupStatus(`Backup ready: ${backup.filename}`)
     } catch (reason) {
       setBackupStatus(reason instanceof Error ? reason.message : 'Backup failed')
     }
+  }
+  async function toggleBackups(): Promise<void> {
+    if (!backupsOpen) {
+      try { setBackups(await listProjectBackups(projectId)) }
+      catch (reason) { setBackupStatus(reason instanceof Error ? reason.message : 'Unable to load backups') }
+    }
+    setBackupsOpen(open => !open)
+  }
+  async function restoreBackup(filename: string): Promise<void> {
+    try {
+      const restored = await restoreProjectBackup(projectId, filename)
+      window.location.assign(`/projects/${restored.project_id}`)
+    } catch (reason) { setBackupStatus(reason instanceof Error ? reason.message : 'Unable to restore backup') }
   }
   async function importFile(event: ChangeEvent<HTMLInputElement>): Promise<void> {
     const file = event.target.files?.[0]
@@ -127,8 +144,9 @@ export default function Workspace({ projectId }: WorkspaceProps) {
     <header className="workspace-topbar">
       <button className="back-link" onClick={() => window.location.assign('/projects')}>← Projects</button>
       <div><p className="eyebrow warm">SCREENPLAY / {workspace.screenplay?.status ?? 'DRAFT'}</p><h1>{workspace.project.title}</h1><p className="workspace-language">Writing language: {workspace.project.primary_language} · Dialogue translations: {workspace.project.languages.length || 'none'} enabled</p></div>
-      <div className="save-state"><label className="button quiet import-button">Import<input type="file" accept=".fountain,.fdx,.pdf,text/plain,application/xml,application/pdf" onChange={event => void importFile(event)} /></label>{workspace.screenplay && <><a className="button quiet" href={`/api/v1/projects/${projectId}/screenplays/${workspace.screenplay.id}/exports/pdf`}>PDF</a><a className="button quiet" href={`/api/v1/projects/${projectId}/screenplays/${workspace.screenplay.id}/exports/fountain`}>Fountain</a><a className="button quiet" href={`/api/v1/projects/${projectId}/screenplays/${workspace.screenplay.id}/exports/fdx`}>FDX</a></>}<button className="button quiet" onClick={() => void backupProject()}>Backup</button>{backupStatus && <small>{backupStatus}</small>}{importStatus && <small>{importStatus}</small>}<span className="status-dot" /> All changes local</div>
+      <div className="save-state"><label className="button quiet import-button">Import<input type="file" accept=".fountain,.fdx,.pdf,text/plain,application/xml,application/pdf" onChange={event => void importFile(event)} /></label>{workspace.screenplay && <><a className="button quiet" href={`/api/v1/projects/${projectId}/screenplays/${workspace.screenplay.id}/exports/pdf`}>PDF</a><a className="button quiet" href={`/api/v1/projects/${projectId}/screenplays/${workspace.screenplay.id}/exports/fountain`}>Fountain</a><a className="button quiet" href={`/api/v1/projects/${projectId}/screenplays/${workspace.screenplay.id}/exports/fdx`}>FDX</a></>}<button className="button quiet" onClick={() => void backupProject()}>Backup</button><button className="button quiet" onClick={() => void toggleBackups()} aria-expanded={backupsOpen}>Backups</button>{backupStatus && <small>{backupStatus}</small>}{importStatus && <small>{importStatus}</small>}<span className="status-dot" /> All changes local</div>
     </header>
+    {backupsOpen && <section className="backup-drawer" aria-label="Project backups"><div><p className="eyebrow warm">RECOVERY</p><h2>Project backups</h2><p>Restore always creates a new project. Your current draft is never overwritten.</p></div>{backups.length ? <div className="backup-list">{backups.map(backup => <article className="backup-row" key={backup.filename}><div><strong>{backup.filename}</strong><small>{new Date(backup.manifest.created_at).toLocaleString()} · SHA-256 {backup.manifest.sha256.slice(0, 12)}…</small></div><div><a className="button quiet" href={`/api/v1/projects/${projectId}/backups/${encodeURIComponent(backup.filename)}`}>Download</a><button className="button primary" onClick={() => void restoreBackup(backup.filename)}>Restore copy</button></div></article>)}</div> : <p className="empty-copy">No backups yet. Create one from the workspace header.</p>}</section>}
     {timelineOpen ? <Timeline projectId={projectId} screenplayId={workspace.screenplay?.id ?? 0} workspace={workspace} /> : <div className="workspace-grid">
       <aside className="navigator"><div className="panel-label"><span>Navigator</span><span>{workspace.scenes.length.toString().padStart(2, '0')} scenes</span></div>
         {workspace.acts.length === 0 && <p className="empty-copy">Your scene list will appear here as the story takes shape.</p>}

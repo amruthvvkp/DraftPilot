@@ -291,6 +291,14 @@ export function createProjectBackup(projectId: number): Promise<ProjectBackup> {
   return request<ProjectBackup>(`/api/v1/projects/${projectId}/backups`, { method: 'POST' })
 }
 
+export function listProjectBackups(projectId: number): Promise<ProjectBackup[]> {
+  return request<ProjectBackup[]>(`/api/v1/projects/${projectId}/backups`)
+}
+
+export function restoreProjectBackup(projectId: number, filename: string): Promise<{ project_id: number }> {
+  return request<{ project_id: number }>(`/api/v1/projects/${projectId}/backups/${encodeURIComponent(filename)}/restore`, { method: 'POST' })
+}
+
 export async function importScreenplay(projectId: number, screenplayId: number, format: 'fountain' | 'fdx' | 'pdf', content: string | ArrayBuffer): Promise<{ id: number; title: string; format: string; status: string; project_id: number }> {
   const response = await fetch(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/imports/${format}`, {
     method: 'POST', headers: { 'Content-Type': format === 'fdx' ? 'application/xml' : format === 'pdf' ? 'application/pdf' : 'text/plain' }, body: content,

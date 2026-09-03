@@ -52,6 +52,8 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace["scenes"][0]))
 
     page.route("**/api/v1/projects/9001/scenes/7/revisions/30/restore", restore_revision)
+    backup = {"filename": "9001-20260101T000000Z.json.gz", "manifest": {"schema_version": 1, "project_id": 9001, "created_at": "2026-01-01T00:00:00Z", "app_version": "0.1.0", "sha256": "abcdef1234567890"}}
+    page.route("**/api/v1/projects/9001/backups", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([backup])))
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
@@ -86,6 +88,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
+    page.get_by_role("button", name="Backups").click()
+    expect(page.get_by_role("heading", name="Project backups")).to_be_visible()
+    expect(page.get_by_text(backup["filename"])).to_be_visible()
     page.get_by_role("checkbox", name="Heading").uncheck()
     page.get_by_role("button", name="Restore").click()
     page.get_by_role("button", name="Run review").click()

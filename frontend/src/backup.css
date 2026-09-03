@@ -1,0 +1,9 @@
+.backup-drawer { padding: 22px 34px; background: #fbfaf7; border-bottom: 1px solid #ddd8d0; }
+.backup-drawer h2 { margin: 4px 0; font: 600 20px Inter, sans-serif; }
+.backup-drawer p { color: #77736d; font-size: 12px; }
+.backup-list { display: grid; gap: 8px; margin-top: 16px; }
+.backup-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 14px; background: #f4f1eb; border: 1px solid #ddd8d0; border-radius: 8px; }
+.backup-row strong, .backup-row small { display: block; }
+.backup-row strong { font: 600 12px ui-monospace, monospace; }
+.backup-row small { margin-top: 4px; color: #8b867f; font-size: 10px; }
+.backup-row .button { margin-left: 6px; }
