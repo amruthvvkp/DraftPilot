@@ -16,10 +16,12 @@ from draftpilot.core.db import session_scope
 from draftpilot.core.providers import create_chat_model
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.copilot import generate_reply
+from draftpilot.core.providers import settings_from_profile
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as workflow_runs_crud
+from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.models import CopilotMessageCreate, WorkflowRun
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
@@ -145,6 +147,14 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
                 await workflow_runs_crud.update_status(session, current, "failed", error="invalid Copilot input")
         return {"error": "invalid_input"}
     try:
+        llm_settings = None
+        profile_id = data.get("provider_profile_id")
+        if isinstance(profile_id, int):
+            async with session_scope() as session:
+                profile = await profiles_crud.get(session, profile_id)
+                if profile is None:
+                    raise ValueError("Provider profile not found")
+                llm_settings = settings_from_profile(profile)
         reply = await generate_reply(
             content,
             page,
@@ -152,6 +162,7 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
             data.get("selection") if isinstance(data.get("selection"), str) else None,
             normalize_agent_role(run.agent_role),
             history,
+            llm_settings,
         )
     except Exception as exc:  # pragma: no cover - provider/network dependent
         async with session_scope() as session:

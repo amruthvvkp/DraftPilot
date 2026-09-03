@@ -10,8 +10,8 @@ UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui interrogate src 
 ```
 
 Browser tests mock every project/workspace API response and never use the Compose database as test
-state. Run them locally with `--base-url http://localhost:9000`, or use the portable Linux browser
-image and Compose network:
+state. The repository default is `http://localhost:9000`; use the portable Linux browser image and
+Compose network for CI-style execution:
 
 ```bash
 docker compose --profile test run --rm e2e

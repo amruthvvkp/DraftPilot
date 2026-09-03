@@ -51,6 +51,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(
         status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'
     ))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
     page.goto("/projects")
     page.get_by_role("heading", name="The Lantern House").click()
 
@@ -72,6 +75,7 @@ def test_story_artifact_workspace_is_editable(page: Page) -> None:
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/projects/9001/artifacts/31", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact)))
     page.goto("/projects/9001/studio")
     expect(page.get_by_role("heading", name="Creative artifacts")).to_be_visible()

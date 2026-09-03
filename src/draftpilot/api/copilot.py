@@ -8,8 +8,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.core.db import async_get_db
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
 from draftpilot.core.copilot import generate_reply
+from draftpilot.core.config import LLMSettings
+from draftpilot.core.providers import settings_from_profile
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import workflow_runs as runs_crud
+from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.models import WorkflowRunCreate, WorkflowRunRead
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import projects as projects_crud
@@ -29,6 +32,22 @@ class CopilotMessageRequest(BaseModel):
     instruction_layers: dict[str, object] = Field(default_factory=dict)
     citations: list[dict[str, object]] = Field(default_factory=list)
     active_tools: list[str] = Field(default_factory=list)
+
+
+async def _selected_profile_config(
+    data: CopilotMessageRequest, session: AsyncSession
+) -> tuple[int | None, LLMSettings | None]:
+    """Resolve an optional server-side provider profile selected for a turn."""
+    raw_profile_id = data.instruction_layers.get("provider_profile_id")
+    if not isinstance(raw_profile_id, int):
+        return None, None
+    profile = await profiles_crud.get(session, raw_profile_id)
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider profile not found")
+    try:
+        return raw_profile_id, settings_from_profile(profile)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
 
 class CopilotRunResponse(BaseModel):
@@ -79,6 +98,7 @@ async def respond_to_message(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Response input must be a user turn")
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    _, profile_config = await _selected_profile_config(data, session)
     await messages_crud.create(session, CopilotMessageCreate(project_id=project_id, **data.model_dump()))
     history = [
         {"role": message.role, "content": message.content}
@@ -87,7 +107,7 @@ async def respond_to_message(
     role = normalize_agent_role(data.instruction_layers.get("agent_role"))
     try:
         reply = await generate_reply(
-            data.content, data.page, data.artifact, data.selection, role, history
+            data.content, data.page, data.artifact, data.selection, role, history, profile_config
         )
     except Exception as exc:
         logfire.warning("Copilot response unavailable: {exc}", exc=str(exc))
@@ -127,6 +147,7 @@ async def start_async_response(
         session,
         CopilotMessageCreate(project_id=project_id, **data.model_dump()),
     )
+    profile_id, _ = await _selected_profile_config(data, session)
     history = [
         {"role": item.role, "content": item.content}
         for item in await messages_crud.list_for_project(session, project_id)
@@ -148,6 +169,7 @@ async def start_async_response(
                 "instruction_layers": data.instruction_layers,
                 "citations": data.citations,
                 "active_tools": data.active_tools,
+                "provider_profile_id": profile_id,
             },
             agent_role=role,
             permission_mode=permission,

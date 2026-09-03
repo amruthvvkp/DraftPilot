@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from draftpilot.core.config import LLMSettings
+from pydantic import SecretStr
+
+from draftpilot.core.config import LLMSettings, settings
+from draftpilot.core.security import decrypt_secret
+from draftpilot.models import ProviderProfile
 
 _DEFAULT_BASE_URLS = {
     "ollama": "http://localhost:11434/v1",
@@ -33,3 +37,19 @@ def create_chat_model(config: LLMSettings) -> Any:
         api_key=config.api_key.get_secret_value() or "not-needed",
     )
     return OpenAIChatModel(config.model, provider=provider)
+
+
+def settings_from_profile(profile: ProviderProfile) -> LLMSettings:
+    """Build private runtime settings from an enabled encrypted provider profile."""
+    if not profile.enabled:
+        raise ValueError("Provider profile is disabled")
+    api_key = ""
+    if profile.api_key_encrypted is not None:
+        api_key = decrypt_secret(profile.api_key_encrypted, settings.secrets.master_key)
+    return LLMSettings(
+        provider=profile.provider,
+        base_url=profile.base_url,
+        api_key=SecretStr(api_key),
+        model=profile.model,
+        enabled=True,
+    )

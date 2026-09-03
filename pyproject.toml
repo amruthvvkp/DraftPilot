@@ -93,3 +93,6 @@ ignore_no_config = true
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+base_url = "http://localhost:9000"

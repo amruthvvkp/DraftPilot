@@ -5,7 +5,7 @@ import json
 from pydantic_ai import Agent
 
 from draftpilot.core.agent_roles import AgentRoleKey
-from draftpilot.core.config import settings
+from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.providers import create_chat_model
 
 
@@ -16,11 +16,13 @@ async def generate_reply(
     selection: str | None,
     agent_role: AgentRoleKey,
     history: list[dict[str, str]],
+    llm_settings: LLMSettings | None = None,
 ) -> str:
     """Generate one context-scoped Copilot reply through the configured provider."""
-    if not settings.llm.enabled:
+    config = llm_settings or settings.llm
+    if not config.enabled:
         raise RuntimeError("LLM provider is disabled")
-    model = create_chat_model(settings.llm)
+    model = create_chat_model(config)
     agent = Agent(
         model,
         system_prompt=(
