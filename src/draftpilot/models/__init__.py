@@ -69,6 +69,7 @@ from draftpilot.models.timeline_proposal import (
     TimelineProposalRead,
     TimelineProposalRecord,
 )
+from draftpilot.models.story_artifact import StoryArtifact, StoryArtifactBase, StoryArtifactRead
 
 __all__ = [
     "BlockType",
@@ -118,4 +119,7 @@ __all__ = [
     "TimelineProposalBase",
     "TimelineProposalRead",
     "TimelineProposalRecord",
+    "StoryArtifact",
+    "StoryArtifactBase",
+    "StoryArtifactRead",
 ]
