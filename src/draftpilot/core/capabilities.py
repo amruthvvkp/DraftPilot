@@ -25,8 +25,11 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="revisions.read", description="Read scene revisions and snapshots.", scope="scene"),
     Capability(name="revisions.restore", description="Restore a named scene revision.", scope="scene", mutates=True, approval_required=True),
     Capability(name="evaluations.read", description="Read persisted evaluation results.", scope="project"),
+    Capability(name="exports.read", description="Render a screenplay export for download.", scope="project"),
     Capability(name="exports.create", description="Create a screenplay export artifact.", scope="project", mutates=True, approval_required=True),
+    Capability(name="backups.read", description="List project backup manifests.", scope="project"),
     Capability(name="backups.create", description="Create a project backup artifact.", scope="project", mutates=True, approval_required=True),
+    Capability(name="runs.read", description="Inspect a project workflow run.", scope="run"),
     Capability(name="runs.control", description="Inspect, pause, resume, or cancel a workflow run.", scope="run", mutates=True, approval_required=True),
 )
 

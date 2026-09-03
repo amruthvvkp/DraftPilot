@@ -28,3 +28,6 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "read_dialogue_translations" in tools
     assert "propose_dialogue_translation" in tools
     assert "read_scene_revisions" in tools
+    assert "render_screenplay_export" in tools
+    assert "list_project_backups" in tools
+    assert "read_workflow_run" in tools

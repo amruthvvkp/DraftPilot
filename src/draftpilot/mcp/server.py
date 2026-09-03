@@ -14,6 +14,10 @@ from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import valid_static_token
+from draftpilot.core.backup import BackupError, read_backup
+from draftpilot.core.screenplay.hydrate import load_screenplay_doc
+from draftpilot.core.screenplay.adapters.fdx import render_fdx
+from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
@@ -23,7 +27,10 @@ from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
+from draftpilot.crud import projects as projects_crud
+from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import AgentProposal, AgentProposalRead
+from draftpilot.models import WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -320,6 +327,73 @@ async def read_scene_revisions(project_id: int, scene_id: int, ctx: Context) -> 
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Revision response exceeds MCP output limit")
     return result
+
+
+@mcp.tool
+async def render_screenplay_export(
+    project_id: int, screenplay_id: int, file_format: str, ctx: Context
+) -> dict[str, object]:
+    """Render a bounded, project-authorized Fountain or FDX export."""
+    if file_format not in {"fountain", "fdx"}:
+        raise ValueError("Only Fountain and FDX exports are available through MCP")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session, client_id, project_id, "exports.read", "read", {"screenplay_id": screenplay_id}
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        project = await projects_crud.get(session, project_id)
+        screenplay = await screenplays_crud.get(session, screenplay_id)
+        if project is None or screenplay is None or screenplay.project_id != project_id:
+            raise ValueError("Screenplay is not in the requested project")
+        document = await load_screenplay_doc(session, screenplay_id)
+    content = render_fountain(document) if file_format == "fountain" else render_fdx(document)
+    if len(content) > settings.mcp.max_output_chars:
+        raise ValueError("Export response exceeds MCP output limit")
+    return {"project_id": project_id, "screenplay_id": screenplay_id, "format": file_format, "content": content}
+
+
+@mcp.tool
+async def list_project_backups(project_id: int, ctx: Context) -> dict[str, object]:
+    """List validated backup manifests for one authorized project."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "backups.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        if await projects_crud.get(session, project_id) is None:
+            raise ValueError("Project not found")
+    results: list[dict[str, object]] = []
+    if settings.backup.root.exists():
+        for path in sorted(settings.backup.root.glob("*.json.gz")):
+            try:
+                envelope = read_backup(settings.backup.root, path.name)
+            except BackupError:
+                continue
+            if envelope.manifest.project_id == project_id:
+                results.append({"filename": path.name, "manifest": envelope.manifest.model_dump(mode="json")})
+    result = {"project_id": project_id, "backups": results}
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Backup response exceeds MCP output limit")
+    return result
+
+
+@mcp.tool
+async def read_workflow_run(project_id: int, run_id: int, ctx: Context) -> dict[str, object]:
+    """Read one durable workflow run within its project scope."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "runs.read", "read", {"run_id": run_id})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        run = await runs_crud.get(session, run_id)
+        if run is None or run.project_id != project_id:
+            raise ValueError("Run is not in the requested project")
+    return WorkflowRunRead.model_validate(run).model_dump(mode="json")
 
 
 @mcp.tool
