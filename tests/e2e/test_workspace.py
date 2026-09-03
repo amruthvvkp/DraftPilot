@@ -86,6 +86,7 @@ def test_story_artifact_workspace_is_editable(page: Page) -> None:
     page.route("**/api/v1/projects/9001/artifacts/31", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact)))
     page.goto("/projects/9001/studio")
     expect(page.get_by_role("heading", name="Creative artifacts")).to_be_visible()
+    expect(page.get_by_label("New artifact kind")).to_have_value("brief")
     expect(page.get_by_role("button", name="brief First pass STALE")).to_be_visible()
     content = page.get_by_label("Artifact content")
     content.fill("A family returns to a house that remembers.")
