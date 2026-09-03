@@ -29,6 +29,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="exports.create", description="Create a screenplay export artifact.", scope="project", mutates=True, approval_required=True),
     Capability(name="backups.read", description="List project backup manifests.", scope="project"),
     Capability(name="backups.create", description="Create a project backup artifact.", scope="project", mutates=True, approval_required=True),
+    Capability(name="backups.restore", description="Restore a project backup into a new project.", scope="project", mutates=True, approval_required=True),
     Capability(name="runs.read", description="Inspect a project workflow run.", scope="run"),
     Capability(name="runs.control", description="Inspect, pause, resume, or cancel a workflow run.", scope="run", mutates=True, approval_required=True),
 )

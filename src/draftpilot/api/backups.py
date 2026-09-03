@@ -12,6 +12,7 @@ from draftpilot.core.backup import BackupError, BackupManifest, read_backup, wri
 from draftpilot.core.config import settings
 from draftpilot.core.db import async_get_db
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
+from draftpilot.core.screenplay.schema import ScreenplayDoc
 from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
@@ -64,6 +65,41 @@ async def _project_payload(session: AsyncSession, project_id: int) -> dict[str, 
         ],
         "screenplays": screenplay_payload,
     }
+
+
+async def restore_backup_payload(session: AsyncSession, payload: dict[str, Any]) -> Project:
+    """Restore validated backup content into a new project without overwriting existing data."""
+    project = Project.model_validate(ProjectCreate.model_validate(payload["project"]))
+    session.add(project)
+    await session.flush()
+    assert project.id is not None
+    for reference in payload.get("references", []):
+        session.add(ProjectReference(project_id=project.id, **reference))
+    for artifact in payload.get("artifacts", []):
+        values = dict(artifact)
+        values.pop("version", None)
+        values.pop("stale", None)
+        values.pop("depends_on", None)
+        session.add(StoryArtifact(project_id=project.id, **values))
+    await session.commit()
+    for screenplay_data in payload.get("screenplays", []):
+        screenplay = Screenplay(
+            project_id=project.id,
+            title=screenplay_data["title"],
+            format=screenplay_data["format"],
+            status=screenplay_data["status"],
+        )
+        session.add(screenplay)
+        await session.flush()
+        assert screenplay.id is not None
+        await save_screenplay_doc(
+            session,
+            screenplay.id,
+            ScreenplayDoc.model_validate(screenplay_data["document"]),
+            commit=False,
+        )
+    await session.commit()
+    return project
 
 
 @router.post("", response_model=BackupRead, status_code=status.HTTP_201_CREATED)
@@ -123,39 +159,10 @@ async def restore_backup(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
     payload = envelope.payload
     try:
-        project = Project.model_validate(ProjectCreate.model_validate(payload["project"]))
-        session.add(project)
-        await session.flush()
-        assert project.id is not None
-        for reference in payload.get("references", []):
-            session.add(ProjectReference(project_id=project.id, **reference))
-        for artifact in payload.get("artifacts", []):
-            values = dict(artifact)
-            values.pop("version", None)
-            values.pop("stale", None)
-            values.pop("depends_on", None)
-            session.add(StoryArtifact(project_id=project.id, **values))
-        await session.commit()
-        from draftpilot.core.screenplay.schema import ScreenplayDoc
-
-        for screenplay_data in payload.get("screenplays", []):
-            screenplay = Screenplay(
-                project_id=project.id,
-                title=screenplay_data["title"],
-                format=screenplay_data["format"],
-                status=screenplay_data["status"],
-            )
-            session.add(screenplay)
-            await session.flush()
-            assert screenplay.id is not None
-            await save_screenplay_doc(
-                session,
-                screenplay.id,
-                ScreenplayDoc.model_validate(screenplay_data["document"]),
-                commit=False,
-            )
-        await session.commit()
+        project = await restore_backup_payload(session, payload)
     except (KeyError, TypeError, ValueError) as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid backup payload") from exc
+    if project.id is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Restored project has no identifier")
     return {"project_id": project.id}

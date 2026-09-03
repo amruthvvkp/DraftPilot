@@ -16,6 +16,7 @@ from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import client_id_for_token
 from draftpilot.core.backup import BackupError, read_backup, write_backup
+from draftpilot.api.backups import _project_payload, restore_backup_payload
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
@@ -32,7 +33,6 @@ from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import AgentProposal, AgentProposalRead
 from draftpilot.models import WorkflowRunRead
-from draftpilot.api.backups import _project_payload
 
 telemetry.setup(mcp=True)
 
@@ -424,6 +424,42 @@ async def create_project_backup(
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Backup response exceeds MCP output limit")
     return result
+
+
+@mcp.tool
+async def restore_project_backup(
+    project_id: int,
+    filename: str,
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, int]:
+    """Restore an approved backup into a new project through the canonical restore service."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    client_id = ctx.client_id or "unknown"
+    try:
+        envelope = read_backup(settings.backup.root, filename)
+    except BackupError as exc:
+        raise ValueError("Invalid backup") from exc
+    if envelope.manifest.project_id != project_id:
+        raise ValueError("Backup is not in the requested project")
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "backups.restore",
+                "restore",
+                {"filename": filename},
+                approved=approved,
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        restored = await restore_backup_payload(session, envelope.payload)
+    if restored.id is None:
+        raise ValueError("Restored project has no identifier")
+    return {"source_project_id": project_id, "project_id": restored.id}
 
 
 @mcp.tool
