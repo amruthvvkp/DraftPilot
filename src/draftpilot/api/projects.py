@@ -3,11 +3,13 @@
 import difflib
 import json
 
+import logfire
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
@@ -36,6 +38,25 @@ from draftpilot.models import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+async def _enqueue_rag_index(
+    project_id: int, source_id: str, source_kind: str, text: str, content_version: int
+) -> None:
+    """Queue a bounded canonical-document refresh after a committed screenplay change."""
+    try:
+        await (await get_arq_pool()).enqueue_job(
+            "index_rag_document",
+            {
+                "project_id": project_id,
+                "source_id": source_id,
+                "source_kind": source_kind,
+                "text": text,
+                "content_version": content_version,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+        logfire.warning("RAG indexing enqueue skipped: {exc}", exc=str(exc))
 
 
 class ProjectWorkspaceRead(BaseModel):
@@ -189,6 +210,9 @@ async def create_project_scene(
     ):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay or act not found")
     scene = await scenes_crud.create(session, data)
+    await _enqueue_rag_index(
+        project_id, f"scene:{scene.id}", "scene", scene.heading, scene.version
+    )
     return SceneRead.model_validate(scene)
 
 
@@ -215,6 +239,9 @@ async def update_project_scene(
     if if_match != scene.version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
     updated = await scenes_crud.update(session, scene, data)
+    await _enqueue_rag_index(
+        project_id, f"scene:{updated.id}", "scene", updated.heading, updated.version
+    )
     return SceneRead.model_validate(updated)
 
 
@@ -242,6 +269,13 @@ async def create_project_block(
     scene.version += 1
     session.add(scene)
     await session.commit()
+    await _enqueue_rag_index(
+        project_id,
+        f"scene:{scene.id}",
+        "scene",
+        f"{scene.heading}\n{block.text}",
+        scene.version,
+    )
     return BlockRead.model_validate(block)
 
 
@@ -277,6 +311,13 @@ async def update_project_block(
     scene.version += 1
     session.add(scene)
     await session.commit()
+    await _enqueue_rag_index(
+        project_id,
+        f"scene:{scene.id}",
+        "scene",
+        f"{scene.heading}\n{updated.text}",
+        scene.version,
+    )
     return BlockRead.model_validate(updated)
 
 
@@ -344,6 +385,13 @@ async def save_dialogue_translation(
             status=data.status,
             source_version=scene.version,
         ),
+    )
+    await _enqueue_rag_index(
+        project_id,
+        f"translation:{translation.id}",
+        "dialogue_translation",
+        translation.text,
+        translation.source_version,
     )
     return DialogueTranslationRead.model_validate(translation)
 
