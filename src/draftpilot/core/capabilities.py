@@ -18,6 +18,8 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="timeline.propose", description="Calculate a reversible scene reorder proposal.", scope="screenplay"),
     Capability(name="screenplay.read", description="Read canonical screenplay blocks and versions.", scope="scene"),
     Capability(name="context.read", description="Read scoped project and scene context.", scope="artifact"),
+    Capability(name="knowledge_graph.read", description="Read project-scoped canon nodes and relationships.", scope="project"),
+    Capability(name="copilot.write", description="Persist a context-bearing Copilot conversation turn.", scope="project", mutates=True, approval_required=False),
     Capability(name="translation.propose", description="Propose a linked dialogue translation.", scope="dialogue", approval_required=True),
     Capability(name="revisions.read", description="Read scene revisions and snapshots.", scope="scene"),
     Capability(name="revisions.restore", description="Restore a named scene revision.", scope="scene", mutates=True, approval_required=True),

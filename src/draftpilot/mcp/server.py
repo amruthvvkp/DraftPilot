@@ -14,6 +14,7 @@ from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import valid_static_token
+from draftpilot.crud import knowledge_graph as graph_crud
 
 telemetry.setup(mcp=True)
 
@@ -68,6 +69,28 @@ def context_schema_resource() -> str:
                     },
                 }
             ],
+        }
+    )
+
+
+@mcp.resource("draftpilot://projects/{project_id}/knowledge-graph")
+async def knowledge_graph_resource(project_id: int, ctx: Context) -> str:
+    """Publish authorized canonical graph nodes and relationships for a project."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session, client_id, project_id, "knowledge_graph.read", "read", {}
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        nodes = await graph_crud.list_nodes(session, project_id)
+        edges = await graph_crud.list_edges(session, project_id)
+    return json.dumps(
+        {
+            "project_id": project_id,
+            "nodes": [node.model_dump(mode="json") for node in nodes],
+            "edges": [edge.model_dump(mode="json") for edge in edges],
         }
     )
 

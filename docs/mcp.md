@@ -33,3 +33,7 @@ checks the persisted state before recording success.
 Copilot turns are persisted at `/api/v1/projects/{project_id}/copilot/messages`. Each message
 records its page, artifact, selection, instruction layers, retrieved citations, and active typed
 tools so a reconnecting client can restore context without direct database access.
+
+Canonical graph data is discoverable at `draftpilot://projects/{project_id}/knowledge-graph` and
+requires the `knowledge_graph.read` project grant. The resource returns only nodes and edges for
+the requested project and records the invocation in the redacted MCP audit log.
