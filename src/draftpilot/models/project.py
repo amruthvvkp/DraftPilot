@@ -3,6 +3,7 @@
 from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON
+from pydantic import model_validator
 from sqlmodel import Field, Relationship, SQLModel
 
 from draftpilot.models.base import TimestampMixin
@@ -51,7 +52,14 @@ class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg
 class ProjectCreate(ProjectBase):
     """Schema for creating a new project."""
 
-    pass
+    @model_validator(mode="after")
+    def validate_translation_languages(self) -> "ProjectCreate":
+        """Reject the primary screenplay language as a translation target."""
+        if self.primary_language.strip().casefold() in {
+            language.strip().casefold() for language in self.languages
+        }:
+            raise ValueError("primary_language cannot also be a dialogue translation language")
+        return self
 
 
 class ProjectUpdate(SQLModel):

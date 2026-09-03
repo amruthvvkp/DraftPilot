@@ -95,6 +95,20 @@ def test_create_project_rejects_missing_title(client: TestClient) -> None:
     assert response.status_code == 422
 
 
+def test_create_project_rejects_primary_language_translation_target(client: TestClient) -> None:
+    """Reject a project that lists its screenplay language as a translation target."""
+    response = client.post(
+        "/api/v1/projects",
+        json={
+            "title": "Language-safe story",
+            "primary_language": " Hindi ",
+            "genres": [],
+            "languages": ["Bengali", "hindi"],
+        },
+    )
+    assert response.status_code == 422
+
+
 def test_scene_update_requires_matching_if_match(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
