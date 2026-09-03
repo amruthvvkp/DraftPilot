@@ -19,6 +19,8 @@ x-app-env: &app-env
   QUEUE__HOST: redis
   QUEUE__PORT: "6379"
   QUEUE__DB: "1"
+  RAG__SERVICE_URL: http://rag:8000
+  RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
   OTEL__ENABLED: ${OTEL__ENABLED:-true}
   OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
   # Basic base64("pk-lf-draftpilot-dev:sk-lf-draftpilot-dev") — matches the

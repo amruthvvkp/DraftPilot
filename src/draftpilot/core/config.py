@@ -158,6 +158,7 @@ class RAGSettings(BaseSettings):
     auth_token: SecretStr = SecretStr("draftpilot-local-token")
     max_results: int = 8
     database_path: Path = Path("/tmp/draftpilot-rag.sqlite3")
+    service_url: str = "http://rag:8000"
 
 
 class UISettings(BaseSettings):

@@ -7,6 +7,7 @@ can display them. The LLM step is fully optional — the task always returns the
 deterministic metrics even when no model is reachable.
 """
 
+import httpx
 import logfire
 
 from draftpilot.core.cache import cache_set
@@ -72,6 +73,25 @@ async def analyze_screenplay(ctx: dict, screenplay_id: int) -> dict:
         await cache_set(ANALYSIS_CACHE_KEY.format(id=screenplay_id), result, ttl=3600)
         logfire.info("Analysis complete for {id}: {result}", id=screenplay_id, result=result)
         return result
+
+
+async def index_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:
+    """Index one approved document through the isolated RAG HTTP boundary."""
+    project_id = document.get("project_id")
+    if not isinstance(project_id, int):
+        return {"error": "project_id is required"}
+    payload = {
+        "source_id": document.get("source_id"),
+        "source_kind": document.get("source_kind"),
+        "text": document.get("text"),
+        "content_version": document.get("content_version"),
+    }
+    headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
+    url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}/documents"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(url, json=payload, headers=headers)
+        response.raise_for_status()
+    return {"status": "indexed"}
 
 
 async def execute_workflow(ctx: dict, run_id: int) -> dict:
