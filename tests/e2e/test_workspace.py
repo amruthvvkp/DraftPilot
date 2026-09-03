@@ -92,7 +92,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_role("heading", name="Project backups")).to_be_visible()
     expect(page.get_by_text(backup["filename"])).to_be_visible()
     page.get_by_role("checkbox", name="Heading").uncheck()
-    page.get_by_role("button", name="Restore").click()
+    page.get_by_role("button", name="Restore", exact=True).click()
     page.get_by_role("button", name="Run review").click()
     editor = page.get_by_label("Edit action")
     expect(editor).to_have_value("The house breathes in the dark.")
