@@ -17,6 +17,14 @@ Compose network for CI-style execution:
 docker compose --profile test run --rm e2e
 ```
 
+Rebuild the test image after changing Python Playwright tests or dependencies so Docker does not
+reuse a cached test source layer:
+
+```bash
+docker compose --profile test build e2e
+docker compose --profile test run --rm e2e
+```
+
 The `e2e` service uses the pinned Playwright Python image and targets `http://ui:8000`, making the
 suite suitable for CI runners that do not have a developer browser session.
 
