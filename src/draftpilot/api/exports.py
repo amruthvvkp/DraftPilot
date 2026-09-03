@@ -1,20 +1,24 @@
 """Canonical screenplay export endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import PlainTextResponse
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
+from draftpilot.core.screenplay.adapters.fdx import parse_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
-from draftpilot.core.screenplay.hydrate import load_screenplay_doc
+from draftpilot.core.screenplay.adapters.fountain import parse_fountain
+from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.models import ScreenplayCreate, ScreenplayRead
 
-router = APIRouter(prefix="/projects/{project_id}/screenplays/{screenplay_id}/exports", tags=["exports"])
+router = APIRouter(prefix="/projects/{project_id}/screenplays/{screenplay_id}", tags=["exports"])
+MAX_IMPORT_BYTES = 10 * 1024 * 1024
 
 
-@router.get("/{file_format}", response_class=PlainTextResponse)
+@router.get("/exports/{file_format}", response_class=PlainTextResponse)
 async def export_screenplay(
     project_id: int,
     screenplay_id: int,
@@ -42,3 +46,50 @@ async def export_screenplay(
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post(
+    "/imports/{file_format}", response_model=ScreenplayRead, status_code=status.HTTP_201_CREATED
+)
+async def import_screenplay(
+    project_id: int,
+    screenplay_id: int,
+    file_format: str,
+    request: Request,
+    session: AsyncSession = Depends(async_get_db),
+) -> ScreenplayRead:
+    """Import Fountain or FDX into a new screenplay without replacing existing data."""
+    if file_format not in {"fountain", "fdx"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported import format")
+    project = await projects_crud.get(session, project_id)
+    source = await screenplays_crud.get(session, screenplay_id)
+    if project is None or source is None or source.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > MAX_IMPORT_BYTES:
+                raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Import is too large")
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid content length") from exc
+    raw = await request.body()
+    if len(raw) > MAX_IMPORT_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Import is too large")
+    try:
+        text = raw.decode("utf-8-sig")
+        document = parse_fountain(text) if file_format == "fountain" else parse_fdx(text)
+    except (UnicodeDecodeError, ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed screenplay import") from exc
+    imported = await screenplays_crud.create(
+        session,
+        ScreenplayCreate(
+            project_id=project_id,
+            title=f"{source.title} (Imported)"[:200],
+            format=source.format,
+            status="draft",
+        ),
+    )
+    if imported.id is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Import could not be persisted")
+    await save_screenplay_doc(session, imported.id, document)
+    return ScreenplayRead.model_validate(imported)
