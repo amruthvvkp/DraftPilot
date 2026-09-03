@@ -56,6 +56,12 @@ be applied. The Copilot rail exposes the page-aware tools available for the curr
 - Keep MCP as the typed capability boundary for agents. The UI subscribes to persisted run events,
   tool results, and artifact changes, then refreshes visible panels from the server rather than
   rendering hidden agent state.
+- Treat MCP interoperability as a product contract: built-in DraftPilot agents and external
+  clients consume the same page-aware catalog of prompts, resources, and tools. Outline pages
+  expose brief/canon/beat tools; timeline pages expose scene-order/runtime tools; editor pages
+  expose screenplay/context/revision tools; review pages expose evaluation/proposal tools; and
+  export/settings pages expose format/provider/backup tools. Every invocation is server-scoped,
+  permission-checked, approval-aware, redacted, and audited.
 
 ## Exit criteria
 

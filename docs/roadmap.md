@@ -28,6 +28,10 @@ Tracking epic: [#13](https://github.com/amruthvvkp/DraftPilot/issues/13).
 - **Retrieval** — Compose includes a replaceable local-first RAG service for project-scoped
   retrieval over artifacts, screenplay chunks, references, and knowledge-graph edges. Approved
   changes trigger incremental re-indexing and visible citation refresh.
+- **MCP interoperability** — DraftPilot is both an MCP client and an MCP server. Built-in agents
+  and external MCP-capable clients use the same typed capability service; the UI selects a
+  page-aware capability bundle, while the server remains authoritative for project scope,
+  permissions, approvals, redaction, and audit.
 
 ## Ground-test screenplay benchmark
 
@@ -105,6 +109,12 @@ must declare its input artifact scope, instruction layers, output artifact type,
 permission mode, and rollback behavior. Expose only typed DraftPilot capabilities through MCP;
 route Copilot turns to the tools appropriate for the current page, artifact, and selection, and
 show those active tools to the writer;
+publish the same capability catalog to external clients through MCP: discoverable prompts for
+workflow turns, resources for canonical artifacts/citations/schema, and tools for approved
+story operations, retrieval, evaluations, exports, and run control. Support authenticated
+Streamable HTTP and local stdio transports, per-client/project grants, explicit consent for
+mutations, and compatibility with external clients such as Claude, ChatGPT, Gemini, and other
+MCP-capable applications without duplicating business logic;
 when a run needs generated code to compose or filter those capabilities, execute it through
 the Monty adapter rather than an unrestricted shell or Python subprocess. PDF/HTML export folds
 in here. Depends on B + D.
@@ -117,7 +127,8 @@ can be regenerated rather than being silently overwritten.
 
 ### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: planned
 Persist workflows, runs, tasks, instruction resolution, context artifacts, approvals, Monty
-execution records, MCP tool calls, evaluator results, and reversible change sets. Support
+execution records, MCP client registrations, capability discovery, prompt/resource/tool
+invocations, evaluator results, and reversible change sets. Support
 resumable snapshots, cancellation, bounded retries, per-tool grants, SSRF protection, output
 limits, and conflict-aware application of story operations. Monty host functions are narrow,
 typed adapters over DraftPilot services; filesystem, network, command, and destructive access

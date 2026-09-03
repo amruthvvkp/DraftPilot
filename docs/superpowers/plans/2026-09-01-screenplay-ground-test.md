@@ -29,6 +29,9 @@ redevelopment and production import/interoperability paths.
   snapshots for every stage.
 - Record each Copilot turn with its active workflow stage, selected artifact scope, retrieved
   citations, participating agents, MCP calls, proposal, approval, and resulting graph/index refresh.
+- Run the same workflow through a built-in agent and an external MCP client. Verify capability
+  discovery, page-aware prompt/resource/tool selection, project isolation, mutation consent,
+  approval gates, redaction, audit records, reconnect behavior, and equivalent typed results.
 - Use mocked/fixture-backed browser tests; never use the developer's live Compose database as test
   state.
 - Score story beats, character arcs, pacing, tone, visual language, continuity, format fidelity,
