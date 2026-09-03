@@ -24,7 +24,8 @@ operation; approval and optimistic-concurrency checks remain on the DraftPilot a
 `read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
 source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
 than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
-diff and rollback planning. `render_screenplay_export` renders bounded Fountain or FDX content,
+diff and rollback planning. `render_screenplay_export` renders bounded Fountain, FDX, or PDF
+content (PDF is returned as base64),
 `list_project_backups` lists validated backup manifests, `create_project_backup` creates an approved
 archive, `restore_project_backup` restores it into a new project, and `read_workflow_run` reads
 durable run state. Backup creation and restore require both the project grant and

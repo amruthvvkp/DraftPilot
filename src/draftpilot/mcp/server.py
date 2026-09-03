@@ -1,5 +1,6 @@
 """FastMCP server exposing DraftPilot's typed capability boundary."""
 
+import base64
 import json
 
 import httpx
@@ -18,6 +19,7 @@ from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc
+from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
@@ -403,9 +405,9 @@ async def read_scene_revisions(
 async def render_screenplay_export(
     project_id: int, screenplay_id: int, file_format: str, ctx: Context
 ) -> dict[str, object]:
-    """Render a bounded, project-authorized Fountain or FDX export."""
-    if file_format not in {"fountain", "fdx"}:
-        raise ValueError("Only Fountain and FDX exports are available through MCP")
+    """Render a bounded, project-authorized Fountain, FDX, or PDF export."""
+    if file_format not in {"fountain", "fdx", "pdf"}:
+        raise ValueError("Only Fountain, FDX, and PDF exports are available through MCP")
     client_id = ctx.client_id or "unknown"
     async with session_scope() as session:
         try:
@@ -424,9 +426,17 @@ async def render_screenplay_export(
         if project is None or screenplay is None or screenplay.project_id != project_id:
             raise ValueError("Screenplay is not in the requested project")
         document = await load_screenplay_doc(session, screenplay_id)
-    content = (
-        render_fountain(document) if file_format == "fountain" else render_fdx(document)
-    )
+    if file_format == "pdf":
+        content_base64 = base64.b64encode(render_pdf(document)).decode("ascii")
+        if len(content_base64) > settings.mcp.max_output_chars:
+            raise ValueError("Export response exceeds MCP output limit")
+        return {
+            "project_id": project_id,
+            "screenplay_id": screenplay_id,
+            "format": file_format,
+            "content_base64": content_base64,
+        }
+    content = render_fountain(document) if file_format == "fountain" else render_fdx(document)
     if len(content) > settings.mcp.max_output_chars:
         raise ValueError("Export response exceeds MCP output limit")
     return {
