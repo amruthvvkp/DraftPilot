@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from draftpilot.api.projects import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import Project
+from draftpilot.models import Act, Project, Scene, Screenplay
 
 
 class _Session:
@@ -82,3 +82,34 @@ def test_create_project_rejects_missing_title(client: TestClient) -> None:
     """Reject an invalid project brief before any persistence call."""
     response = client.post("/api/v1/projects", json={"genres": [], "languages": []})
     assert response.status_code == 422
+
+
+def test_scene_update_requires_matching_if_match(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject stale scene edits without calling the persistence layer."""
+    scene = Scene(id=7, act_id=4, heading="INT. HOUSE - DAY", version=3)
+    act = Act(id=4, screenplay_id=2, position=0)
+    screenplay = Screenplay(id=2, project_id=9, title="Story")
+
+    async def get_scene(_session: _Session, _scene_id: int) -> Scene:
+        """Return the versioned scene fixture."""
+        return scene
+
+    async def get_act(_session: _Session, _act_id: int) -> Act:
+        """Return the owning act fixture."""
+        return act
+
+    async def get_screenplay(_session: _Session, _screenplay_id: int) -> Screenplay:
+        """Return the owning screenplay fixture."""
+        return screenplay
+
+    monkeypatch.setattr("draftpilot.api.projects.scenes_crud.get", get_scene)
+    monkeypatch.setattr("draftpilot.api.projects.acts_crud.get", get_act)
+    monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.get", get_screenplay)
+    response = client.patch(
+        "/api/v1/projects/9/scenes/7",
+        headers={"If-Match": "2"},
+        json={"body": "A changed room."},
+    )
+    assert response.status_code == 409

@@ -1,6 +1,6 @@
 """Project resource endpoints for the DraftPilot API."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -19,6 +19,7 @@ from draftpilot.models import (
     ProjectReferenceBase,
     ProjectReferenceRead,
     SceneRead,
+    SceneUpdate,
     ScreenplayRead,
 )
 
@@ -107,3 +108,29 @@ async def get_project_workspace(
         scenes=[SceneRead.model_validate(scene) for scene in scenes],
         blocks=blocks,
     )
+
+
+@router.patch("/{project_id}/scenes/{scene_id}", response_model=SceneRead)
+async def update_project_scene(
+    project_id: int,
+    scene_id: int,
+    data: SceneUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> SceneRead:
+    """Update a project scene only when the caller holds its current version."""
+    scene = await scenes_crud.get(session, scene_id)
+    if scene is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    act = await acts_crud.get(session, scene.act_id)
+    if act is None or act.screenplay_id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    screenplay = await screenplays_crud.get(session, act.screenplay_id)
+    if screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != scene.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
+    updated = await scenes_crud.update(session, scene, data)
+    return SceneRead.model_validate(updated)

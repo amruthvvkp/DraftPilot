@@ -18,6 +18,7 @@ class SceneBase(SQLModel):
     heading: str = Field(max_length=300)  # e.g. "INT. COFFEE SHOP - DAY"
     position: int = Field(default=0, index=True)
     body: str = Field(default="")  # rendered cache; the ground truth is ``blocks``
+    version: int = Field(default=1, ge=1)
 
 
 class Scene(SceneBase, TimestampMixin, table=True):  # type: ignore[call-arg]
