@@ -29,6 +29,10 @@ diff and rollback planning. `render_screenplay_export` renders bounded Fountain 
 state. Backup creation, restore, export artifacts, and run control remain approval-gated and are not
 performed implicitly by an external client.
 
+`control_workflow_run` exposes explicit `resume` and `cancel` actions. It requires the client grant
+for `runs.control` and an `approved: true` writer-consent value; every attempt is audited, and resume
+requeues the same durable run rather than creating a second run.
+
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
 in the server environment or encrypted storage and must not be sent to an MCP client. Streamable HTTP

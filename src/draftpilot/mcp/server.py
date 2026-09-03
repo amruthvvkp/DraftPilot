@@ -10,6 +10,7 @@ from fastmcp.server.auth import AccessToken, TokenVerifier
 from draftpilot.core import telemetry
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.db import session_scope
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
@@ -394,6 +395,52 @@ async def read_workflow_run(project_id: int, run_id: int, ctx: Context) -> dict[
         run = await runs_crud.get(session, run_id)
         if run is None or run.project_id != project_id:
             raise ValueError("Run is not in the requested project")
+    return WorkflowRunRead.model_validate(run).model_dump(mode="json")
+
+
+@mcp.tool
+async def control_workflow_run(
+    project_id: int,
+    run_id: int,
+    action: str,
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Resume or cancel a durable run only after explicit writer approval."""
+    if action not in {"resume", "cancel"}:
+        raise ValueError("Run action must be resume or cancel")
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "runs.control",
+                action,
+                {"run_id": run_id, "action": action},
+                approved=approved,
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        run = await runs_crud.get(session, run_id)
+        if run is None or run.project_id != project_id:
+            raise ValueError("Run is not in the requested project")
+        if action == "cancel":
+            if run.status in {"succeeded", "failed", "cancelled"}:
+                raise ValueError("Run is already terminal")
+            await runs_crud.update_status(session, run, "cancelled")
+        else:
+            if run.status == "succeeded":
+                raise ValueError("Run already succeeded")
+            run.status = "queued"
+            run.error = None
+            session.add(run)
+            await session.commit()
+            await session.refresh(run)
+            await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
     return WorkflowRunRead.model_validate(run).model_dump(mode="json")
 
 

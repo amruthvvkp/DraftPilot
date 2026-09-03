@@ -31,3 +31,4 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "render_screenplay_export" in tools
     assert "list_project_backups" in tools
     assert "read_workflow_run" in tools
+    assert "control_workflow_run" in tools
