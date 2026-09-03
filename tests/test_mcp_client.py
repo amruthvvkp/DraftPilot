@@ -11,7 +11,12 @@ def test_validate_mcp_endpoint_blocks_metadata_and_credentials() -> None:
         validate_mcp_endpoint("http://169.254.169.254/mcp")
     with pytest.raises(MCPClientError):
         validate_mcp_endpoint("https://user:secret@example.com/mcp")
+    with pytest.raises(MCPClientError):
+        validate_mcp_endpoint("http://10.0.0.8:9001/mcp")
+    with pytest.raises(MCPClientError):
+        validate_mcp_endpoint("http://[fe80::1]:9001/mcp")
     assert validate_mcp_endpoint("http://localhost:9001/mcp") == "http://localhost:9001/mcp"
+    assert validate_mcp_endpoint("http://127.0.0.1:9001/mcp") == "http://127.0.0.1:9001/mcp"
 
 
 def test_bounded_result_rejects_oversized_mcp_payload() -> None:
