@@ -14,3 +14,8 @@ Supported OpenAI-compatible routes include OpenAI, OpenRouter, custom gateways, 
 LM Studio. Use `base_url` for a gateway or a container-to-host address such as
 `http://host.docker.internal:11434/v1`. Provider calls are optional until a profile is enabled;
 credentials remain server-side and are never sent to the browser.
+
+The Copilot response endpoint uses the process-level `LLM__*` settings for its active model. A
+configured `LLM__ENABLED=true`, provider, model, and endpoint are required before it calls a model;
+otherwise it returns an explicit `503` and retains the writer's turn. Persisted provider profiles
+are encrypted configuration records and are the next selection layer for multi-profile routing.

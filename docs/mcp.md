@@ -12,6 +12,11 @@ results with source identifiers and content versions. Clients can inspect the re
 access. Retrieval requires the `context.read` grant for the requested project and is bounded by the
 MCP request timeout and output limit.
 
+`read_project_artifacts` and `read_screenplay_scenes` expose canonical editable artifacts and
+ordered screenplay blocks through the same project authorization boundary. Both tools enforce the
+configured response-size limit, and screenplay reads reject a screenplay belonging to another
+project.
+
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
 in the server environment or encrypted storage and must not be sent to an MCP client. Streamable HTTP
@@ -33,6 +38,10 @@ checks the persisted state before recording success.
 Copilot turns are persisted at `/api/v1/projects/{project_id}/copilot/messages`. Each message
 records its page, artifact, selection, instruction layers, retrieved citations, and active typed
 tools so a reconnecting client can restore context without direct database access.
+
+The `/copilot/messages/respond` endpoint persists the user turn, invokes the configured server-side
+PydanticAI provider, and persists the assistant reply. If `LLM__ENABLED` is false or the provider is
+unavailable, it returns `503` after retaining the user turn; the UI does not fabricate a response.
 
 Canonical graph data is discoverable at `draftpilot://projects/{project_id}/knowledge-graph` and
 requires the `knowledge_graph.read` project grant. The resource returns only nodes and edges for
