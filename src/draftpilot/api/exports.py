@@ -31,7 +31,7 @@ async def export_screenplay(
     if project is None or screenplay is None or screenplay.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
     if file_format not in {"fountain", "fdx"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported export format")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unsupported export format")
     document = await load_screenplay_doc(session, screenplay_id)
     if file_format == "fountain":
         content = render_fountain(document)
@@ -60,7 +60,7 @@ async def import_screenplay(
 ) -> ScreenplayRead:
     """Import Fountain or FDX into a new screenplay without replacing existing data."""
     if file_format not in {"fountain", "fdx"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported import format")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unsupported import format")
     project = await projects_crud.get(session, project_id)
     source = await screenplays_crud.get(session, screenplay_id)
     if project is None or source is None or source.project_id != project_id:
@@ -79,7 +79,7 @@ async def import_screenplay(
         text = raw.decode("utf-8-sig")
         document = parse_fountain(text) if file_format == "fountain" else parse_fdx(text)
     except (UnicodeDecodeError, ValueError, RuntimeError) as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Malformed screenplay import") from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Malformed screenplay import") from exc
     imported = await screenplays_crud.create(
         session,
         ScreenplayCreate(
