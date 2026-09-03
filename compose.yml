@@ -157,7 +157,10 @@ services:
       - "${DRAFTPILOT_RAG_PORT:-9010}:8000"
     environment:
       RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
+      RAG__DATABASE_PATH: /data/draftpilot-rag.sqlite3
       OTEL__ENABLED: "false"
+    volumes:
+      - rag_data:/data
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s
@@ -312,3 +315,4 @@ volumes:
   langfuse_clickhouse_logs:
   langfuse_minio_data:
   langfuse_redis_data:
+  rag_data:

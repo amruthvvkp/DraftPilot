@@ -22,6 +22,5 @@ suite suitable for CI runners that do not have a developer browser session.
 
 The local retrieval service is also portable: `docker compose up --build rag` exposes its health
 endpoint at `http://localhost:9010/health`. It uses the same bearer token convention as MCP and
-keeps search partitions project-scoped. The initial lexical store is intentionally replaceable;
-production deployments should provide a persistent vector-store adapter before relying on restart
-survival.
+keeps search partitions project-scoped and persists its initial lexical store in the `rag_data`
+volume. The lexical implementation is intentionally replaceable with a vector-store adapter.

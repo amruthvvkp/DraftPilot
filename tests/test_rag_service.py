@@ -1,7 +1,9 @@
 """Test the isolated project retrieval service."""
 
 from fastapi.testclient import TestClient
+from pathlib import Path
 
+from draftpilot.core.rag import IndexedDocument, SQLiteLexicalIndex
 from draftpilot.rag_service import app, index
 
 
@@ -31,3 +33,13 @@ def test_rag_requires_auth_and_returns_project_scoped_citations() -> None:
         "source_kind": "brief",
         "content_version": 3,
     }
+
+
+def test_sqlite_index_survives_reopen(tmp_path: Path) -> None:
+    """Retain indexed content and citation versions across service restarts."""
+    database_path = tmp_path / "rag.sqlite3"
+    first = SQLiteLexicalIndex(database_path)
+    first.upsert(IndexedDocument(7, "outline", "outline", "The hero returns", 4))
+    reopened = SQLiteLexicalIndex(database_path)
+    results = reopened.search(7, "hero")
+    assert results[0].citation.content_version == 4
