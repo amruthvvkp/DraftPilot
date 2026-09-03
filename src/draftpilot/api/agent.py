@@ -33,6 +33,28 @@ class ProposalCreateRequest(BaseModel):
     run_id: int | None = None
 
 
+def _validate_operation(target_kind: str, operation: dict[str, Any]) -> None:
+    """Reject operation fields that do not belong to the selected target type."""
+    allowed = {
+        "scene": {"heading", "body"},
+        "artifact": {"title", "content", "depends_on", "artifact_metadata"},
+        "dialogue_translation": {"language", "text", "status"},
+    }[target_kind]
+    if not operation or set(operation) - allowed:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Unsupported typed operation",
+        )
+    if target_kind == "dialogue_translation" and (
+        not isinstance(operation.get("language"), str)
+        or not isinstance(operation.get("text"), str)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid translation operation",
+        )
+
+
 async def _scene_in_project(
     session: AsyncSession, project_id: int, scene_id: int
 ) -> Any | None:
@@ -74,6 +96,7 @@ async def create_agent_proposal(
     session: AsyncSession = Depends(async_get_db),
 ) -> AgentProposalRead:
     """Persist a proposal after deriving its target version server-side."""
+    _validate_operation(data.target_kind, data.operation)
     target: Any | None
     if data.target_kind == "scene":
         target = await _scene_in_project(session, project_id, data.target_id)
@@ -100,6 +123,7 @@ async def create_agent_proposal(
         )
         snapshot = {
             "exists": existing is not None,
+            "scene_id": data.scene_id,
             "language": existing.language if existing else data.operation.get("language"),
             "text": existing.text if existing else "",
             "status": existing.status if existing else "draft",
@@ -172,7 +196,11 @@ async def approve_agent_proposal(
         await session.refresh(proposal)
         return AgentProposalRead.model_validate(proposal)
     operation = proposal.operation
-    allowed = {"title", "content", "depends_on", "artifact_metadata", "heading", "body"}
+    allowed = (
+        {"heading", "body"}
+        if proposal.target_kind == "scene"
+        else {"title", "content", "depends_on", "artifact_metadata"}
+    )
     if set(operation) - allowed:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported typed operation")
     for key, value in operation.items():
@@ -233,7 +261,6 @@ async def rollback_agent_proposal(
     for key, value in proposal.before.items():
         if key not in {"exists", "language", "text", "status", "scene_id"}:
             setattr(target, key, value)
-        setattr(target, key, value)
     target.version += 1
     session.add(target)
     proposal.status = "rolled_back"
