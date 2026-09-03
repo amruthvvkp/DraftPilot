@@ -22,3 +22,5 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "draftpilot://projects/{project_id}/knowledge-graph" in resources
     assert "retrieve_project_context" in tools
     assert "propose_timeline_reorder" in tools
+    assert "read_project_artifacts" in tools
+    assert "read_screenplay_scenes" in tools

@@ -15,6 +15,10 @@ from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.config import settings
 from draftpilot.core.mcp_auth import valid_static_token
 from draftpilot.crud import knowledge_graph as graph_crud
+from draftpilot.crud import blocks as blocks_crud
+from draftpilot.crud import scenes as scenes_crud
+from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.crud import story_artifacts as artifacts_crud
 
 telemetry.setup(mcp=True)
 
@@ -139,6 +143,56 @@ async def retrieve_project_context(
         result = response.json()
     if not isinstance(result, dict):
         raise ValueError("RAG response is invalid")
+    return result
+
+
+@mcp.tool
+async def read_project_artifacts(project_id: int, ctx: Context) -> dict[str, object]:
+    """Read editable project artifacts through the authorized MCP boundary."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "outline.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        artifacts = await artifacts_crud.list_for_project(session, project_id)
+    result = {
+        "project_id": project_id,
+        "artifacts": [artifact.model_dump(mode="json") for artifact in artifacts],
+    }
+    encoded = json.dumps(result)
+    if len(encoded) > settings.mcp.max_output_chars:
+        raise ValueError("Artifact response exceeds MCP output limit")
+    return result
+
+
+@mcp.tool
+async def read_screenplay_scenes(
+    project_id: int, screenplay_id: int, ctx: Context
+) -> dict[str, object]:
+    """Read ordered scenes and semantic blocks for one authorized screenplay."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "screenplay.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        screenplay = await screenplays_crud.get(session, screenplay_id)
+        if screenplay is None or screenplay.project_id != project_id:
+            raise ValueError("Screenplay is not in the requested project")
+        scenes = await scenes_crud.list_for_screenplay(session, screenplay_id)
+        payload = []
+        for scene in scenes:
+            blocks = await blocks_crud.list_for_scene(session, scene.id or 0)
+            payload.append(
+                {
+                    "scene": scene.model_dump(mode="json"),
+                    "blocks": [block.model_dump(mode="json") for block in blocks],
+                }
+            )
+    result = {"project_id": project_id, "screenplay_id": screenplay_id, "scenes": payload}
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Screenplay response exceeds MCP output limit")
     return result
 
 
