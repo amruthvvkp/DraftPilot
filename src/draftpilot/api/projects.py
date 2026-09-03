@@ -7,6 +7,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.core.db import async_get_db
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
+from draftpilot.crud import dialogue_translations as translations_crud
 from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
@@ -14,6 +15,8 @@ from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.models import (
     ActRead,
     BlockRead,
+    DialogueTranslationCreate,
+    DialogueTranslationRead,
     ProjectCreate,
     ProjectRead,
     ProjectReferenceBase,
@@ -34,6 +37,13 @@ class ProjectWorkspaceRead(BaseModel):
     acts: list[ActRead]
     scenes: list[SceneRead]
     blocks: dict[int, list[BlockRead]] = Field(default_factory=dict)
+
+
+class TranslationInput(BaseModel):
+    """Accept editable text for one dialogue translation variant."""
+
+    text: str
+    status: str = Field(default="draft", max_length=30)
 
 
 class ProjectReferenceInput(BaseModel):
@@ -134,3 +144,44 @@ async def update_project_scene(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
     updated = await scenes_crud.update(session, scene, data)
     return SceneRead.model_validate(updated)
+
+
+@router.put(
+    "/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations/{language}",
+    response_model=DialogueTranslationRead,
+)
+async def save_dialogue_translation(
+    project_id: int,
+    scene_id: int,
+    block_id: int,
+    language: str,
+    data: TranslationInput,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> DialogueTranslationRead:
+    """Save a dialogue variant while preserving the authoritative source block."""
+    scene = await scenes_crud.get(session, scene_id)
+    block = await blocks_crud.get(session, block_id)
+    if scene is None or block is None or block.scene_id != scene_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dialogue block not found")
+    act = await acts_crud.get(session, scene.act_id)
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dialogue block not found")
+    if block.element_type.value != "dialogue":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Block is not dialogue")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != scene.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
+    translation = await translations_crud.upsert(
+        session,
+        DialogueTranslationCreate(
+            block_id=block_id,
+            language=language,
+            text=data.text,
+            status=data.status,
+            source_version=scene.version,
+        ),
+    )
+    return DialogueTranslationRead.model_validate(translation)

@@ -9,6 +9,7 @@ from draftpilot.models.base import TimestampMixin
 from draftpilot.models.enums import BlockType
 
 if TYPE_CHECKING:
+    from draftpilot.models.dialogue_translation import DialogueTranslation
     from draftpilot.models.scene import Scene
 
 
@@ -36,6 +37,10 @@ class Block(BlockBase, TimestampMixin, table=True):  # type: ignore[call-arg]
     marks: dict[str, Any] | None = Field(default=None, sa_type=JSON)
 
     scene: "Scene" = Relationship(back_populates="blocks")
+    translations: list["DialogueTranslation"] = Relationship(
+        back_populates="block",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "order_by": "DialogueTranslation.language"},
+    )
 
 
 class BlockCreate(BlockBase):

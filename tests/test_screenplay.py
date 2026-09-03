@@ -4,6 +4,7 @@ from draftpilot.core.screenplay.adapters.fdx import parse_fdx, render_fdx
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain, render_fountain
 from draftpilot.core.screenplay.schema import SceneDoc
 from draftpilot.models.enums import BlockType
+from draftpilot.models import Block, DialogueTranslationCreate
 
 SAMPLE = """Title: Test Script
 Author: Jane
@@ -65,3 +66,13 @@ def test_scene_doc_snapshot_roundtrip() -> None:
     scene = parse_fountain(SAMPLE).acts[0].scenes[0]
     restored = SceneDoc.model_validate(scene.model_dump(mode="json"))
     assert restored == scene
+
+
+def test_dialogue_translation_keeps_source_block_unchanged() -> None:
+    """Store a translation as a linked variant rather than replacing source text."""
+    source = Block(id=4, scene_id=2, text="We should go.", element_type=BlockType.DIALOGUE)
+    translation = DialogueTranslationCreate(
+        block_id=source.id or 0, language="Hindi", text="हमें जाना चाहिए।"
+    )
+    assert translation.text != source.text
+    assert source.text == "We should go."

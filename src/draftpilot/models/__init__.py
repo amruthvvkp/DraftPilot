@@ -19,6 +19,12 @@ from draftpilot.models.block import (
     BlockUpdate,
 )
 from draftpilot.models.enums import BlockType, ReferenceKind, ScreeningType
+from draftpilot.models.dialogue_translation import (
+    DialogueTranslation,
+    DialogueTranslationBase,
+    DialogueTranslationCreate,
+    DialogueTranslationRead,
+)
 from draftpilot.models.project import (
     Project,
     ProjectBase,
@@ -57,6 +63,10 @@ __all__ = [
     "BlockType",
     "ReferenceKind",
     "ScreeningType",
+    "DialogueTranslation",
+    "DialogueTranslationBase",
+    "DialogueTranslationCreate",
+    "DialogueTranslationRead",
     "Project",
     "ProjectBase",
     "ProjectCreate",
