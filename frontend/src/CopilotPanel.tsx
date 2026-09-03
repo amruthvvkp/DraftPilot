@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { AgentProposal, AgentRole, approveAgentProposal, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, getWorkflowRun, listProviderProfiles, ProviderProfile, rollbackAgentProposal, startCopilotRun } from './api'
 
-type CopilotPanelProps = { projectId: number }
+type CopilotPanelProps = { projectId: number; page?: string; artifact?: string | null; selection?: string | null }
 
-export default function CopilotPanel({ projectId }: CopilotPanelProps) {
+export default function CopilotPanel({ projectId, page = window.location.pathname, artifact = null, selection = null }: CopilotPanelProps) {
   const [proposals, setProposals] = useState<AgentProposal[]>([])
   const [messages, setMessages] = useState<CopilotMessage[]>([])
   const [roles, setRoles] = useState<AgentRole[]>([])
@@ -13,6 +13,11 @@ export default function CopilotPanel({ projectId }: CopilotPanelProps) {
   const [permissionMode, setPermissionMode] = useState<'chat_only' | 'suggest' | 'scoped_edit' | 'project_edit'>('chat_only')
   const [draft, setDraft] = useState('')
   const [error, setError] = useState('')
+  const activeTools = page.endsWith('/timeline')
+    ? ['timeline.propose', 'screenplay.read', 'context.read', 'revisions.read']
+    : page.endsWith('/studio')
+      ? ['outline.read', 'context.read', 'knowledge_graph.read', 'revisions.read']
+      : ['screenplay.read', 'context.read', 'revisions.read']
 
   async function refresh(): Promise<void> {
     try {
@@ -39,8 +44,8 @@ export default function CopilotPanel({ projectId }: CopilotPanelProps) {
     if (!draft.trim()) return
     try {
       const pending = await startCopilotRun(projectId, {
-        content: draft.trim(), page: window.location.pathname, artifact: null, selection: null,
-        instruction_layers: { agent_role: selectedRole, permission_mode: permissionMode, provider_profile_id: selectedProfile ? Number(selectedProfile) : null }, citations: [], active_tools: ['screenplay.read', 'context.read', 'revisions.read'],
+        content: draft.trim(), page, artifact, selection,
+        instruction_layers: { agent_role: selectedRole, permission_mode: permissionMode, provider_profile_id: selectedProfile ? Number(selectedProfile) : null }, citations: [], active_tools: activeTools,
       })
       setMessages(current => [...current, pending.message])
       setDraft('')
@@ -58,7 +63,7 @@ export default function CopilotPanel({ projectId }: CopilotPanelProps) {
     <div className="panel-label"><span>Copilot</span><span className="context-badge">Server scoped</span></div>
     <div className="copilot-intro"><span className="copilot-mark">✦</span><div><strong>Make the next decision visible.</strong><p>Agent changes arrive as typed proposals. You stay in control.</p></div></div>
     <div className="copilot-controls"><label>Agent<select value={selectedRole} onChange={event => setSelectedRole(event.target.value)}>{roles.map(role => <option key={role.key} value={role.key}>{role.label}</option>)}</select></label><label>Permission<select value={permissionMode} onChange={event => setPermissionMode(event.target.value as typeof permissionMode)}><option value="chat_only">Chat only</option><option value="suggest">Suggest</option><option value="scoped_edit">Scoped edit</option><option value="project_edit">Project edit</option></select></label>{profiles.length > 0 && <label>Provider<select value={selectedProfile} onChange={event => setSelectedProfile(event.target.value)}><option value="">Process default</option>{profiles.filter(profile => profile.enabled).map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.model}</option>)}</select></label>}</div>
-    <div className="agent-tools"><p className="eyebrow warm">ACTIVE TOOLS</p><span>screenplay.read</span><span>context.read</span><span>revisions.read</span></div>
+    <div className="agent-tools"><p className="eyebrow warm">ACTIVE TOOLS</p>{activeTools.map(tool => <span key={tool}>{tool}</span>)}</div>
     <div className="copilot-messages">{messages.map(message => <p className={`copilot-message ${message.role}`} key={message.id}><strong>{message.role}</strong>{message.content}</p>)}</div>
     <form className="copilot-compose" onSubmit={event => void send(event)}><input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask the studio…" aria-label="Copilot message" /><button className="button primary" type="submit">Send</button></form>
     {error && <p className="copilot-error">{error}</p>}

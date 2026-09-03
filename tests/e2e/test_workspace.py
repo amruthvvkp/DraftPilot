@@ -112,7 +112,15 @@ def test_copilot_turn_polls_durable_run(page: Page) -> None:
         route.fulfill(status=200, content_type="application/json", body=json.dumps([assistant] if message_reads > 1 else []))
 
     page.route("**/api/v1/projects/9001/copilot/messages", messages)
-    page.route("**/api/v1/projects/9001/copilot/messages/respond-async", lambda route: route.fulfill(status=202, content_type="application/json", body=json.dumps({"message": {"id": 30, "project_id": 9001, "role": "user", "content": "Find the gap.", "page": "studio", "artifact": None, "selection": None, "instruction_layers": {"agent_role": "story_architect", "permission_mode": "chat_only", "provider_profile_id": None}, "citations": [], "active_tools": [], "created_at": "2026-01-01T00:00:00Z"}, "run": {"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "queued", "result": None, "error": None}})))
+    def respond(route: Route) -> None:
+        """Validate the context envelope sent by the story-studio Copilot."""
+        payload = route.request.post_data_json
+        assert payload["page"] == "/projects/9001/studio"
+        assert payload["artifact"] == "brief"
+        assert payload["selection"] == "First pass"
+        route.fulfill(status=202, content_type="application/json", body=json.dumps({"message": {"id": 30, "project_id": 9001, "role": "user", "content": "Find the gap.", "page": "studio", "artifact": "brief", "selection": "First pass", "instruction_layers": {"agent_role": "story_architect", "permission_mode": "chat_only", "provider_profile_id": None}, "citations": [], "active_tools": [], "created_at": "2026-01-01T00:00:00Z"}, "run": {"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "queued", "result": None, "error": None}}))
+
+    page.route("**/api/v1/projects/9001/copilot/messages/respond-async", respond)
     page.route("**/api/v1/projects/9001/runs/44", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "succeeded", "result": {"assistant_message_id": 32}, "error": None})))
     page.goto("/projects/9001/studio")
     page.get_by_label("Copilot message").fill("Find the gap.")
