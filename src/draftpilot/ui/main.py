@@ -10,6 +10,7 @@ from pathlib import Path
 
 from nicegui import app, ui
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from draftpilot.core import telemetry
@@ -27,6 +28,12 @@ telemetry.setup(ui=True)
 _FRONTEND_DIR = Path(__file__).parents[3] / "frontend" / "dist"
 _FRONTEND_READY = _FRONTEND_DIR.joinpath("index.html").exists()
 app.include_router(api_router)
+
+
+@app.get("/health", include_in_schema=False)
+async def health() -> JSONResponse:
+    """Report that the UI process is ready to accept HTTP requests."""
+    return JSONResponse({"status": "ok"})
 
 if _FRONTEND_READY:
     app.mount("/assets", StaticFiles(directory=_FRONTEND_DIR / "assets"), name="frontend-assets")

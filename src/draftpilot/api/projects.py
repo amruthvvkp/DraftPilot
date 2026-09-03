@@ -15,7 +15,9 @@ from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.models import (
     ActRead,
+    BlockCreate,
     BlockRead,
+    BlockUpdate,
     DialogueTranslationCreate,
     DialogueTranslationRead,
     ProjectCreate,
@@ -46,6 +48,12 @@ class TranslationInput(BaseModel):
 
     text: str
     status: str = Field(default="draft", max_length=30)
+
+
+class BlockInput(BlockCreate):
+    """Accept a semantic block while taking its scene from the URL."""
+
+    scene_id: int = 0
 
 
 class SceneRevisionDetail(SceneRevisionRead):
@@ -152,6 +160,68 @@ async def update_project_scene(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
     updated = await scenes_crud.update(session, scene, data)
     return SceneRead.model_validate(updated)
+
+
+@router.post("/{project_id}/scenes/{scene_id}/blocks", response_model=BlockRead, status_code=201)
+async def create_project_block(
+    project_id: int,
+    scene_id: int,
+    data: BlockInput,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> BlockRead:
+    """Create a semantic screenplay block under a versioned scene."""
+    scene = await scenes_crud.get(session, scene_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if scene is None or screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != scene.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
+    block = await blocks_crud.create(
+        session, BlockCreate(scene_id=scene_id, **data.model_dump(exclude={"scene_id"}))
+    )
+    scene.version += 1
+    session.add(scene)
+    await session.commit()
+    return BlockRead.model_validate(block)
+
+
+@router.patch(
+    "/{project_id}/scenes/{scene_id}/blocks/{block_id}", response_model=BlockRead
+)
+async def update_project_block(
+    project_id: int,
+    scene_id: int,
+    block_id: int,
+    data: BlockUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> BlockRead:
+    """Update a semantic screenplay block with optimistic concurrency."""
+    scene = await scenes_crud.get(session, scene_id)
+    block = await blocks_crud.get(session, block_id)
+    act = await acts_crud.get(session, scene.act_id) if scene else None
+    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+    if (
+        scene is None
+        or block is None
+        or block.scene_id != scene_id
+        or screenplay is None
+        or screenplay.project_id != project_id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Block not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != scene.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
+    updated = await blocks_crud.update(session, block, data)
+    scene.version += 1
+    session.add(scene)
+    await session.commit()
+    return BlockRead.model_validate(updated)
 
 
 @router.put(
