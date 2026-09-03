@@ -29,6 +29,7 @@ from draftpilot.models import (
     ProjectReferenceBase,
     ProjectReferenceRead,
     SceneRead,
+    SceneCreate,
     SceneRevisionRead,
     SceneUpdate,
     ScreenplayRead,
@@ -162,6 +163,33 @@ async def get_project_workspace(
         scenes=[SceneRead.model_validate(scene) for scene in scenes],
         blocks=blocks,
     )
+
+
+@router.post(
+    "/{project_id}/screenplays/{screenplay_id}/scenes",
+    response_model=SceneRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_project_scene(
+    project_id: int,
+    screenplay_id: int,
+    data: SceneCreate,
+    session: AsyncSession = Depends(async_get_db),
+) -> SceneRead:
+    """Create a scene only under an act belonging to the requested screenplay."""
+    project = await projects_crud.get(session, project_id)
+    screenplay = await screenplays_crud.get(session, screenplay_id)
+    act = await acts_crud.get(session, data.act_id)
+    if (
+        project is None
+        or screenplay is None
+        or screenplay.project_id != project_id
+        or act is None
+        or act.screenplay_id != screenplay_id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay or act not found")
+    scene = await scenes_crud.create(session, data)
+    return SceneRead.model_validate(scene)
 
 
 @router.patch("/{project_id}/scenes/{scene_id}", response_model=SceneRead)

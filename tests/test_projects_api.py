@@ -126,6 +126,44 @@ def test_scene_update_requires_matching_if_match(
     assert response.status_code == 409
 
 
+def test_scene_creation_requires_the_requested_screenplay_and_act(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Create a scene only when both screenplay and act belong to the project."""
+    project = Project(id=9, title="Story")
+    screenplay = Screenplay(id=2, project_id=9, title="Story")
+    act = Act(id=4, screenplay_id=2, position=0)
+    created = Scene(id=7, act_id=4, heading="EXT. GARDEN - DAY", position=1)
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the project fixture."""
+        return project
+
+    async def get_screenplay(_session: _Session, _screenplay_id: int) -> Screenplay:
+        """Return the screenplay fixture."""
+        return screenplay
+
+    async def get_act(_session: _Session, _act_id: int) -> Act:
+        """Return the act fixture."""
+        return act
+
+    async def create_scene(_session: _Session, _data: object) -> Scene:
+        """Return the created scene fixture."""
+        return created
+
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.get", get_screenplay)
+    monkeypatch.setattr("draftpilot.api.projects.acts_crud.get", get_act)
+    monkeypatch.setattr("draftpilot.api.projects.scenes_crud.create", create_scene)
+    response = client.post(
+        "/api/v1/projects/9/screenplays/2/scenes",
+        json={"act_id": 4, "heading": "EXT. GARDEN - DAY", "position": 1},
+    )
+    assert response.status_code == 201
+    assert response.json()["id"] == 7
+    assert response.json()["heading"] == "EXT. GARDEN - DAY"
+
+
 def test_project_instruction_update_requires_matching_if_match(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -191,6 +191,10 @@ export function getProjectWorkspace(projectId: number): Promise<ProjectWorkspace
   return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace`)
 }
 
+export function createProjectScene(projectId: number, screenplayId: number, actId: number, heading: string, position = 0): Promise<Scene> {
+  return request<Scene>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/scenes`, { method: 'POST', body: JSON.stringify({ act_id: actId, heading, position }) })
+}
+
 export function createTimelineProposal(projectId: number, screenplayId: number, sceneIds: number[], durations: Record<number, number>): Promise<TimelineProposal> {
   return request<TimelineProposal>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals`, { method: 'POST', body: JSON.stringify({ scene_ids: sceneIds, durations }) })
 }
