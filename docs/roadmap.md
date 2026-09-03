@@ -127,6 +127,8 @@ logline, character, beat, timeline event, or scene; dependent artifacts become v
 can be regenerated rather than being silently overwritten.
 
 ### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: in progress
+Project backup archives and non-destructive restore endpoints now protect project metadata,
+references, artifacts, and canonical screenplay documents with atomic writes and checksums.
 Persist workflows, runs, tasks, instruction resolution, context artifacts, approvals, Monty
 execution records, MCP client registrations, capability discovery, prompt/resource/tool
 invocations, evaluator results, and reversible change sets. Support

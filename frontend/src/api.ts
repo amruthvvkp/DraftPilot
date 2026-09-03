@@ -113,6 +113,11 @@ export type StoryArtifact = {
   artifact_metadata: Record<string, unknown>
 }
 
+export type ProjectBackup = {
+  filename: string
+  manifest: { schema_version: number; project_id: number; created_at: string; app_version: string; sha256: string }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -183,4 +188,8 @@ export function createArtifact(projectId: number, kind: string, title: string): 
 
 export function updateArtifact(projectId: number, artifactId: number, version: number, changes: { title?: string; content?: string }): Promise<StoryArtifact> {
   return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts/${artifactId}`, { method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes) })
+}
+
+export function createProjectBackup(projectId: number): Promise<ProjectBackup> {
+  return request<ProjectBackup>(`/api/v1/projects/${projectId}/backups`, { method: 'POST' })
 }

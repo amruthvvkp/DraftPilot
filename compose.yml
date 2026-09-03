@@ -21,6 +21,7 @@ x-app-env: &app-env
   QUEUE__DB: "1"
   RAG__SERVICE_URL: http://rag:8000
   RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
+  BACKUP__ROOT: /data/backups
   OTEL__ENABLED: ${OTEL__ENABLED:-true}
   OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
   # Basic base64("pk-lf-draftpilot-dev:sk-lf-draftpilot-dev") — matches the
@@ -82,6 +83,8 @@ services:
       <<: *app-env
       UI__STORAGE_SECRET: change-me-in-production
     extra_hosts: *extra-hosts
+    volumes:
+      - backup_data:/data/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -318,3 +321,4 @@ volumes:
   langfuse_minio_data:
   langfuse_redis_data:
   rag_data:
+  backup_data:

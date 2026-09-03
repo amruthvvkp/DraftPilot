@@ -81,9 +81,9 @@ async def load_screenplay_doc(session: AsyncSession, screenplay_id: int) -> Scre
 
 
 async def save_screenplay_doc(
-    session: AsyncSession, screenplay_id: int, doc: ScreenplayDoc
+    session: AsyncSession, screenplay_id: int, doc: ScreenplayDoc, *, commit: bool = True
 ) -> None:
-    """Replace all acts/scenes/blocks of a screenplay with the contents of a doc."""
+    """Replace all acts/scenes/blocks, optionally leaving commit to the caller."""
     existing = await session.exec(select(Act).where(Act.screenplay_id == screenplay_id))
     for act in existing.all():
         await session.delete(act)
@@ -104,4 +104,5 @@ async def save_screenplay_doc(
             assert scene.id is not None
             for block_position, block_doc in enumerate(scene_doc.blocks):
                 session.add(block_from_doc(block_doc, scene.id, block_position))
-    await session.commit()
+    if commit:
+        await session.commit()

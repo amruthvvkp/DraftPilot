@@ -161,6 +161,14 @@ class RAGSettings(BaseSettings):
     service_url: str = "http://rag:8000"
 
 
+class BackupSettings(BaseSettings):
+    """Local backup storage configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="BACKUP__")
+
+    root: Path = Path("/tmp/draftpilot-backups")
+
+
 class UISettings(BaseSettings):
     """NiceGUI web interface settings."""
 
@@ -187,6 +195,7 @@ class Settings(BaseSettings):
     secrets: SecretsSettings = SecretsSettings()
     mcp: MCPSettings = MCPSettings()
     rag: RAGSettings = RAGSettings()
+    backup: BackupSettings = BackupSettings()
     ui: UISettings = UISettings()
 
 
