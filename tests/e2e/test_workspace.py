@@ -14,7 +14,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         "logline": "A family returns to a house that remembers.",
         "description": "",
         "genres": ["Drama"],
-        "languages": ["English"],
+        "languages": ["English", "Hindi"],
         "primary_language": "English",
         "artwork_url": None,
     }
@@ -22,8 +22,8 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         "project": project,
         "screenplay": {"id": 12, "title": "The Lantern House", "format": "feature", "status": "draft"},
         "acts": [{"id": 4, "title": "Act One", "position": 0}],
-        "scenes": [{"id": 7, "act_id": 4, "heading": "INT. LANTERN HOUSE - NIGHT", "position": 0, "body": "The house breathes in the dark."}],
-        "blocks": {},
+        "scenes": [{"id": 7, "act_id": 4, "heading": "INT. LANTERN HOUSE - NIGHT", "position": 0, "body": "The house breathes in the dark.", "version": 2}],
+        "blocks": {"7": [{"id": 20, "scene_id": 7, "position": 0, "element_type": "action", "text": "The house breathes in the dark.", "character_extension": None, "is_dual": False, "dual_group": None, "translation": None, "translation_lang": None}]},
     }
 
     def projects(route: Route) -> None:
@@ -34,8 +34,14 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         """Return a workspace without contacting Postgres."""
         route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace))
 
+    def block_update(route: Route) -> None:
+        """Accept a versioned semantic block edit without contacting Postgres."""
+        assert route.request.headers.get("if-match") == "2"
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace["blocks"]["7"][0]))
+
     page.route("**/api/v1/projects", projects)
     page.route("**/api/v1/projects/9001/workspace", workspace_request)
+    page.route("**/api/v1/projects/9001/scenes/7/blocks/20", block_update)
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
@@ -45,3 +51,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page).to_have_url(re.compile(r"/projects/9001$"))
     expect(page.get_by_role("heading", name="The Lantern House")).to_be_visible()
     expect(page.get_by_role("article").get_by_text("INT. LANTERN HOUSE - NIGHT")).to_be_visible()
+    editor = page.get_by_label("Edit action")
+    expect(editor).to_have_value("The house breathes in the dark.")
+    editor.fill("The house exhales in the dark.")
+    editor.blur()
