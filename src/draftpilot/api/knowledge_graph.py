@@ -1,15 +1,36 @@
 """Project-scoped knowledge graph REST endpoints."""
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
+import logfire
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import KnowledgeEdge, KnowledgeEdgeRead, KnowledgeNodeBase, KnowledgeNodeCreate, KnowledgeNodeRead
 
 router = APIRouter(prefix="/projects/{project_id}/knowledge-graph", tags=["knowledge-graph"])
+
+
+async def _enqueue_index(
+    project_id: int, source_id: str, source_kind: str, text: str, content_version: int
+) -> None:
+    """Queue one committed graph record for bounded RAG refresh."""
+    try:
+        await (await get_arq_pool()).enqueue_job(
+            "index_rag_document",
+            {
+                "project_id": project_id,
+                "source_id": source_id,
+                "source_kind": source_kind,
+                "text": text,
+                "content_version": content_version,
+            },
+        )
+    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+        logfire.warning("RAG graph indexing enqueue skipped: {exc}", exc=str(exc))
 
 
 class GraphRead(BaseModel):
@@ -67,6 +88,14 @@ async def create_node(
     node = await graph_crud.create_node(
         session, KnowledgeNodeCreate(project_id=project_id, **data.model_dump())
     )
+    if node.id is not None:
+        await _enqueue_index(
+            project_id,
+            f"knowledge_node:{node.id}",
+            f"knowledge_node:{node.kind}",
+            f"{node.label}\n{node.description or ''}",
+            node.version,
+        )
     return KnowledgeNodeRead.model_validate(node)
 
 
@@ -92,6 +121,13 @@ async def update_node(
     session.add(node)
     await session.commit()
     await session.refresh(node)
+    await _enqueue_index(
+        project_id,
+        f"knowledge_node:{node.id}",
+        f"knowledge_node:{node.kind}",
+        f"{node.label}\n{node.description or ''}",
+        node.version,
+    )
     return KnowledgeNodeRead.model_validate(node)
 
 
@@ -116,4 +152,12 @@ async def create_edge(
             edge_metadata=data.edge_metadata,
         ),
     )
+    if edge.id is not None:
+        await _enqueue_index(
+            project_id,
+            f"knowledge_edge:{edge.id}",
+            "knowledge_edge",
+            f"{edge.source_node_id} {edge.relation} {edge.target_node_id}",
+            1,
+        )
     return KnowledgeEdgeRead.model_validate(edge)

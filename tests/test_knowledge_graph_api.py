@@ -8,7 +8,7 @@ import pytest
 
 from draftpilot.api.knowledge_graph import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import KnowledgeNode, KnowledgeNodeCreate, Project
+from draftpilot.models import KnowledgeEdge, KnowledgeNode, KnowledgeNodeCreate, Project
 
 
 class _Session:
@@ -81,3 +81,58 @@ def test_graph_node_update_rejects_stale_version(monkeypatch: pytest.MonkeyPatch
         json={"label": "Mira revised"},
     )
     assert response.status_code == 409
+
+
+def test_graph_mutations_enqueue_project_scoped_rag_refresh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Refresh RAG after committed node and edge mutations."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+    project = Project(id=5, title="Graph story")
+    node = KnowledgeNode(id=1, project_id=5, kind="film", label="Reference", version=2)
+    edge = KnowledgeEdge(id=8, project_id=5, source_node_id=1, target_node_id=1, relation="echoes")
+    indexed: list[tuple[str, str, int]] = []
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the project fixture."""
+        return project
+
+    async def create_node(_session: _Session, _data: KnowledgeNodeCreate) -> KnowledgeNode:
+        """Return the committed node fixture."""
+        return node
+
+    async def get_node(_session: _Session, _node_id: int) -> KnowledgeNode:
+        """Return the authorized node fixture for both edge endpoints."""
+        return node
+
+    async def create_edge(_session: _Session, _edge: KnowledgeEdge) -> KnowledgeEdge:
+        """Return the committed edge fixture."""
+        return edge
+
+    async def enqueue(project_id: int, source_id: str, _kind: str, _text: str, version: int) -> None:
+        """Capture the RAG refresh request."""
+        indexed.append((source_id, str(project_id), version))
+
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.graph_crud.create_node", create_node)
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.graph_crud.get_node", get_node)
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.graph_crud.create_edge", create_edge)
+    monkeypatch.setattr("draftpilot.api.knowledge_graph._enqueue_index", enqueue)
+
+    client = TestClient(app)
+    assert client.post(
+        "/api/v1/projects/5/knowledge-graph/nodes",
+        json={"kind": "film", "label": "Reference"},
+    ).status_code == 201
+    assert client.post(
+        "/api/v1/projects/5/knowledge-graph/edges",
+        json={"source_node_id": 1, "target_node_id": 1, "relation": "echoes"},
+    ).status_code == 201
+    assert indexed == [("knowledge_node:1", "5", 2), ("knowledge_edge:8", "5", 1)]
