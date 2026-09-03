@@ -169,6 +169,18 @@ class BackupSettings(BaseSettings):
     root: Path = Path("/tmp/draftpilot-backups")
 
 
+class MontySettings(BaseSettings):
+    """Feature gate and resource limits for model-generated glue code."""
+
+    model_config = SettingsConfigDict(env_prefix="MONTY__")
+
+    enabled: bool = False
+    max_code_chars: int = 20_000
+    max_input_items: int = 100
+    max_duration_seconds: float = 0.5
+    max_output_chars: int = 20_000
+
+
 class UISettings(BaseSettings):
     """NiceGUI web interface settings."""
 
@@ -196,6 +208,7 @@ class Settings(BaseSettings):
     mcp: MCPSettings = MCPSettings()
     rag: RAGSettings = RAGSettings()
     backup: BackupSettings = BackupSettings()
+    monty: MontySettings = MontySettings()
     ui: UISettings = UISettings()
 
 

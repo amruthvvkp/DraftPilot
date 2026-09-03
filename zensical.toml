@@ -48,6 +48,7 @@ nav = [
   { "Roadmap" = "roadmap.md" },
   { "Backups & recovery" = "backups.md" },
   { "Provider setup" = "providers.md" },
+  { "Monty sandbox" = "monty.md" },
   { "References & credits" = "references.md" },
   { "Markdown in 5min" = "markdown.md" },
 ]

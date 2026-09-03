@@ -15,7 +15,7 @@ with this project's MIT license (e.g. GPL).
 
 ## Reused libraries
 
-- **Pydantic Monty** — planned runtime for short-lived, model-generated Python that composes
+- **Pydantic Monty** — runtime for short-lived, model-generated Python that composes
   explicitly granted DraftPilot host functions. Experimental; its security model and supported
   Python subset are subject to change. No unrestricted machine access or third-party packages
   are assumed. <https://pydantic.dev/docs/monty/get-started/>
