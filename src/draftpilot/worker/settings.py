@@ -6,7 +6,7 @@ Run with: ``arq draftpilot.worker.settings.WorkerSettings``
 from draftpilot.core import telemetry
 from draftpilot.core.db import dispose_engine
 from draftpilot.core.queue import redis_settings
-from draftpilot.worker.functions import analyze_screenplay
+from draftpilot.worker.functions import analyze_screenplay, execute_workflow
 
 
 async def startup(ctx: dict) -> None:
@@ -22,7 +22,7 @@ async def shutdown(ctx: dict) -> None:
 class WorkerSettings:
     """ARQ worker configuration: tasks, Redis target, and lifecycle hooks."""
 
-    functions = [analyze_screenplay]
+    functions = [analyze_screenplay, execute_workflow]
     redis_settings = redis_settings()
     on_startup = startup
     on_shutdown = shutdown

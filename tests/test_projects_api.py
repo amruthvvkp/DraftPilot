@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from draftpilot.api.projects import router
+from draftpilot.api.runs import router as runs_router
 from draftpilot.core.db import async_get_db
 from draftpilot.models import (
     Act,
@@ -16,6 +17,7 @@ from draftpilot.models import (
     Project,
     Scene,
     Screenplay,
+    WorkflowRun,
 )
 
 
@@ -34,6 +36,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 
     app.dependency_overrides[async_get_db] = session
     app.include_router(router, prefix="/api/v1")
+    app.include_router(runs_router, prefix="/api/v1")
     return TestClient(app)
 
 
@@ -173,3 +176,41 @@ def test_translation_update_is_scoped_and_preserves_source(
     assert response.json()["text"] == "हमें जाना चाहिए।"
     assert response.json()["source_version"] == 3
     assert block.text == "We should go."
+
+
+def test_start_run_persists_before_enqueue(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Create a durable run and enqueue only its persisted identifier."""
+    project = Project(id=9, title="Story")
+    run = WorkflowRun(id=31, project_id=9, input={"screenplay_id": 2})
+    enqueued: list[tuple[str, int | None]] = []
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the owning project fixture."""
+        return project
+
+    async def create_run(_session: _Session, _data: object) -> WorkflowRun:
+        """Return the durable run fixture."""
+        return run
+
+    class Pool:
+        """Capture queue submissions without Redis."""
+
+        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+            """Record one queued job."""
+            enqueued.append((name, run_id))
+
+    async def get_pool() -> Pool:
+        """Return the in-memory queue fixture."""
+        return Pool()
+
+    monkeypatch.setattr("draftpilot.api.runs.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.runs.runs_crud.create", create_run)
+    monkeypatch.setattr("draftpilot.api.runs.get_arq_pool", get_pool)
+    response = client.post(
+        "/api/v1/projects/9/runs", json={"screenplay_id": 2}
+    )
+    assert response.status_code == 202
+    assert response.json()["id"] == 31
+    assert enqueued == [("execute_workflow", 31)]

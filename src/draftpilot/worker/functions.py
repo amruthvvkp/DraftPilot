@@ -14,6 +14,7 @@ from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.crud import workflow_runs as workflow_runs_crud
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
 
@@ -76,4 +77,33 @@ async def analyze_screenplay(ctx: dict, screenplay_id: int) -> dict:
 
         await cache_set(ANALYSIS_CACHE_KEY.format(id=screenplay_id), result, ttl=3600)
         logfire.info("Analysis complete for {id}: {result}", id=screenplay_id, result=result)
+        return result
+
+
+async def execute_workflow(ctx: dict, run_id: int) -> dict:
+    """Resume a persisted workflow run and record its terminal state."""
+    with logfire.span("execute_workflow", run_id=run_id):
+        async with session_scope() as session:
+            run = await workflow_runs_crud.get(session, run_id)
+            if run is None:
+                return {"error": "not_found"}
+            await workflow_runs_crud.update_status(session, run, "running")
+            screenplay_id = run.input.get("screenplay_id")
+            if not isinstance(screenplay_id, int):
+                await workflow_runs_crud.update_status(
+                    session, run, "failed", error="screenplay_id is required"
+                )
+                return {"error": "invalid_input"}
+        try:
+            result = await analyze_screenplay(ctx, screenplay_id)
+        except Exception as exc:  # pragma: no cover - worker failure boundary
+            async with session_scope() as session:
+                run = await workflow_runs_crud.get(session, run_id)
+                if run is not None:
+                    await workflow_runs_crud.update_status(session, run, "failed", error=str(exc))
+            raise
+        async with session_scope() as session:
+            run = await workflow_runs_crud.get(session, run_id)
+            if run is not None:
+                await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
         return result
