@@ -26,7 +26,7 @@ model provider.
 
 The local retrieval service is also portable: `docker compose up --build rag` exposes its health
 endpoint at `http://localhost:9010/health`. It uses the same bearer token convention as MCP and
-keeps search partitions project-scoped and persists its initial lexical store in the `rag_data`
+ keeps search partitions project-scoped and persists its replaceable local embedding/lexical store in the `rag_data`
 volume. The lexical implementation is intentionally replaceable with a vector-store adapter.
 
 Screenplay exports are non-mutating: use `/api/v1/projects/{project_id}/screenplays/{screenplay_id}/exports/fountain`,

@@ -4,10 +4,13 @@ from fastapi import FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from draftpilot.core.config import settings
-from draftpilot.core.rag import IndexedDocument, RetrievalResult, SQLiteLexicalIndex
+from draftpilot.core.rag import IndexedDocument, RetrievalResult, SQLiteLexicalIndex, create_embedding_provider
 
 app = FastAPI(title="DraftPilot RAG", version=settings.metadata.version)
-index = SQLiteLexicalIndex(settings.rag.database_path)
+index = SQLiteLexicalIndex(
+    settings.rag.database_path,
+    embedding_provider=create_embedding_provider(settings.rag.embedding_provider),
+)
 
 
 class DocumentRequest(BaseModel):
