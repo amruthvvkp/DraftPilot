@@ -15,6 +15,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         "description": "",
         "genres": ["Drama"],
         "languages": ["English"],
+        "primary_language": "English",
         "artwork_url": None,
     }
     workspace = {
@@ -22,6 +23,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         "screenplay": {"id": 12, "title": "The Lantern House", "format": "feature", "status": "draft"},
         "acts": [{"id": 4, "title": "Act One", "position": 0}],
         "scenes": [{"id": 7, "act_id": 4, "heading": "INT. LANTERN HOUSE - NIGHT", "position": 0, "body": "The house breathes in the dark."}],
+        "blocks": {},
     }
 
     def projects(route: Route) -> None:
@@ -34,6 +36,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
 
     page.route("**/api/v1/projects", projects)
     page.route("**/api/v1/projects/9001/workspace", workspace_request)
+    page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
     page.goto("/projects")
     page.get_by_role("heading", name="The Lantern House").click()
 
