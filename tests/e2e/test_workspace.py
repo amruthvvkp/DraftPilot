@@ -135,3 +135,31 @@ def test_copilot_turn_polls_durable_run(page: Page) -> None:
     page.get_by_label("Copilot message").fill("Find the gap.")
     page.get_by_role("button", name="Send").click()
     expect(page.get_by_text("The reveal needs a setup.")).to_be_visible()
+
+
+def test_context_page_creates_typed_knowledge_node(page: Page) -> None:
+    """Create a project-scoped creative-context node through the React page."""
+    graph = {"nodes": [], "edges": []}
+    created = {"id": 40, "project_id": 9001, "kind": "film", "label": "Pather Panchali", "description": "Textured rural reference.", "node_metadata": {}, "version": 1}
+
+    def graph_request(route: Route) -> None:
+        """Return the current mocked graph."""
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({"nodes": [created] if graph["nodes"] else [], "edges": []}))
+
+    def create_node(route: Route) -> None:
+        """Validate and persist the mocked graph node."""
+        assert route.request.post_data_json == {"kind": "film", "label": "Pather Panchali", "description": "Textured rural reference."}
+        graph["nodes"].append(created)
+        route.fulfill(status=201, content_type="application/json", body=json.dumps(created))
+
+    page.route("**/api/v1/projects/9001/knowledge-graph", graph_request)
+    page.route("**/api/v1/projects/9001/knowledge-graph/nodes", create_node)
+    page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.goto("/projects/9001/context?kind=film")
+    expect(page.get_by_label("Context node type")).to_have_value("film")
+    page.get_by_label("Context node label").fill("Pather Panchali")
+    page.get_by_label("Context node description").fill("Textured rural reference.")
+    page.get_by_role("button", name="Add context").click()
+    expect(page.get_by_role("heading", name="Pather Panchali")).to_be_visible()

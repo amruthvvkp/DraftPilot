@@ -343,6 +343,10 @@ export function getKnowledgeGraph(projectId: number): Promise<KnowledgeGraph> {
   return request<KnowledgeGraph>(`/api/v1/projects/${projectId}/knowledge-graph`)
 }
 
+export function createKnowledgeNode(projectId: number, kind: string, label: string, description: string): Promise<KnowledgeGraph['nodes'][number]> {
+  return request<KnowledgeGraph['nodes'][number]>(`/api/v1/projects/${projectId}/knowledge-graph/nodes`, { method: 'POST', body: JSON.stringify({ kind, label, description: description || null }) })
+}
+
 export function getAgentRoles(): Promise<AgentRole[]> {
   return request<AgentRole[]>('/api/v1/agents/roles')
 }
