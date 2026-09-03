@@ -10,11 +10,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.core.db import async_get_db
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import acts as acts_crud
+from draftpilot.crud import blocks as blocks_crud
+from draftpilot.crud import dialogue_translations as translations_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import screenplays as screenplays_crud
-from draftpilot.models import AgentProposal, AgentProposalRead
+from draftpilot.models import AgentProposal, AgentProposalRead, DialogueTranslation
 
 router = APIRouter(prefix="/projects/{project_id}/agent-proposals", tags=["agent"])
 
@@ -22,8 +24,9 @@ router = APIRouter(prefix="/projects/{project_id}/agent-proposals", tags=["agent
 class ProposalCreateRequest(BaseModel):
     """Describe a typed, reviewable operation proposed by an agent."""
 
-    target_kind: str = Field(pattern="^(scene|artifact)$")
+    target_kind: str = Field(pattern="^(scene|artifact|dialogue_translation)$")
     target_id: int
+    scene_id: int | None = None
     operation: dict[str, Any] = Field(min_length=1)
     diff: dict[str, Any] = Field(default_factory=dict)
     base_version: int = Field(ge=1)
@@ -40,6 +43,17 @@ async def _scene_in_project(
     if scene is None or screenplay is None or screenplay.project_id != project_id:
         return None
     return scene
+
+
+async def _dialogue_target(
+    session: AsyncSession, project_id: int, scene_id: int, block_id: int
+) -> tuple[Any, Any] | None:
+    """Return a dialogue block and scene in the requested project."""
+    scene = await _scene_in_project(session, project_id, scene_id)
+    block = await blocks_crud.get(session, block_id)
+    if scene is None or block is None or block.scene_id != scene_id or block.element_type.value != "dialogue":
+        return None
+    return scene, block
 
 
 @router.get("", response_model=list[AgentProposalRead])
@@ -63,6 +77,11 @@ async def create_agent_proposal(
     target: Any | None
     if data.target_kind == "scene":
         target = await _scene_in_project(session, project_id, data.target_id)
+    elif data.target_kind == "dialogue_translation":
+        if data.scene_id is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="scene_id is required")
+        dialogue_target = await _dialogue_target(session, project_id, data.scene_id, data.target_id)
+        target = dialogue_target[0] if dialogue_target else None
     else:
         target = await artifacts_crud.get(session, data.target_id)
         if target is not None and target.project_id != project_id:
@@ -72,8 +91,22 @@ async def create_agent_proposal(
     version = getattr(target, "version", None)
     if version != data.base_version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal target has changed")
-    before = data.operation.keys() & {"title", "content", "depends_on", "artifact_metadata", "heading", "body"}
-    snapshot = {key: getattr(target, key) for key in before}
+    if data.target_kind == "dialogue_translation":
+        assert data.scene_id is not None
+        existing = next(
+            (item for item in await translations_crud.list_for_block(session, data.target_id)
+             if item.language == data.operation.get("language")),
+            None,
+        )
+        snapshot = {
+            "exists": existing is not None,
+            "language": existing.language if existing else data.operation.get("language"),
+            "text": existing.text if existing else "",
+            "status": existing.status if existing else "draft",
+        }
+    else:
+        before = data.operation.keys() & {"title", "content", "depends_on", "artifact_metadata", "heading", "body"}
+        snapshot = {key: getattr(target, key) for key in before}
     proposal = await proposals_crud.create(
         session,
         AgentProposal(
@@ -103,12 +136,41 @@ async def approve_agent_proposal(
     target: Any | None
     if proposal.target_kind == "scene":
         target = await _scene_in_project(session, project_id, proposal.target_id)
+    elif proposal.target_kind == "dialogue_translation":
+        scene_id = proposal.before.get("scene_id")
+        target = None
+        if isinstance(scene_id, int):
+            dialogue_target = await _dialogue_target(session, project_id, scene_id, proposal.target_id)
+            target = dialogue_target[0] if dialogue_target else None
     else:
         target = await artifacts_crud.get(session, proposal.target_id)
         if target is not None and target.project_id != project_id:
             target = None
     if target is None or getattr(target, "version", None) != proposal.base_version:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal target has changed")
+    if proposal.target_kind == "dialogue_translation":
+        language = proposal.operation.get("language")
+        text = proposal.operation.get("text")
+        if not isinstance(language, str) or not isinstance(text, str):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid translation operation")
+        existing = next(
+            (item for item in await translations_crud.list_for_block(session, proposal.target_id)
+             if item.language == language),
+            None,
+        )
+        if existing is None:
+            session.add(DialogueTranslation(block_id=proposal.target_id, language=language, text=text, source_version=target.version))
+        else:
+            existing.text = text
+            existing.status = str(proposal.operation.get("status", "draft"))
+            existing.source_version = target.version
+            session.add(existing)
+        proposal.status = "approved"
+        proposal.updated_at = datetime.now(timezone.utc)
+        session.add(proposal)
+        await session.commit()
+        await session.refresh(proposal)
+        return AgentProposalRead.model_validate(proposal)
     operation = proposal.operation
     allowed = {"title", "content", "depends_on", "artifact_metadata", "heading", "body"}
     if set(operation) - allowed:
@@ -140,13 +202,37 @@ async def rollback_agent_proposal(
     target: Any | None
     if proposal.target_kind == "scene":
         target = await _scene_in_project(session, project_id, proposal.target_id)
+    elif proposal.target_kind == "dialogue_translation":
+        scene_id = proposal.before.get("scene_id")
+        target = None
+        if isinstance(scene_id, int):
+            dialogue_target = await _dialogue_target(session, project_id, scene_id, proposal.target_id)
+            target = dialogue_target[0] if dialogue_target else None
     else:
         target = await artifacts_crud.get(session, proposal.target_id)
         if target is not None and target.project_id != project_id:
             target = None
     if target is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal target not found")
+    if proposal.target_kind == "dialogue_translation":
+        language = proposal.before.get("language")
+        if not isinstance(language, str):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid translation rollback")
+        existing = next(
+            (item for item in await translations_crud.list_for_block(session, proposal.target_id)
+             if item.language == language),
+            None,
+        )
+        if proposal.before.get("exists") and existing is not None:
+            existing.text = str(proposal.before.get("text", ""))
+            existing.status = str(proposal.before.get("status", "draft"))
+            existing.source_version = target.version
+            session.add(existing)
+        elif existing is not None:
+            await session.delete(existing)
     for key, value in proposal.before.items():
+        if key not in {"exists", "language", "text", "status", "scene_id"}:
+            setattr(target, key, value)
         setattr(target, key, value)
     target.version += 1
     session.add(target)

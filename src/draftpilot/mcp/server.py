@@ -292,7 +292,8 @@ async def propose_dialogue_translation(
                 target_id=block_id,
                 operation={"language": language, "text": text, "status": "draft"},
                 diff={"source": block.text, "translation": text},
-                before={"source_text": block.text, "source_version": scene.version},
+                before={"source_text": block.text, "source_version": scene.version, "scene_id": scene_id,
+                        "exists": False, "language": language, "text": "", "status": "draft"},
                 base_version=scene.version,
             ),
         )
