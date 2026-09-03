@@ -270,6 +270,10 @@ def test_start_run_persists_before_enqueue(
         """Return the durable run fixture."""
         return run
 
+    async def get_screenplay(_session: _Session, _screenplay_id: int) -> Screenplay:
+        """Return a screenplay owned by the project fixture."""
+        return Screenplay(id=2, project_id=9, title="Story")
+
     class Pool:
         """Capture queue submissions without Redis."""
 
@@ -282,6 +286,7 @@ def test_start_run_persists_before_enqueue(
         return Pool()
 
     monkeypatch.setattr("draftpilot.api.runs.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.runs.screenplays_crud.get", get_screenplay)
     monkeypatch.setattr("draftpilot.api.runs.runs_crud.create", create_run)
     monkeypatch.setattr("draftpilot.api.runs.get_arq_pool", get_pool)
     response = client.post(
@@ -290,6 +295,25 @@ def test_start_run_persists_before_enqueue(
     assert response.status_code == 202
     assert response.json()["id"] == 31
     assert enqueued == [("execute_workflow", 31)]
+
+
+def test_start_run_rejects_screenplay_from_another_project(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prevent a run from crossing project boundaries through its screenplay id."""
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the requested project fixture."""
+        return Project(id=9, title="Story")
+
+    async def get_screenplay(_session: _Session, _screenplay_id: int) -> Screenplay:
+        """Return a screenplay owned by a different project."""
+        return Screenplay(id=2, project_id=10, title="Other story")
+
+    monkeypatch.setattr("draftpilot.api.runs.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.runs.screenplays_crud.get", get_screenplay)
+    response = client.post("/api/v1/projects/9/runs", json={"screenplay_id": 2})
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Screenplay not found"
 
 
 def test_cancel_run_preserves_durable_history(

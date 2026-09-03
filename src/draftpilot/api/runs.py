@@ -8,6 +8,7 @@ from draftpilot.core.db import async_get_db
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.agent_roles import AgentRoleKey, PermissionMode
 from draftpilot.crud import projects as projects_crud
+from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import WorkflowRunCreate, WorkflowRunRead
 
@@ -33,6 +34,9 @@ async def start_run(
     project = await projects_crud.get(session, project_id)
     if project is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    screenplay = await screenplays_crud.get(session, data.screenplay_id)
+    if screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
     run = await runs_crud.create(
         session,
         WorkflowRunCreate(
@@ -78,8 +82,8 @@ async def resume_run(
     run = await runs_crud.get(session, run_id)
     if run is None or run.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
-    if run.status == "succeeded":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run already succeeded")
+    if run.status in {"succeeded", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is terminal")
     run.status = "queued"
     run.error = None
     session.add(run)
