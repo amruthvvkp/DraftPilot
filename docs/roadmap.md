@@ -99,7 +99,8 @@ formatting produces a diff proposal before application. Wires when `SceneRevisio
 Depends on B + C.
 
 ### Phase E — Agentic layer · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: in progress
-Provider-agnostic PydanticAI across all supported providers; agent roles (researcher,
+Provider-agnostic PydanticAI model construction now supports OpenAI-compatible first-party,
+OpenRouter/gateway, Ollama, and LM Studio endpoints; agent roles (researcher,
 script assistant, associate director, audience evaluator); model switching in the agent
 panel; settings provider config; MCP tools exposing project actions to external clients;
 agent-assisted new-screenplay wizard (outline / genre / characters / audience / format /

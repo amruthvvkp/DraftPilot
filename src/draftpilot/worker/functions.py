@@ -12,6 +12,7 @@ import logfire
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
+from draftpilot.core.providers import create_chat_model
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as workflow_runs_crud
@@ -25,14 +26,7 @@ async def _llm_note(title: str, scene_count: int, word_count: int) -> str | None
         return None
     try:
         from pydantic_ai import Agent
-        from pydantic_ai.models.openai import OpenAIChatModel
-        from pydantic_ai.providers.openai import OpenAIProvider
-
-        provider = OpenAIProvider(
-            base_url=settings.llm.base_url,
-            api_key=settings.llm.api_key.get_secret_value() or "not-needed",
-        )
-        model = OpenAIChatModel(settings.llm.model, provider=provider)
+        model = create_chat_model(settings.llm)
         agent = Agent(
             model,
             system_prompt=(
