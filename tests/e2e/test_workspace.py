@@ -42,6 +42,16 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/projects", projects)
     page.route("**/api/v1/projects/9001/workspace", workspace_request)
     page.route("**/api/v1/projects/9001/scenes/7/blocks/*", block_update)
+    page.route("**/api/v1/projects/9001/scenes/7/revisions", lambda route: route.fulfill(
+        status=200, content_type="application/json", body='[{"id":30,"scene_id":7,"rev_number":1,"message":"Opening","created_at":"2026-01-01T00:00:00Z"}]'
+    ))
+
+    def restore_revision(route: Route) -> None:
+        """Validate selective scene-section restoration."""
+        assert route.request.post_data_json == {"sections": ["blocks"]}
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace["scenes"][0]))
+
+    page.route("**/api/v1/projects/9001/scenes/7/revisions/30/restore", restore_revision)
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
@@ -76,6 +86,8 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
+    page.get_by_role("checkbox", name="Heading").uncheck()
+    page.get_by_role("button", name="Restore").click()
     page.get_by_role("button", name="Run review").click()
     editor = page.get_by_label("Edit action")
     expect(editor).to_have_value("The house breathes in the dark.")
