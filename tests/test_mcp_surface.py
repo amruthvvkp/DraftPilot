@@ -24,3 +24,4 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "propose_timeline_reorder" in tools
     assert "read_project_artifacts" in tools
     assert "read_screenplay_scenes" in tools
+    assert "propose_screenplay_change" in tools

@@ -17,6 +17,10 @@ ordered screenplay blocks through the same project authorization boundary. Both 
 configured response-size limit, and screenplay reads reject a screenplay belonging to another
 project.
 
+`propose_screenplay_change` accepts only typed `heading` or `body` operations and stores a
+reviewable agent proposal using the scene's current server-derived version. It never applies the
+operation; approval and optimistic-concurrency checks remain on the DraftPilot approval boundary.
+
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
 in the server environment or encrypted storage and must not be sent to an MCP client. Streamable HTTP

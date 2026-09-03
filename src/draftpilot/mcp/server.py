@@ -19,6 +19,9 @@ from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
+from draftpilot.crud import acts as acts_crud
+from draftpilot.crud import agent_proposals as proposals_crud
+from draftpilot.models import AgentProposal, AgentProposalRead
 
 telemetry.setup(mcp=True)
 
@@ -194,6 +197,52 @@ async def read_screenplay_scenes(
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Screenplay response exceeds MCP output limit")
     return result
+
+
+@mcp.tool
+async def propose_screenplay_change(
+    project_id: int,
+    scene_id: int,
+    operation: dict[str, object],
+    diff: dict[str, object],
+    ctx: Context,
+) -> dict[str, object]:
+    """Persist a typed screenplay proposal without applying creative changes."""
+    client_id = ctx.client_id or "unknown"
+    allowed = {"heading", "body"}
+    if not operation or set(operation) - allowed:
+        raise ValueError("Only heading and body operations are supported")
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "screenplay.propose",
+                "propose",
+                {"scene_id": scene_id, "operation_keys": sorted(operation)},
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        scene = await scenes_crud.get(session, scene_id)
+        act = await acts_crud.get(session, scene.act_id) if scene else None
+        screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
+        if scene is None or screenplay is None or screenplay.project_id != project_id:
+            raise ValueError("Scene is not in the requested project")
+        before = {key: getattr(scene, key) for key in operation}
+        proposal = await proposals_crud.create(
+            session,
+            AgentProposal(
+                project_id=project_id,
+                target_kind="scene",
+                target_id=scene_id,
+                operation=operation,
+                diff=diff,
+                before=before,
+                base_version=scene.version,
+            ),
+        )
+    return AgentProposalRead.model_validate(proposal).model_dump(mode="json")
 
 
 @mcp.tool
