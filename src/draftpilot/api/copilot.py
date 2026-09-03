@@ -6,8 +6,11 @@ from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
-from draftpilot.core.agent_roles import normalize_agent_role
+from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
 from draftpilot.core.copilot import generate_reply
+from draftpilot.core.queue import get_arq_pool
+from draftpilot.crud import workflow_runs as runs_crud
+from draftpilot.models import WorkflowRunCreate, WorkflowRunRead
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import CopilotMessageCreate, CopilotMessageRead
@@ -26,6 +29,13 @@ class CopilotMessageRequest(BaseModel):
     instruction_layers: dict[str, object] = Field(default_factory=dict)
     citations: list[dict[str, object]] = Field(default_factory=list)
     active_tools: list[str] = Field(default_factory=list)
+
+
+class CopilotRunResponse(BaseModel):
+    """Return the persisted user turn and its reconnectable workflow run."""
+
+    message: CopilotMessageRead
+    run: WorkflowRunRead
 
 
 @router.get("", response_model=list[CopilotMessageRead])
@@ -100,3 +110,48 @@ async def respond_to_message(
         ),
     )
     return CopilotMessageRead.model_validate(assistant)
+
+
+@router.post("/respond-async", response_model=CopilotRunResponse, status_code=status.HTTP_202_ACCEPTED)
+async def start_async_response(
+    project_id: int,
+    data: CopilotMessageRequest,
+    session: AsyncSession = Depends(async_get_db),
+) -> CopilotRunResponse:
+    """Persist a Copilot turn and enqueue a reconnectable provider response."""
+    if data.role != "user":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Response input must be a user turn")
+    if await projects_crud.get(session, project_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    message = await messages_crud.create(
+        session,
+        CopilotMessageCreate(project_id=project_id, **data.model_dump()),
+    )
+    history = [
+        {"role": item.role, "content": item.content}
+        for item in await messages_crud.list_for_project(session, project_id)
+    ][:-1]
+    role = normalize_agent_role(data.instruction_layers.get("agent_role"))
+    permission = normalize_permission_mode(data.instruction_layers.get("permission_mode"))
+    run = await runs_crud.create(
+        session,
+        WorkflowRunCreate(
+            project_id=project_id,
+            kind="copilot_response",
+            input={
+                "message_id": message.id,
+                "content": data.content,
+                "page": data.page,
+                "artifact": data.artifact,
+                "selection": data.selection,
+                "history": history[-12:],
+            },
+            agent_role=role,
+            permission_mode=permission,
+        ),
+    )
+    await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    return CopilotRunResponse(
+        message=CopilotMessageRead.model_validate(message),
+        run=WorkflowRunRead.model_validate(run),
+    )

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { AgentProposal, AgentRole, approveAgentProposal, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, requestCopilotReply, rollbackAgentProposal } from './api'
+import { AgentProposal, AgentRole, approveAgentProposal, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, getWorkflowRun, rollbackAgentProposal, startCopilotRun } from './api'
 
 type CopilotPanelProps = { projectId: number }
 
@@ -35,12 +35,19 @@ export default function CopilotPanel({ projectId }: CopilotPanelProps) {
     event.preventDefault()
     if (!draft.trim()) return
     try {
-      const message = await requestCopilotReply(projectId, {
+      const pending = await startCopilotRun(projectId, {
         content: draft.trim(), page: window.location.pathname, artifact: null, selection: null,
         instruction_layers: { agent_role: selectedRole, permission_mode: permissionMode }, citations: [], active_tools: ['screenplay.read', 'context.read', 'revisions.read'],
       })
-      setMessages(current => [...current, message])
+      setMessages(current => [...current, pending.message])
       setDraft('')
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 250))
+        const run = await getWorkflowRun(projectId, pending.run.id)
+        if (run.status === 'succeeded') { await refresh(); return }
+        if (run.status === 'failed' || run.status === 'cancelled') { setError(run.error ?? `Copilot run ${run.status}`); return }
+      }
+      setError('Copilot is still running; the conversation will resume when you return.')
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to save Copilot message') }
   }
 

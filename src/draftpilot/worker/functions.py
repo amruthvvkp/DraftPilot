@@ -14,9 +14,13 @@ from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
 from draftpilot.core.providers import create_chat_model
+from draftpilot.core.agent_roles import normalize_agent_role
+from draftpilot.core.copilot import generate_reply
+from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as workflow_runs_crud
+from draftpilot.models import CopilotMessageCreate, WorkflowRun
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
 
@@ -102,12 +106,16 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
             if run is None:
                 return {"error": "not_found"}
             await workflow_runs_crud.update_status(session, run, "running")
+            copilot_run = run.kind == "copilot_response"
             screenplay_id = run.input.get("screenplay_id")
-            if not isinstance(screenplay_id, int):
+            if not copilot_run and not isinstance(screenplay_id, int):
                 await workflow_runs_crud.update_status(
                     session, run, "failed", error="screenplay_id is required"
                 )
                 return {"error": "invalid_input"}
+        if copilot_run:
+            return await _execute_copilot_run(ctx, run)
+        assert isinstance(screenplay_id, int)
         try:
             result = await analyze_screenplay(ctx, screenplay_id, run.agent_role)
         except Exception as exc:  # pragma: no cover - worker failure boundary
@@ -122,3 +130,55 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
                 await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
                 return result
         return {"status": "cancelled"}
+
+
+async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]:
+    """Resume one persisted Copilot response and store its assistant turn."""
+    data = run.input
+    content = data.get("content")
+    page = data.get("page")
+    history = data.get("history", [])
+    if not isinstance(content, str) or not isinstance(page, str) or not isinstance(history, list):
+        async with session_scope() as session:
+            current = await workflow_runs_crud.get(session, run.id or 0)
+            if current is not None:
+                await workflow_runs_crud.update_status(session, current, "failed", error="invalid Copilot input")
+        return {"error": "invalid_input"}
+    try:
+        reply = await generate_reply(
+            content,
+            page,
+            data.get("artifact") if isinstance(data.get("artifact"), str) else None,
+            data.get("selection") if isinstance(data.get("selection"), str) else None,
+            normalize_agent_role(run.agent_role),
+            history,
+        )
+    except Exception as exc:  # pragma: no cover - provider/network dependent
+        async with session_scope() as session:
+            current = await workflow_runs_crud.get(session, run.id or 0)
+            if current is not None:
+                await workflow_runs_crud.update_status(session, current, "failed", error=str(exc))
+        raise
+    async with session_scope() as session:
+        current = await workflow_runs_crud.get(session, run.id or 0)
+        if current is None or current.status == "cancelled":
+            return {"status": "cancelled"}
+        assistant = await messages_crud.create(
+            session,
+            CopilotMessageCreate(
+                project_id=current.project_id,
+                role="assistant",
+                content=reply,
+                page=page,
+                artifact=data.get("artifact") if isinstance(data.get("artifact"), str) else None,
+                selection=data.get("selection") if isinstance(data.get("selection"), str) else None,
+                instruction_layers={"agent_role": current.agent_role, "permission_mode": current.permission_mode},
+            ),
+        )
+        await workflow_runs_crud.update_status(
+            session,
+            current,
+            "succeeded",
+            result={"assistant_message_id": assistant.id},
+        )
+        return {"assistant_message_id": assistant.id}

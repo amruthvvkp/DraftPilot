@@ -43,6 +43,12 @@ def normalize_agent_role(value: object) -> AgentRoleKey:
     return value if isinstance(value, str) and value in AGENT_ROLE_KEYS else "story_architect"  # type: ignore[return-value]
 
 
+def normalize_permission_mode(value: object) -> PermissionMode:
+    """Return a supported permission mode, falling back to chat-only."""
+    allowed = {"chat_only", "suggest", "scoped_edit", "project_edit"}
+    return value if isinstance(value, str) and value in allowed else "chat_only"  # type: ignore[return-value]
+
+
 def agent_roles() -> list[AgentRole]:
     """Return independent copies of the built-in role catalog."""
     return [role.model_copy(deep=True) for role in AGENT_ROLES]

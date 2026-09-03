@@ -149,6 +149,10 @@ export type KnowledgeGraph = {
 
 export type AgentRole = { key: string; label: string; description: string; default_permission: 'chat_only' | 'suggest' | 'scoped_edit' | 'project_edit' }
 
+export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null }
+
+export type CopilotRunResponse = { message: CopilotMessage; run: WorkflowRun }
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -259,6 +263,14 @@ export function sendCopilotMessage(projectId: number, payload: Pick<CopilotMessa
 
 export function requestCopilotReply(projectId: number, payload: Pick<CopilotMessage, 'content' | 'page' | 'artifact' | 'selection' | 'instruction_layers' | 'citations' | 'active_tools'>): Promise<CopilotMessage> {
   return request<CopilotMessage>(`/api/v1/projects/${projectId}/copilot/messages/respond`, { method: 'POST', body: JSON.stringify({ ...payload, role: 'user' }) })
+}
+
+export function startCopilotRun(projectId: number, payload: Pick<CopilotMessage, 'content' | 'page' | 'artifact' | 'selection' | 'instruction_layers' | 'citations' | 'active_tools'>): Promise<CopilotRunResponse> {
+  return request<CopilotRunResponse>(`/api/v1/projects/${projectId}/copilot/messages/respond-async`, { method: 'POST', body: JSON.stringify({ ...payload, role: 'user' }) })
+}
+
+export function getWorkflowRun(projectId: number, runId: number): Promise<WorkflowRun> {
+  return request<WorkflowRun>(`/api/v1/projects/${projectId}/runs/${runId}`)
 }
 
 export function getKnowledgeGraph(projectId: number): Promise<KnowledgeGraph> {

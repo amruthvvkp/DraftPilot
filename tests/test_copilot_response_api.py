@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.api.copilot import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project
+from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project, WorkflowRun
 
 
 class _Session:
@@ -66,3 +66,54 @@ def test_copilot_response_persists_user_and_assistant_turns(monkeypatch) -> None
     assert response.status_code == 201
     assert response.json()["role"] == "assistant"
     assert len(captured) == 2
+
+
+def test_async_copilot_response_enqueues_durable_run(monkeypatch) -> None:
+    """Persist a user turn before returning a worker-reconnectable run."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the project fixture."""
+        return Project(id=7, title="Durable story")
+
+    async def create_message(_session: _Session, data: CopilotMessageCreate) -> CopilotMessage:
+        """Return the persisted user turn fixture."""
+        return CopilotMessage(id=8, **data.model_dump())
+
+    async def list_messages(_session: _Session, _project_id: int) -> list[CopilotMessage]:
+        """Return no prior turns for the fixture."""
+        return []
+
+    async def create_run(_session: _Session, _data: object) -> WorkflowRun:
+        """Return a queued durable run fixture."""
+        return WorkflowRun(id=44, project_id=7, kind="copilot_response")
+
+    class Pool:
+        """Capture one queued worker job."""
+
+        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+            """Capture the queued worker call."""
+            assert (name, run_id) == ("execute_workflow", 44)
+
+    async def get_pool() -> Pool:
+        """Return the queue fixture."""
+        return Pool()
+
+    monkeypatch.setattr("draftpilot.api.copilot.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.copilot.messages_crud.create", create_message)
+    monkeypatch.setattr("draftpilot.api.copilot.messages_crud.list_for_project", list_messages)
+    monkeypatch.setattr("draftpilot.api.copilot.runs_crud.create", create_run)
+    monkeypatch.setattr("draftpilot.api.copilot.get_arq_pool", get_pool)
+    response = TestClient(app).post(
+        "/api/v1/projects/7/copilot/messages/respond-async",
+        json={"content": "Keep the ending earned.", "page": "workspace"},
+    )
+    assert response.status_code == 202
+    assert response.json()["run"]["kind"] == "copilot_response"
