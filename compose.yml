@@ -148,6 +148,22 @@ services:
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
     extra_hosts: *extra-hosts
 
+  rag:
+    image: draftpilot-rag
+    build:
+      context: .
+      dockerfile: ./Dockerfile.rag
+    ports:
+      - "${DRAFTPILOT_RAG_PORT:-9010}:8000"
+    environment:
+      RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
+      OTEL__ENABLED: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   # --- Langfuse (self-hosted LLM observability, part of the default stack) -----
   # Comes up with `docker compose up`. UI at http://localhost:3300. On first boot
   # LANGFUSE_INIT_* (on langfuse-web) auto-provisions an org/project/user with the

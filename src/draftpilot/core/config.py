@@ -150,6 +150,15 @@ class MCPSettings(BaseSettings):
     auth_token: SecretStr = SecretStr("draftpilot-local-token")
 
 
+class RAGSettings(BaseSettings):
+    """Local retrieval service configuration."""
+
+    model_config = SettingsConfigDict(env_prefix="RAG__")
+
+    auth_token: SecretStr = SecretStr("draftpilot-local-token")
+    max_results: int = 8
+
+
 class UISettings(BaseSettings):
     """NiceGUI web interface settings."""
 
@@ -175,6 +184,7 @@ class Settings(BaseSettings):
     llm: LLMSettings = LLMSettings()
     secrets: SecretsSettings = SecretsSettings()
     mcp: MCPSettings = MCPSettings()
+    rag: RAGSettings = RAGSettings()
     ui: UISettings = UISettings()
 
 
