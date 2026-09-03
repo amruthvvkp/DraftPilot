@@ -76,3 +76,10 @@ the turn recoverable after a browser disconnect or worker restart.
 Canonical graph data is discoverable at `draftpilot://projects/{project_id}/knowledge-graph` and
 requires the `knowledge_graph.read` project grant. The resource returns only nodes and edges for
 the requested project and records the invocation in the redacted MCP audit log.
+
+DraftPilot also provides the `DraftPilotMCPClient` outbound adapter for built-in agents and
+workflow integrations. It supports authenticated Streamable HTTP (`list_tools` and `call_tool`)
+and explicitly configured local stdio (`call_stdio_tool`), validates endpoints against embedded
+credentials and cloud metadata targets, and rejects responses beyond its configured output limit.
+External MCP results must still be translated into typed DraftPilot operations before any project
+mutation; the client never receives database credentials or a database connection.
