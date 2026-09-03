@@ -118,6 +118,16 @@ export type ProjectBackup = {
   manifest: { schema_version: number; project_id: number; created_at: string; app_version: string; sha256: string }
 }
 
+export type ProviderProfile = {
+  id: number
+  name: string
+  provider: string
+  model: string
+  base_url: string | null
+  enabled: boolean
+  has_api_key: boolean
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
@@ -192,4 +202,16 @@ export function updateArtifact(projectId: number, artifactId: number, version: n
 
 export function createProjectBackup(projectId: number): Promise<ProjectBackup> {
   return request<ProjectBackup>(`/api/v1/projects/${projectId}/backups`, { method: 'POST' })
+}
+
+export function listProviderProfiles(): Promise<ProviderProfile[]> {
+  return request<ProviderProfile[]>('/api/v1/settings/providers')
+}
+
+export function createProviderProfile(payload: { name: string; provider: string; model: string; base_url?: string; enabled: boolean; api_key?: string }): Promise<ProviderProfile> {
+  return request<ProviderProfile>('/api/v1/settings/providers', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function updateProviderProfile(profileId: number, payload: { provider?: string; model?: string; base_url?: string; enabled?: boolean; api_key?: string }): Promise<ProviderProfile> {
+  return request<ProviderProfile>(`/api/v1/settings/providers/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }

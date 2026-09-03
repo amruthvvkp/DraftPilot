@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { createProject, listProjects, Project, ProjectCreatePayload } from './api'
 import Workspace from './Workspace'
 import ArtifactStudio from './ArtifactStudio'
+import ProviderSettings from './ProviderSettings'
 
 const genres = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'Historical', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western', 'Experimental']
 const languages = ['English', 'Hindi', 'Bengali', 'Telugu', 'Marathi', 'Tamil', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Odia', 'Assamese', 'Urdu', 'Kashmiri', 'Konkani', 'Nepali', 'Sindhi', 'Maithili', 'Sanskrit', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Korean', 'Mandarin', 'Arabic']
@@ -19,6 +20,7 @@ function App() {
   const workspaceId = workspaceMatch ? Number(workspaceMatch[1]) : null
   const artifactMatch = window.location.pathname.match(/^\/projects\/(\d+)\/studio$/)
   const artifactProjectId = artifactMatch ? Number(artifactMatch[1]) : null
+  const settingsPage = window.location.pathname === '/settings'
 
   const [projects, setProjects] = useState<Project[]>([])
   const [form, setForm] = useState<FormState>(emptyForm)
@@ -58,6 +60,7 @@ function App() {
 
   if (workspaceId !== null) return <Workspace projectId={workspaceId} />
   if (artifactProjectId !== null) return <ArtifactStudio projectId={artifactProjectId} />
+  if (settingsPage) return <ProviderSettings />
 
   return <div className="app-shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span className="wordmark"><em>Draft</em><b>Pilot</b></span></div><p className="eyebrow">Story studio</p><nav><a className="active">Projects <span>{projects.length}</span></a><a>Studio</a><a>Settings</a></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace<br /><small>Your drafts stay close.</small></div></aside>
