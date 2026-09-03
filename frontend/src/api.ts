@@ -101,6 +101,15 @@ export type DialogueTranslation = {
   status: string
 }
 
+export type SceneRevision = {
+  id: number
+  scene_id: number
+  rev_number: number
+  message: string | null
+  created_at: string
+  snapshot?: Record<string, unknown>
+}
+
 export type StoryArtifact = {
   id: number
   project_id: number
@@ -217,6 +226,22 @@ export function saveDialogueTranslation(projectId: number, sceneId: number, bloc
   return request<DialogueTranslation>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}/translations/${encodeURIComponent(language)}`, {
     method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify({ text }),
   })
+}
+
+export function listSceneRevisions(projectId: number, sceneId: number): Promise<SceneRevision[]> {
+  return request<SceneRevision[]>(`/api/v1/projects/${projectId}/scenes/${sceneId}/revisions`)
+}
+
+export function createSceneRevision(projectId: number, sceneId: number, message: string): Promise<SceneRevision> {
+  return request<SceneRevision>(`/api/v1/projects/${projectId}/scenes/${sceneId}/revisions`, { method: 'POST', body: JSON.stringify({ message }) })
+}
+
+export function diffSceneRevisions(projectId: number, sceneId: number, fromId: number, toId: number): Promise<{ diff: string }> {
+  return request<{ diff: string }>(`/api/v1/projects/${projectId}/scenes/${sceneId}/revisions/${fromId}/diff/${toId}`)
+}
+
+export function restoreSceneRevision(projectId: number, sceneId: number, revisionId: number, version: number, sections: Array<'heading' | 'blocks'>): Promise<Scene> {
+  return request<Scene>(`/api/v1/projects/${projectId}/scenes/${sceneId}/revisions/${revisionId}/restore`, { method: 'POST', headers: { 'If-Match': String(version) }, body: JSON.stringify({ sections }) })
 }
 
 export function listArtifacts(projectId: number): Promise<StoryArtifact[]> {
