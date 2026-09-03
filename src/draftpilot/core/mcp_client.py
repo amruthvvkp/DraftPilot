@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamablehttp_client
+from pydantic import AnyUrl
 
 
 class MCPClientError(ValueError):
@@ -110,6 +111,42 @@ class DraftPilotMCPClient:
         """Discover external MCP tools through Streamable HTTP."""
         async with self._http_session() as session:
             return _bounded_result(await session.list_tools(), self.max_output_chars)
+
+    async def list_prompts(self) -> dict[str, object] | list[object] | str:
+        """Discover external MCP prompts through Streamable HTTP."""
+        async with self._http_session() as session:
+            return _bounded_result(await session.list_prompts(), self.max_output_chars)
+
+    async def list_resources(self) -> dict[str, object] | list[object] | str:
+        """Discover external MCP resources through Streamable HTTP."""
+        async with self._http_session() as session:
+            return _bounded_result(await session.list_resources(), self.max_output_chars)
+
+    async def read_resource(self, uri: str) -> dict[str, object] | list[object] | str:
+        """Read one bounded external MCP resource by URI."""
+        if not uri or len(uri) > 2_000:
+            raise MCPClientError("MCP resource URI is invalid")
+        async with self._http_session() as session:
+            try:
+                resource_uri = AnyUrl(uri)
+            except ValueError as exc:
+                raise MCPClientError("MCP resource URI is invalid") from exc
+            return _bounded_result(
+                await session.read_resource(resource_uri), self.max_output_chars
+            )
+
+    async def get_prompt(
+        self, name: str, arguments: dict[str, str] | None = None
+    ) -> dict[str, object] | list[object] | str:
+        """Render one external MCP prompt with bounded string arguments."""
+        if not name or len(name) > 200:
+            raise MCPClientError("MCP prompt name is invalid")
+        if arguments and any(len(key) > 200 or len(value) > 10_000 for key, value in arguments.items()):
+            raise MCPClientError("MCP prompt arguments are invalid")
+        async with self._http_session() as session:
+            return _bounded_result(
+                await session.get_prompt(name, arguments or {}), self.max_output_chars
+            )
 
     async def call_tool(
         self, name: str, arguments: dict[str, object] | None = None

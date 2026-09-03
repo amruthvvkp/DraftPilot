@@ -83,7 +83,8 @@ the requested project and records the invocation in the redacted MCP audit log.
 
 DraftPilot also provides the `DraftPilotMCPClient` outbound adapter for built-in agents and
 workflow integrations. It supports authenticated Streamable HTTP (`list_tools` and `call_tool`)
-and explicitly configured local stdio (`call_stdio_tool`). HTTP endpoints reject embedded
+with prompt/resource discovery and retrieval (`list_prompts`, `get_prompt`, `list_resources`, and
+`read_resource`), plus explicitly configured local stdio (`call_stdio_tool`). HTTP endpoints reject embedded
 credentials, cloud metadata targets, private/link-local/reserved IP literals, and multicast
 addresses; loopback endpoints remain available for local-first services. Responses are bounded by
 the configured output limit. External MCP results must still be translated into typed DraftPilot

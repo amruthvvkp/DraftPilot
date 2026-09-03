@@ -2,7 +2,8 @@
 
 import pytest
 
-from draftpilot.core.mcp_client import MCPClientError, _bounded_result, validate_mcp_endpoint
+from _async import run_async
+from draftpilot.core.mcp_client import DraftPilotMCPClient, MCPClientError, _bounded_result, validate_mcp_endpoint
 
 
 def test_validate_mcp_endpoint_blocks_metadata_and_credentials() -> None:
@@ -23,3 +24,12 @@ def test_bounded_result_rejects_oversized_mcp_payload() -> None:
     """Reject an external response beyond the client output budget."""
     with pytest.raises(MCPClientError):
         _bounded_result("secret-looking payload", 5)
+
+
+def test_mcp_client_rejects_invalid_prompt_and_resource_inputs() -> None:
+    """Bound outbound prompt and resource identifiers before opening a session."""
+    client = DraftPilotMCPClient("http://localhost:9001/mcp")
+    with pytest.raises(MCPClientError):
+        run_async(client.get_prompt(""))
+    with pytest.raises(MCPClientError):
+        run_async(client.read_resource(""))
