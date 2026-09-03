@@ -19,6 +19,7 @@ class SceneBase(SQLModel):
     position: int = Field(default=0, index=True)
     body: str = Field(default="")  # rendered cache; the ground truth is ``blocks``
     version: int = Field(default=1, ge=1)
+    scene_instruction: str = Field(default="")
 
 
 class Scene(SceneBase, TimestampMixin, table=True):  # type: ignore[call-arg]
@@ -58,6 +59,7 @@ class SceneUpdate(SQLModel):
     heading: str | None = None
     position: int | None = None
     body: str | None = None
+    scene_instruction: str | None = None
 
 
 class SceneRead(SceneBase):

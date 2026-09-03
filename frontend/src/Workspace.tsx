@@ -1,5 +1,5 @@
 import { type ChangeEvent, type KeyboardEvent, useEffect, useState } from 'react'
-import { createProjectBackup, getDialogueTranslations, getProjectWorkspace, importScreenplay, ProjectWorkspace, saveDialogueTranslation, Scene, ScreenplayBlock, updateProjectBlock, updateProjectScene } from './api'
+import { createProjectBackup, getDialogueTranslations, getProjectWorkspace, importScreenplay, ProjectWorkspace, saveDialogueTranslation, Scene, ScreenplayBlock, updateProject, updateProjectBlock, updateProjectScene } from './api'
 import Timeline from './Timeline'
 import CopilotPanel from './CopilotPanel'
 import RevisionPanel from './RevisionPanel'
@@ -37,6 +37,22 @@ export default function Workspace({ projectId }: WorkspaceProps) {
 
   const selectedScene: Scene | undefined = workspace?.scenes.find(scene => scene.id === selectedId)
   useEffect(() => { setSceneHeading(selectedScene?.heading ?? '') }, [selectedScene?.id, selectedScene?.heading])
+  useEffect(() => { setProjectInstruction(workspace?.project.project_instruction ?? '') }, [workspace?.project.id, workspace?.project.project_instruction])
+  useEffect(() => { setSceneInstruction(selectedScene?.scene_instruction ?? '') }, [selectedScene?.id, selectedScene?.scene_instruction])
+  useEffect(() => {
+    if (!workspace || projectInstruction === (workspace.project.project_instruction ?? '')) return
+    const timer = window.setTimeout(() => {
+      void updateProject(projectId, workspace.project.version, projectInstruction).then(() => getProjectWorkspace(projectId).then(setWorkspace)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to save project instruction'))
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [projectId, workspace?.project.id, workspace?.project.version, workspace?.project.project_instruction, projectInstruction])
+  useEffect(() => {
+    if (!selectedScene || sceneInstruction === (selectedScene.scene_instruction ?? '')) return
+    const timer = window.setTimeout(() => {
+      void updateProjectScene(projectId, selectedScene.id, selectedScene.version, { scene_instruction: sceneInstruction }).then(() => getProjectWorkspace(projectId).then(setWorkspace)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to save scene instruction'))
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [projectId, selectedScene?.id, selectedScene?.version, selectedScene?.scene_instruction, sceneInstruction])
   useEffect(() => {
     if (!workspace) return
     setDrafts(previous => Object.fromEntries(Object.values(workspace.blocks).flat().map(block => [block.id, previous[block.id] ?? block.text])))
@@ -74,7 +90,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   async function saveSceneHeading(): Promise<void> {
     if (!selectedScene || !sceneHeading.trim() || sceneHeading === selectedScene.heading) return
     try {
-      await updateProjectScene(projectId, selectedScene.id, selectedScene.version, sceneHeading.trim())
+      await updateProjectScene(projectId, selectedScene.id, selectedScene.version, { heading: sceneHeading.trim() })
       setWorkspace(await getProjectWorkspace(projectId))
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Unable to save scene heading')

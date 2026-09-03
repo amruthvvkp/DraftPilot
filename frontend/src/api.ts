@@ -6,6 +6,8 @@ export type Project = {
   genres: string[]
   languages: string[]
   primary_language: string
+  project_instruction: string
+  version: number
   artwork_url: string | null
   references?: ProjectReference[]
 }
@@ -43,6 +45,7 @@ export type Scene = {
   position: number
   body: string
   version: number
+  scene_instruction: string
 }
 
 export type ScreenplayBlock = {
@@ -212,9 +215,15 @@ export function updateProjectBlock(projectId: number, sceneId: number, blockId: 
   })
 }
 
-export function updateProjectScene(projectId: number, sceneId: number, version: number, heading: string): Promise<Scene> {
+export function updateProjectScene(projectId: number, sceneId: number, version: number, changes: { heading?: string; scene_instruction?: string }): Promise<Scene> {
   return request<Scene>(`/api/v1/projects/${projectId}/scenes/${sceneId}`, {
-    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify({ heading }),
+    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes),
+  })
+}
+
+export function updateProject(projectId: number, version: number, projectInstruction: string): Promise<Project> {
+  return request<Project>(`/api/v1/projects/${projectId}`, {
+    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify({ project_instruction: projectInstruction }),
   })
 }
 

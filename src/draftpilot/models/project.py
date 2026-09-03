@@ -28,6 +28,7 @@ class ProjectBase(SQLModel):
     genres: list[str] = Field(default_factory=list, sa_type=JSON)
     languages: list[str] = Field(default_factory=list, sa_type=JSON)
     primary_language: str = Field(default="English", max_length=50)
+    project_instruction: str = Field(default="")
 
 
 class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg]
@@ -36,6 +37,7 @@ class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg
     __tablename__ = "project"
 
     id: int | None = Field(default=None, primary_key=True)
+    version: int = Field(default=1, ge=1)
     screenplays: list["Screenplay"] = Relationship(
         back_populates="project",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
@@ -67,9 +69,11 @@ class ProjectUpdate(SQLModel):
     genres: list[str] | None = None
     languages: list[str] | None = None
     primary_language: str | None = None
+    project_instruction: str | None = None
 
 
 class ProjectRead(ProjectBase):
     """Schema for reading a project, including its identifier."""
 
     id: int
+    version: int

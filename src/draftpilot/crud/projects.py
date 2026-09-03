@@ -59,6 +59,7 @@ async def update(
     """Apply the given changes to a project and persist them."""
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(project, key, value)
+    project.version += 1
     session.add(project)
     await session.commit()
     await session.refresh(project)

@@ -25,6 +25,7 @@ from draftpilot.models import (
     DialogueTranslationRead,
     ProjectCreate,
     ProjectRead,
+    ProjectUpdate,
     ProjectReferenceBase,
     ProjectReferenceRead,
     SceneRead,
@@ -114,6 +115,24 @@ async def create_project(
         **ProjectRead.model_validate(project).model_dump(),
         references=[ProjectReferenceRead.model_validate(reference) for reference in references],
     )
+
+
+@router.patch("/{project_id}", response_model=ProjectRead)
+async def update_project(
+    project_id: int,
+    data: ProjectUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> ProjectRead:
+    """Update project instructions and metadata with optimistic concurrency."""
+    project = await projects_crud.get(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != project.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project has changed")
+    return ProjectRead.model_validate(await projects_crud.update(session, project, data))
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspaceRead)

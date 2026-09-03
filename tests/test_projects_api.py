@@ -126,6 +126,44 @@ def test_scene_update_requires_matching_if_match(
     assert response.status_code == 409
 
 
+def test_project_instruction_update_requires_matching_if_match(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Persist project instructions only when the caller holds its current version."""
+    project = Project(id=9, title="Story", version=4, project_instruction="Keep it tense.")
+    updated = Project(id=9, title="Story", version=5, project_instruction="Keep it intimate.")
+    calls: list[object] = []
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the versioned project fixture."""
+        return project
+
+    async def update_project(_session: _Session, _project: Project, data: object) -> Project:
+        """Capture the instruction update and return the next project version."""
+        calls.append(data)
+        return updated
+
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.update", update_project)
+    response = client.patch(
+        "/api/v1/projects/9",
+        headers={"If-Match": "4"},
+        json={"project_instruction": "Keep it intimate."},
+    )
+    assert response.status_code == 200
+    assert response.json()["project_instruction"] == "Keep it intimate."
+    assert response.json()["version"] == 5
+    assert len(calls) == 1
+
+    stale = client.patch(
+        "/api/v1/projects/9",
+        headers={"If-Match": "3"},
+        json={"project_instruction": "Overwrite me."},
+    )
+    assert stale.status_code == 409
+    assert len(calls) == 1
+
+
 def test_translation_update_is_scoped_and_preserves_source(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
