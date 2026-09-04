@@ -23,7 +23,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         "screenplay": {"id": 12, "title": "The Lantern House", "format": "feature", "status": "draft"},
         "acts": [{"id": 4, "title": "Act One", "position": 0}],
         "scenes": [{"id": 7, "act_id": 4, "heading": "INT. LANTERN HOUSE - NIGHT", "position": 0, "body": "The house breathes in the dark.", "version": 2}],
-        "blocks": {"7": [{"id": 20, "scene_id": 7, "position": 0, "element_type": "action", "text": "The house breathes in the dark.", "character_extension": None, "is_dual": False, "dual_group": None, "translation": None, "translation_lang": None}, {"id": 21, "scene_id": 7, "position": 1, "element_type": "dialogue", "text": "We should go.", "character_extension": None, "is_dual": True, "dual_group": 3, "translation": None, "translation_lang": None}]},
+        "blocks": {"7": [{"id": 20, "scene_id": 7, "position": 0, "element_type": "action", "text": "The house breathes in the dark.", "character_extension": None, "is_dual": False, "dual_group": None, "translation": None, "translation_lang": None}, {"id": 21, "scene_id": 7, "position": 1, "element_type": "dialogue", "text": "We should go.", "character_extension": None, "is_dual": True, "dual_group": 3, "translation": None, "translation_lang": None}, {"id": 22, "scene_id": 7, "position": 2, "element_type": "character", "text": "MIRA", "character_extension": None, "is_dual": False, "dual_group": None, "translation": None, "translation_lang": None}]},
     }
 
     def projects(route: Route) -> None:
@@ -89,7 +89,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
     page.get_by_role("button", name="Timeline board →").click()
-    expect(page.get_by_role("region", name="Act and character lanes")).to_contain_text("Act One")
+    lanes = page.get_by_role("region", name="Act and character lanes")
+    expect(lanes).to_contain_text("Act One")
+    expect(lanes).to_contain_text("MIRA")
     page.get_by_role("button", name="← Editor").click()
     page.get_by_role("button", name="Backups").click()
     expect(page.get_by_role("heading", name="Project backups")).to_be_visible()
