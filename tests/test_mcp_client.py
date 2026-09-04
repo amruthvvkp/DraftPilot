@@ -137,3 +137,49 @@ def test_mcp_context_workflow_uses_shared_scope_and_queues_run(monkeypatch: pyte
 
     assert result["id"] == 44
     assert pool.jobs == [("execute_workflow", 44)]
+
+
+def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Require writer approval before applying a context suggestion externally."""
+    from draftpilot.mcp import server
+    from draftpilot.models import KnowledgeNode, WorkflowRun
+
+    class SessionScope:
+        """Provide a bounded fake database context for context application."""
+
+        async def __aenter__(self) -> object:
+            """Return the isolated session marker."""
+            return object()
+
+        async def __aexit__(self, *_args: object) -> None:
+            """Close the isolated database context."""
+
+    class Pool:
+        """Capture the canonical graph refresh job."""
+
+        def __init__(self) -> None:
+            """Initialize the captured job list."""
+            self.jobs: list[tuple[str, object]] = []
+
+        async def enqueue_job(self, name: str, payload: object) -> None:
+            """Capture one RAG refresh job."""
+            self.jobs.append((name, payload))
+
+    run = WorkflowRun(id=44, project_id=9, kind="context_generation", status="succeeded", input={"artifact_id": 3}, result={"suggestion": "Use a long lens.", "output_kind": "camera", "source_version": 4, "citations": []})
+    node = KnowledgeNode(id=51, project_id=9, kind="camera", label="Camera from run 44", description="Use a long lens.")
+    pool = Pool()
+    update = AsyncMock()
+    monkeypatch.setattr(server, "session_scope", lambda: SessionScope())
+    monkeypatch.setattr(server, "authorize_invocation", AsyncMock())
+    monkeypatch.setattr(server.runs_crud, "get", AsyncMock(return_value=run))
+    monkeypatch.setattr(server.graph_crud, "create_node", AsyncMock(return_value=node))
+    monkeypatch.setattr(server.runs_crud, "update_status", update)
+    monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
+
+    with pytest.raises(ValueError, match="approval"):
+        run_async(server.apply_context_workflow(9, 44, 4, ctx=SimpleNamespace(client_id="writer")))
+    result = run_async(server.apply_context_workflow(9, 44, 4, approved=True, ctx=SimpleNamespace(client_id="writer")))
+
+    assert result["node"]["id"] == 51
+    assert pool.jobs[0][0] == "index_rag_document"
+    assert update.await_args.args[2] == "applied"

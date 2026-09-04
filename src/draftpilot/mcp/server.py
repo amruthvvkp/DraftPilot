@@ -257,8 +257,18 @@ async def apply_context_workflow(
                 kind=output_kind,
                 label=f"{output_kind.replace('_', ' ').title()} from run {run_id}",
                 description=suggestion,
-                node_metadata={"source_run_id": run_id, "source_version": expected_source_version, "citations": run.result.get("citations", [])},
+                node_metadata={"source_run_id": run_id, "source_artifact_id": run.input.get("artifact_id"), "source_version": expected_source_version, "citations": run.result.get("citations", [])},
             ),
+        )
+        await (await get_arq_pool()).enqueue_job(
+            "index_rag_document",
+            {
+                "project_id": project_id,
+                "source_id": f"knowledge_node:{node.id}",
+                "source_kind": f"knowledge_node:{node.kind}",
+                "text": f"{node.label}\n{node.description or ''}",
+                "content_version": node.version,
+            },
         )
         run.result = {**run.result, "applied_node_id": node.id}
         await runs_crud.update_status(session, run, "applied", result=run.result)

@@ -30,6 +30,7 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "read_project_artifacts" in tools
     assert "apply_story_operation" in tools
     assert "start_context_workflow" in tools
+    assert "apply_context_workflow" in tools
     assert "read_project_evaluations" in tools
     assert "read_screenplay_scenes" in tools
     assert "propose_screenplay_change" in tools
