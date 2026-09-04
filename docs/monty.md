@@ -9,5 +9,7 @@ shell access, or process access.
 The adapter uses Monty’s worker-process runtime and per-session duration limits. Inputs are passed
 as typed host values; when injected names are present, Monty’s static type-check pass is skipped
 because those names are supplied at runtime, while the interpreter boundary and resource limits
-remain active. Persisted execution records and approval policy are required before enabling this
-feature in a shared deployment.
+remain active. When a caller associates an execution with a project run, DraftPilot persists a
+redacted audit record containing status, code hash, input/output counts, duration, and bounded
+error text; raw code and input values are never stored. Approval policy is still required before
+enabling this feature in a shared deployment.

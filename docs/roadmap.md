@@ -152,7 +152,7 @@ mutations, and compatibility with external clients such as Claude, ChatGPT, Gemi
 MCP-capable applications without duplicating business logic;
 when a run needs generated code to compose or filter those capabilities, execute it through
 the Monty adapter rather than an unrestricted shell or Python subprocess. Fountain, FDX, and a
-best-effort ReportLab PDF export now fold in here; HTML export remains open. Depends on B + D.
+best-effort ReportLab PDF and safe self-contained HTML exports now fold in here. Depends on B + D.
 
 The guided interaction is turn-based: the user states or confirms a decision, the Copilot retrieves
 relevant project context and proposes the next artifact or change, agents can collaborate through

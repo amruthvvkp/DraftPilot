@@ -3,7 +3,7 @@
 import pytest
 
 from draftpilot.core.config import MontySettings
-from draftpilot.core.monty import MontyDisabledError, MontyExecutionConfig, MontySandboxError, execute_glue, execution_config
+from draftpilot.core.monty import MontyDisabledError, MontyExecutionConfig, MontySandboxError, audit_record, execute_glue, execution_config
 
 
 def test_monty_is_disabled_by_default() -> None:
@@ -37,3 +37,15 @@ def test_monty_settings_are_translated_without_widening_limits() -> None:
     assert config.enabled is True
     assert config.max_code_chars == 10
     assert config.max_input_items == 2
+
+
+def test_monty_audit_payload_redacts_code_and_inputs() -> None:
+    """Create a bounded audit payload without retaining sensitive execution values."""
+    result = audit_record(7, "secret = 1", {"token": "private"}, error="failed")
+    assert result.project_id == 7
+    assert result.status == "failed"
+    assert result.code_sha256
+    assert result.input_count == 1
+    assert result.error == "failed"
+    assert "secret" not in result.model_dump_json()
+    assert "private" not in result.model_dump_json()

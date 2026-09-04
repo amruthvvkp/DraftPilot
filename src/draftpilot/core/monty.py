@@ -1,12 +1,14 @@
 """Run tightly bounded model-generated glue code through Pydantic Monty."""
 
 from dataclasses import dataclass
+from hashlib import sha256
 from time import monotonic
 from typing import Any
 
 import logfire
 
 from draftpilot.core.config import MontySettings
+from draftpilot.models import MontyExecutionCreate
 
 
 class MontyDisabledError(RuntimeError):
@@ -35,6 +37,27 @@ class MontyExecutionResult:
     value: Any
     stdout: str
     duration_ms: int
+
+
+def audit_record(
+    project_id: int,
+    code: str,
+    inputs: dict[str, Any] | None,
+    result: MontyExecutionResult | None = None,
+    run_id: int | None = None,
+    error: str | None = None,
+) -> MontyExecutionCreate:
+    """Build a redacted persistence payload for one Monty attempt."""
+    return MontyExecutionCreate(
+        project_id=project_id,
+        run_id=run_id,
+        status="completed" if result is not None and error is None else "failed",
+        code_sha256=sha256(code.encode("utf-8")).hexdigest(),
+        input_count=len(inputs or {}),
+        output_chars=len(result.stdout) if result is not None else 0,
+        duration_ms=result.duration_ms if result is not None else 0,
+        error=error[:1000] if error else None,
+    )
 
 
 def execution_config(settings: MontySettings) -> MontyExecutionConfig:

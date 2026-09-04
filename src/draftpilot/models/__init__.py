@@ -81,6 +81,7 @@ from draftpilot.models.mcp_access import MCPAuditEvent, MCPClient, MCPClientBase
 from draftpilot.models.provider_profile import ProviderProfile, ProviderProfileBase, ProviderProfileCreate, ProviderProfileRead, ProviderProfileUpdate
 from draftpilot.models.copilot_message import CopilotMessage, CopilotMessageBase, CopilotMessageCreate, CopilotMessageRead
 from draftpilot.models.knowledge_graph import KnowledgeEdge, KnowledgeEdgeBase, KnowledgeEdgeCreate, KnowledgeEdgeRead, KnowledgeNode, KnowledgeNodeBase, KnowledgeNodeCreate, KnowledgeNodeRead
+from draftpilot.models.monty_execution import MontyExecution, MontyExecutionBase, MontyExecutionCreate, MontyExecutionRead
 
 __all__ = [
     "BlockType",
@@ -164,4 +165,8 @@ __all__ = [
     "KnowledgeEdgeBase",
     "KnowledgeEdgeCreate",
     "KnowledgeEdgeRead",
+    "MontyExecution",
+    "MontyExecutionBase",
+    "MontyExecutionCreate",
+    "MontyExecutionRead",
 ]
