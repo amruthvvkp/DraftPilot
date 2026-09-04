@@ -491,3 +491,58 @@ def test_resume_run_resets_exhausted_attempt_budget(
     assert response.status_code == 202
     assert response.json()["attempt_count"] == 0
     assert run.status == "queued"
+
+
+def test_get_project_workspace_includes_timings_and_runtime_targets(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Return ordered scene timings, total runtime, and format targets for the workspace."""
+    project = Project(id=9, title="Story", primary_language="English")
+    screenplay = Screenplay(id=1, project_id=9, title="Feature Draft", format="feature")
+    act = Act(id=1, screenplay_id=1, title="Act One", position=0)
+    scene1 = Scene(id=10, act_id=1, heading="INT. ROOM - DAY", position=0, body="word " * 60)
+    scene2 = Scene(id=11, act_id=1, heading="EXT. PARK - DAY", position=1, body="word " * 40)
+    block1 = Block(id=101, scene_id=10, position=0, element_type=BlockType.ACTION, text="A desk.")
+
+    async def get_project(_session: _Session, _item_id: int) -> Project:
+        """Return the isolated project fixture."""
+        return project
+
+    async def list_screenplays(_session: _Session, _project_id: int) -> list[Screenplay]:
+        """Return the screenplay fixture."""
+        return [screenplay]
+
+    async def list_acts(_session: _Session, _screenplay_id: int) -> list[Act]:
+        """Return the act fixture."""
+        return [act]
+
+    async def list_scenes(_session: _Session, _screenplay_id: int) -> list[Scene]:
+        """Return the scene fixtures."""
+        return [scene1, scene2]
+
+    async def list_blocks(_session: _Session, scene_id: int) -> list[Block]:
+        """Return block fixtures for scene 10."""
+        return [block1] if scene_id == 10 else []
+
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.list_for_project", list_screenplays)
+    monkeypatch.setattr("draftpilot.api.projects.acts_crud.list_for_screenplay", list_acts)
+    monkeypatch.setattr("draftpilot.api.projects.scenes_crud.list_for_screenplay", list_scenes)
+    monkeypatch.setattr("draftpilot.api.projects.blocks_crud.list_for_scene", list_blocks)
+
+    response = client.get("/api/v1/projects/9/workspace")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["project"]["id"] == 9
+    assert data["screenplay"]["id"] == 1
+    assert data["target_runtime_seconds"] == 6600
+    assert len(data["timings"]) == 2
+    assert data["timings"][0]["scene_id"] == 10
+    assert data["timings"][0]["estimated_duration_seconds"] == 30
+    assert data["timings"][0]["start_seconds"] == 0
+    assert data["timings"][0]["end_seconds"] == 30
+    assert data["timings"][1]["scene_id"] == 11
+    assert data["timings"][1]["start_seconds"] == 30
+    assert data["timings"][1]["end_seconds"] == 60
+    assert data["total_runtime_seconds"] == 60
+

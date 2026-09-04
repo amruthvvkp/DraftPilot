@@ -64,12 +64,23 @@ export type ScreenplayBlock = {
 
 export type Act = { id: number; screenplay_id: number; title: string | null; position: number }
 
+export type SceneTiming = {
+  scene_id: number
+  position: number
+  estimated_duration_seconds: number
+  start_seconds: number
+  end_seconds: number
+}
+
 export type ProjectWorkspace = {
   project: Project
   screenplay: { id: number; project_id: number; title: string; format: string; status: string } | null
   acts: Act[]
   scenes: Scene[]
   blocks: Record<number, ScreenplayBlock[]>
+  timings?: SceneTiming[]
+  total_runtime_seconds?: number
+  target_runtime_seconds?: number
 }
 
 export type TimelineProposal = {

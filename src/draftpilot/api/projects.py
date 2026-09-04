@@ -12,6 +12,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.core.db import async_get_db
 from draftpilot.core.config import settings
 from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.screenplay.timeline import (
+    SceneTiming,
+    calculate_scene_timings,
+    target_runtime_seconds_for_format,
+)
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
@@ -78,6 +83,9 @@ class ProjectWorkspaceRead(BaseModel):
     acts: list[ActRead]
     scenes: list[SceneRead]
     blocks: dict[int, list[BlockRead]] = Field(default_factory=dict)
+    timings: list[SceneTiming] = Field(default_factory=list)
+    total_runtime_seconds: int = 0
+    target_runtime_seconds: int = 6600
 
 
 class TranslationInput(BaseModel):
@@ -304,6 +312,9 @@ async def get_project_workspace(
     acts = []
     scenes = []
     blocks: dict[int, list[BlockRead]] = {}
+    timings: list[SceneTiming] = []
+    total_runtime = 0
+    target_runtime = target_runtime_seconds_for_format(screenplay.format if screenplay else None)
     if screenplay is not None and screenplay.id is not None:
         acts = await acts_crud.list_for_screenplay(session, screenplay.id)
         scenes = await scenes_crud.list_for_screenplay(session, screenplay.id)
@@ -311,12 +322,19 @@ async def get_project_workspace(
             if scene.id is not None:
                 scene_blocks = await blocks_crud.list_for_scene(session, scene.id)
                 blocks[scene.id] = [BlockRead.model_validate(block) for block in scene_blocks]
+        scenes_read = [SceneRead.model_validate(scene) for scene in scenes]
+        timings, total_runtime = calculate_scene_timings(scenes_read, blocks)
+    else:
+        scenes_read = []
     return ProjectWorkspaceRead(
         project=ProjectRead.model_validate(project),
         screenplay=ScreenplayRead.model_validate(screenplay) if screenplay else None,
         acts=[ActRead.model_validate(act) for act in acts],
-        scenes=[SceneRead.model_validate(scene) for scene in scenes],
+        scenes=scenes_read,
         blocks=blocks,
+        timings=timings,
+        total_runtime_seconds=total_runtime,
+        target_runtime_seconds=target_runtime,
     )
 
 

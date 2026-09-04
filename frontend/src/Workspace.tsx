@@ -15,6 +15,24 @@ function advanceEditor(event: KeyboardEvent<HTMLTextAreaElement>): void {
   next?.focus()
 }
 
+function clock(seconds: number): string {
+  const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
+  const remainder = (seconds % 60).toString().padStart(2, '0')
+  return `${minutes}:${remainder}`
+}
+
+function estimateDuration(body: string): number {
+  return Math.max(30, Math.round(body.split(/\s+/).filter(Boolean).length / 2))
+}
+
+function getSceneStatus(scene: Scene, blockList: ScreenplayBlock[] | undefined): 'ready' | 'in progress' | 'needs content' {
+  if (!scene.body.trim() && (!blockList || blockList.length === 0)) return 'needs content'
+  const hasDialogue = blockList?.some(b => b.element_type === 'dialogue')
+  const hasCharacter = blockList?.some(b => b.element_type === 'character')
+  if (hasDialogue && hasCharacter) return 'ready'
+  return 'in progress'
+}
+
 export default function Workspace({ projectId }: WorkspaceProps) {
   const [workspace, setWorkspace] = useState<ProjectWorkspace | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -33,6 +51,7 @@ export default function Workspace({ projectId }: WorkspaceProps) {
   const [sceneHeading, setSceneHeading] = useState('')
   const [formatDrafts, setFormatDrafts] = useState<Record<number, string>>({})
   const [proposalRefresh, setProposalRefresh] = useState(0)
+  const [activeBlockId, setActiveBlockId] = useState<number | null>(null)
 
   useEffect(() => {
     void getProjectWorkspace(projectId).then(data => {
@@ -157,6 +176,64 @@ export default function Workspace({ projectId }: WorkspaceProps) {
       event.target.value = ''
     }
   }
+
+  function applyFormat(wrapper: string): void {
+    if (activeBlockId === null) return
+    const textarea = document.querySelector<HTMLTextAreaElement>(`textarea[data-block-id="${activeBlockId}"]`)
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const currentText = drafts[activeBlockId] ?? ''
+    const selected = currentText.slice(start, end) || 'text'
+    const newText = currentText.slice(0, start) + `${wrapper}${selected}${wrapper}` + currentText.slice(end)
+    setDrafts(previous => ({ ...previous, [activeBlockId]: newText }))
+    setTimeout(() => {
+      textarea.focus()
+      textarea.setSelectionRange(start + wrapper.length, start + wrapper.length + selected.length)
+    }, 0)
+  }
+
+  function applyColor(hex: string): void {
+    if (activeBlockId === null) return
+    const textarea = document.querySelector<HTMLTextAreaElement>(`textarea[data-block-id="${activeBlockId}"]`)
+    if (!textarea) return
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const currentText = drafts[activeBlockId] ?? ''
+    const selected = currentText.slice(start, end) || 'colored'
+    const newText = currentText.slice(0, start) + `[[color:${hex}]]${selected}[[/color]]` + currentText.slice(end)
+    setDrafts(previous => ({ ...previous, [activeBlockId]: newText }))
+    setTimeout(() => {
+      textarea.focus()
+      textarea.setSelectionRange(start + `[[color:${hex}]]`.length, start + `[[color:${hex}]]`.length + selected.length)
+    }, 0)
+  }
+
+  const timingMap = new Map<number, { duration: number; start: number; end: number }>()
+  let totalRuntime = 0
+  if (workspace?.timings && workspace.timings.length > 0) {
+    for (const t of workspace.timings) {
+      timingMap.set(t.scene_id, {
+        duration: t.estimated_duration_seconds,
+        start: t.start_seconds,
+        end: t.end_seconds,
+      })
+    }
+    totalRuntime = workspace.total_runtime_seconds ?? 0
+  } else if (workspace?.scenes) {
+    let offset = 0
+    for (const scene of workspace.scenes) {
+      const d = estimateDuration(scene.body)
+      timingMap.set(scene.id, { duration: d, start: offset, end: offset + d })
+      offset += d
+    }
+    totalRuntime = offset
+  }
+  const targetRuntime = workspace?.target_runtime_seconds ?? 6600
+  const progressPercent = Math.min(100, Math.round((totalRuntime / targetRuntime) * 100))
+  const driftSeconds = totalRuntime - targetRuntime
+  const pacingDrift = totalRuntime === 0 ? 'Not started' : Math.abs(driftSeconds) <= 300 ? 'On pace' : driftSeconds > 0 ? `+${Math.round(driftSeconds / 60)}m ahead` : `-${Math.round(Math.abs(driftSeconds) / 60)}m behind`
+
   if (error) return <main className="workspace-error"><p>{error}</p><button className="button primary" onClick={() => window.location.assign('/projects')}>Back to projects</button></main>
   if (!workspace) return <main className="workspace-loading"><span className="status-dot" /> Opening your workspace…</main>
 
@@ -170,10 +247,36 @@ export default function Workspace({ projectId }: WorkspaceProps) {
     {notice && <div className="notice" role="status">{notice}<button type="button" onClick={() => setNotice('')}>×</button></div>}
     {timelineOpen ? <Timeline projectId={projectId} screenplayId={workspace.screenplay?.id ?? 0} workspace={workspace} /> : <div className="workspace-grid">
       <aside className="navigator"><div className="panel-label"><span>Navigator</span><span>{workspace.scenes.length.toString().padStart(2, '0')} scenes</span></div>
+        <div className="runtime-summary" aria-label="Screenplay runtime">
+          <div className="runtime-numbers">
+            <span>Estimated runtime</span>
+            <strong>{clock(totalRuntime)} / {clock(targetRuntime)}</strong>
+          </div>
+          <div className="runtime-track" role="progressbar" aria-valuenow={progressPercent} aria-valuemin={0} aria-valuemax={100} aria-label="Runtime progress">
+            <div className="runtime-fill" style={{ width: `${progressPercent}%` }} />
+          </div>
+          <div className="runtime-meta">
+            <small className="runtime-drift">Pacing: {pacingDrift}</small>
+            <small className="runtime-note">Scene time accumulates as the draft grows.</small>
+          </div>
+        </div>
         {workspace.acts.length === 0 && <p className="empty-copy">Your scene list will appear here as the story takes shape.</p>}
-        {workspace.acts.map(act => <div className="act-group" key={act.id}><p className="act-title">{act.title || `Act ${act.position + 1}`}</p>{workspace.scenes.filter(scene => scene.act_id === act.id).map(scene => <button className={scene.id === selectedId ? 'scene-link selected' : 'scene-link'} key={scene.id} onClick={() => setSelectedId(scene.id)}><span>{String(scene.position + 1).padStart(2, '0')}</span><strong>{scene.heading}</strong></button>)}</div>)}
+        {workspace.acts.map(act => <div className="act-group" key={act.id}><p className="act-title">{act.title || `Act ${act.position + 1}`}</p>{workspace.scenes.filter(scene => scene.act_id === act.id).map(scene => {
+          const timing = timingMap.get(scene.id) ?? { duration: 30, start: 0, end: 30 }
+          const status = getSceneStatus(scene, workspace.blocks[scene.id])
+          return <button className={scene.id === selectedId ? 'scene-link selected' : 'scene-link'} key={scene.id} onClick={() => setSelectedId(scene.id)}>
+            <div className="scene-link-header">
+              <span>{String(scene.position + 1).padStart(2, '0')}</span>
+              <strong>{scene.heading}</strong>
+              <span className="scene-duration">{clock(timing.duration)}</span>
+            </div>
+            <div className="scene-link-meta">
+              <small>{clock(timing.start)}–{clock(timing.end)} · {status}</small>
+            </div>
+          </button>
+        })}</div>)}
       </aside>
-      <main className="script-canvas"><div className="canvas-toolbar"><span>{workspace.screenplay?.format ?? 'feature'} draft</span><span>Continuous view <i className="toggle on" /></span></div>{selectedScene ? <article className="script-page"><input className="script-heading" list="screenplay-headings" value={sceneHeading} onChange={event => setSceneHeading(event.target.value)} onBlur={() => void saveSceneHeading()} aria-label="Edit scene heading" />{workspace.blocks?.[selectedScene.id]?.length ? <div className="semantic-blocks">{workspace.blocks[selectedScene.id].map(block => <div className="semantic-row" key={block.id}><select className="element-selector" value={formatDrafts[block.id] ?? block.element_type} onChange={event => setFormatDrafts(previous => ({ ...previous, [block.id]: event.target.value }))} aria-label={`Format ${block.element_type}`}><option value="action">Action</option><option value="character">Character</option><option value="dialogue">Dialogue</option><option value="parenthetical">Parenthetical</option><option value="transition">Transition</option><option value="lyric">Lyric</option><option value="note">Note</option><option value="section">Section</option><option value="synopsis">Synopsis</option><option value="shot">Shot</option><option value="page_break">Page break</option></select><button type="button" className="mini-button format-proposal" onClick={() => void proposeBlockFormat(selectedScene, block)} disabled={(formatDrafts[block.id] ?? block.element_type) === block.element_type}>Review format</button><textarea className={`script-editor ${block.element_type}`} list={block.element_type === 'character' ? 'screenplay-characters' : undefined} value={drafts[block.id] ?? block.text} onChange={event => setDrafts(previous => ({ ...previous, [block.id]: event.target.value }))} onKeyDown={advanceEditor} onBlur={() => void saveBlock(selectedScene, block)} aria-label={`Edit ${block.element_type}`} aria-keyshortcuts="Tab" /></div>)}</div> : <p className="script-body">{selectedScene.body || 'Begin writing this scene…'}</p>}<datalist id="screenplay-headings"><option value="INT. - DAY" /><option value="INT. - NIGHT" /><option value="EXT. - DAY" /><option value="EXT. - NIGHT" /><option value="INT./EXT. - DAY" /></datalist><datalist id="screenplay-characters">{workspace.blocks[selectedScene.id]?.filter(block => block.element_type === 'character' && block.text.trim()).map(block => <option value={block.text} key={block.id} />)}</datalist><div className="script-cursor" /></article> : <article className="script-page empty-script"><span>✦</span><h2>Your first scene starts here.</h2><p>Create a scene to begin shaping the screenplay.</p></article>}</main>
+      <main className="script-canvas"><div className="canvas-toolbar"><span>{workspace.screenplay?.format ?? 'feature'} draft</span><span>Continuous view <i className="toggle on" /></span></div>{selectedScene ? <article className="script-page"><input className="script-heading" list="screenplay-headings" value={sceneHeading} onChange={event => setSceneHeading(event.target.value)} onBlur={() => void saveSceneHeading()} aria-label="Edit scene heading" />{workspace.blocks?.[selectedScene.id]?.length ? <div className="semantic-blocks">{workspace.blocks[selectedScene.id].map(block => <div className={block.is_dual ? 'semantic-row dual-block' : 'semantic-row'} key={block.id}><select className="element-selector" value={formatDrafts[block.id] ?? block.element_type} onChange={event => setFormatDrafts(previous => ({ ...previous, [block.id]: event.target.value }))} aria-label={`Format ${block.element_type}`}><option value="action">Action</option><option value="character">Character</option><option value="dialogue">Dialogue</option><option value="parenthetical">Parenthetical</option><option value="transition">Transition</option><option value="lyric">Lyric</option><option value="note">Note</option><option value="section">Section</option><option value="synopsis">Synopsis</option><option value="shot">Shot</option><option value="page_break">Page break</option></select><button type="button" className="mini-button format-proposal" onClick={() => void proposeBlockFormat(selectedScene, block)} disabled={(formatDrafts[block.id] ?? block.element_type) === block.element_type}>Review format</button><textarea className={`script-editor ${block.element_type}`} data-block-id={block.id} onFocus={() => setActiveBlockId(block.id)} list={block.element_type === 'character' ? 'screenplay-characters' : undefined} value={drafts[block.id] ?? block.text} onChange={event => setDrafts(previous => ({ ...previous, [block.id]: event.target.value }))} onKeyDown={advanceEditor} onBlur={() => void saveBlock(selectedScene, block)} aria-label={`Edit ${block.element_type}`} aria-keyshortcuts="Tab" /></div>)}</div> : <p className="script-body">{selectedScene.body || 'Begin writing this scene…'}</p>}<div className="format-toolbar" aria-label="Screenplay formatting toolbar"><span className="format-toolbar-label">Format:</span><button type="button" className="mini-button format-action-btn" onClick={() => applyFormat('**')} aria-label="Bold text" title="Bold (**text**)"><b>B</b></button><button type="button" className="mini-button format-action-btn" onClick={() => applyFormat('*')} aria-label="Italic text" title="Italic (*text*)"><i>I</i></button><button type="button" className="mini-button format-action-btn" onClick={() => applyFormat('_')} aria-label="Underline text" title="Underline (_text_)"><u>U</u></button><button type="button" className="mini-button format-action-btn color-action-btn" onClick={() => applyColor('#dda05d')} aria-label="Amber mark" title="Amber accent mark"><span className="color-swatch" /></button></div><datalist id="screenplay-headings"><option value="INT. - DAY" /><option value="INT. - NIGHT" /><option value="EXT. - DAY" /><option value="EXT. - NIGHT" /><option value="INT./EXT. - DAY" /></datalist><datalist id="screenplay-characters">{workspace.blocks[selectedScene.id]?.filter(block => block.element_type === 'character' && block.text.trim()).map(block => <option value={block.text} key={block.id} />)}</datalist><div className="script-cursor" /></article> : <article className="script-page empty-script"><span>✦</span><h2>Your first scene starts here.</h2><p>Create a scene to begin shaping the screenplay.</p></article>}</main>
       <aside className="context-panel"><div className="panel-label"><span>Context</span><span className="context-badge">Inherited</span></div><section className="context-card"><p className="eyebrow warm">PROJECT INSTRUCTION</p><textarea value={projectInstruction} onChange={event => setProjectInstruction(event.target.value)} placeholder="What should every scene remember?" /><small>Applies to the whole project</small></section><section className="context-card"><p className="eyebrow warm">SCENE INSTRUCTION</p><textarea value={sceneInstruction} onChange={event => setSceneInstruction(event.target.value)} placeholder="Tone, camera, light, or blocking for this scene…" /><small>{selectedScene ? 'Applies to the selected scene' : 'Select a scene to scope this instruction'}</small></section><section className="context-card translation-card"><p className="eyebrow warm">DIALOGUE TRANSLATION</p><select aria-label="Dialogue translation language" value={translationLanguage} onChange={event => setTranslationLanguage(event.target.value)}><option value="">Choose a language</option>{workspace.project.languages.filter(language => language !== workspace.project.primary_language).map(language => <option key={language}>{language}</option>)}</select>{translationLanguage && dialogueBlock && <textarea value={translationDraft} onChange={event => setTranslationDraft(event.target.value)} onBlur={() => void saveTranslation()} placeholder={`Translate dialogue into ${translationLanguage}…`} aria-label={`Edit ${translationLanguage} translation`} />}<small>Only dialogue changes language. Headings and action remain in {workspace.project.primary_language}.</small></section><div className="context-links"><p className="eyebrow">Creative context</p><a href={`/projects/${projectId}/context`}>＋ Knowledge graph</a><a href={`/projects/${projectId}/context?kind=reference_scene`}>＋ Reference scene</a><a href={`/projects/${projectId}/context?kind=color_palette`}>＋ Color palette</a><a href={`/projects/${projectId}/context?kind=camera`}>＋ Camera & lighting</a><a href={`/projects/${projectId}/context?kind=film`}>＋ Film / director / style</a></div><CopilotPanel projectId={projectId} page={`/projects/${projectId}/workspace`} artifact="screenplay" selection={selectedScene?.heading ?? null} refreshToken={proposalRefresh} /></aside>
     </div>}
     {!timelineOpen && selectedScene && workspace.screenplay && <RevisionPanel projectId={projectId} sceneId={selectedScene.id} sceneVersion={selectedScene.version} screenplayId={workspace.screenplay.id} />}{!backupsOpen && <><button className="studio-launch" onClick={() => window.location.assign(`/projects/${projectId}/studio`)}>Story studio ↗</button><button className="timeline-launch" onClick={() => setTimelineOpen(open => !open)}>{timelineOpen ? '← Editor' : 'Timeline board →'}</button></>}

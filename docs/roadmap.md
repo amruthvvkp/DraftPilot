@@ -125,7 +125,7 @@ outline, visual style, camera type, screening type, typed references — add mul
 artwork upload or weblink render; navigate to the opened project on create; clickable
 project cards on `/projects`. Depends on B.
 
-### Phase D — Editor workspace · [#16](https://github.com/amruthvvkp/DraftPilot/issues/16) · status: in progress
+### Phase D — Editor workspace · [#16](https://github.com/amruthvvkp/DraftPilot/issues/16) · status: completed
 3-pane editor — left Navigator (scenes), center script (element-typed, screenplay fonts,
 top element selector + bottom bold/italic/underline/color toolbar), right persistent Copilot and
 agent panel. The same assistant panel appears in project, outline, timeline, context, review, and
