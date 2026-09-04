@@ -16,8 +16,12 @@ class Capability(BaseModel):
 CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="outline.read", description="Read the project brief and outline.", scope="project"),
     Capability(name="timeline.propose", description="Calculate a reversible scene reorder proposal.", scope="screenplay"),
+    Capability(name="timeline.approve", description="Approve a pending timeline reorder.", scope="screenplay", mutates=True, approval_required=True),
+    Capability(name="timeline.rollback", description="Roll back an approved timeline reorder.", scope="screenplay", mutates=True, approval_required=True),
     Capability(name="screenplay.read", description="Read canonical screenplay blocks and versions.", scope="scene"),
     Capability(name="screenplay.propose", description="Create a reviewable typed screenplay change proposal.", scope="scene", mutates=True, approval_required=False),
+    Capability(name="screenplay.approve", description="Approve a pending screenplay proposal.", scope="scene", mutates=True, approval_required=True),
+    Capability(name="screenplay.rollback", description="Roll back an approved screenplay proposal.", scope="scene", mutates=True, approval_required=True),
     Capability(name="context.read", description="Read scoped project and scene context.", scope="artifact"),
     Capability(name="knowledge_graph.read", description="Read project-scoped canon nodes and relationships.", scope="project"),
     Capability(name="copilot.write", description="Persist a context-bearing Copilot conversation turn.", scope="project", mutates=True, approval_required=False),

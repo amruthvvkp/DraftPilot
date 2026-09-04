@@ -10,7 +10,9 @@ from fastmcp.server.auth import AccessToken, TokenVerifier
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from draftpilot.api.agent import approve_agent_proposal, rollback_agent_proposal
 from draftpilot.api.backups import _project_payload, restore_backup_payload
+from draftpilot.api.timeline import approve_timeline_proposal, rollback_timeline_proposal
 from draftpilot.core import telemetry
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
@@ -35,9 +37,10 @@ from draftpilot.crud import scene_revisions as revisions_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
+from draftpilot.crud import timeline_proposals as timeline_proposals_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, WorkflowRunRead
+from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -765,12 +768,13 @@ async def propose_screenplay_change(
 @mcp.tool
 async def propose_timeline_reorder(
     project_id: int,
+    screenplay_id: int,
     current_scene_ids: list[int],
     proposed_scene_ids: list[int],
     durations: dict[int, int],
     ctx: Context,
 ) -> dict[str, object]:
-    """Return a reversible, non-mutating timeline proposal."""
+    """Persist a reversible timeline proposal after validating current order."""
     client_id = ctx.client_id or "unknown"
     async with session_scope() as session:
         try:
@@ -780,9 +784,83 @@ async def propose_timeline_reorder(
                 project_id,
                 "timeline.propose",
                 "propose",
-                {"scene_count": len(current_scene_ids)},
+                {"screenplay_id": screenplay_id, "scene_count": len(current_scene_ids)},
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
-    proposal = propose_reorder(current_scene_ids, proposed_scene_ids, durations)
-    return proposal.model_dump(mode="json")
+        screenplay = await screenplays_crud.get(session, screenplay_id)
+        if screenplay is None or screenplay.project_id != project_id:
+            raise ValueError("Screenplay is not in the requested project")
+        scenes = await scenes_crud.list_for_screenplay(session, screenplay_id)
+        server_scene_ids = [scene.id for scene in scenes if scene.id is not None]
+        if server_scene_ids != current_scene_ids:
+            raise ValueError("Screenplay order has changed")
+        try:
+            calculated = propose_reorder(current_scene_ids, proposed_scene_ids, durations)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        record = await timeline_proposals_crud.create(
+            session,
+            TimelineProposalRecord(
+                project_id=project_id,
+                screenplay_id=screenplay_id,
+                original_scene_ids=current_scene_ids,
+                proposed_scene_ids=calculated.scene_ids,
+                timings=[timing.model_dump() for timing in calculated.timings],
+                total_runtime_seconds=calculated.total_runtime_seconds,
+            ),
+        )
+    return TimelineProposalRead.model_validate(record).model_dump(mode="json")
+
+
+@mcp.tool
+async def review_screenplay_proposal(
+    project_id: int,
+    proposal_id: int,
+    action: str,
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Approve or roll back a typed screenplay proposal through REST logic."""
+    if action not in {"approve", "rollback"} or ctx is None:
+        raise ValueError("Action and MCP context are required")
+    capability = "screenplay.approve" if action == "approve" else "screenplay.rollback"
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, capability, action, {"proposal_id": proposal_id}, approved=approved)
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        result = await (
+            approve_agent_proposal(project_id, proposal_id, session)
+            if action == "approve"
+            else rollback_agent_proposal(project_id, proposal_id, session)
+        )
+    return result.model_dump(mode="json")
+
+
+@mcp.tool
+async def review_timeline_proposal(
+    project_id: int,
+    screenplay_id: int,
+    proposal_id: int,
+    action: str,
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Approve or roll back a timeline proposal through REST logic."""
+    if action not in {"approve", "rollback"} or ctx is None:
+        raise ValueError("Action and MCP context are required")
+    capability = "timeline.approve" if action == "approve" else "timeline.rollback"
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, capability, action, {"screenplay_id": screenplay_id, "proposal_id": proposal_id}, approved=approved)
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        result = await (
+            approve_timeline_proposal(project_id, screenplay_id, proposal_id, session)
+            if action == "approve"
+            else rollback_timeline_proposal(project_id, screenplay_id, proposal_id, session)
+        )
+    return result.model_dump(mode="json")

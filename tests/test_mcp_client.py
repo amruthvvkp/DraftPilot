@@ -1,6 +1,8 @@
 """Test the bounded outbound MCP client boundary."""
 
 import pytest
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from _async import run_async
 from draftpilot.core.mcp_client import DraftPilotMCPClient, MCPClientError, _bounded_result, validate_mcp_endpoint
@@ -50,3 +52,47 @@ def test_mcp_block_proposal_rejects_invalid_semantic_values() -> None:
                 block_id=11,
             )
         )
+
+
+def test_mcp_timeline_proposal_persists_with_server_order(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Persist an external timeline proposal only for the current screenplay order."""
+    from draftpilot.mcp import server
+    from draftpilot.models import Screenplay, Scene, TimelineProposalRecord
+
+    class SessionScope:
+        """Provide a bounded fake database context for the MCP tool."""
+
+        async def __aenter__(self) -> object:
+            """Return the isolated session marker."""
+            return object()
+
+        async def __aexit__(self, *_args: object) -> None:
+            """Close the isolated database context."""
+
+    created = TimelineProposalRecord(
+        id=12,
+        project_id=9,
+        screenplay_id=4,
+        original_scene_ids=[7, 8],
+        proposed_scene_ids=[8, 7],
+        timings=[{"scene_id": 8, "position": 0, "start_seconds": 0, "end_seconds": 45}],
+        total_runtime_seconds=75,
+    )
+    create = AsyncMock(return_value=created)
+    monkeypatch.setattr(server, "session_scope", lambda: SessionScope())
+    monkeypatch.setattr(server, "authorize_invocation", AsyncMock())
+    monkeypatch.setattr(server.screenplays_crud, "get", AsyncMock(return_value=Screenplay(id=4, project_id=9, title="Draft")))
+    monkeypatch.setattr(server.scenes_crud, "list_for_screenplay", AsyncMock(return_value=[Scene(id=7, act_id=1, heading="A"), Scene(id=8, act_id=1, heading="B")]))
+    monkeypatch.setattr(server.timeline_proposals_crud, "create", create)
+
+    result = run_async(
+        server.propose_timeline_reorder(
+            9, 4, [7, 8], [8, 7], {7: 30, 8: 45}, SimpleNamespace(client_id="writer")
+        )
+    )
+
+    assert result["id"] == 12
+    assert result["proposed_scene_ids"] == [8, 7]
+    record = create.await_args.args[1]
+    assert record.original_scene_ids == [7, 8]
+    assert record.total_runtime_seconds == 75

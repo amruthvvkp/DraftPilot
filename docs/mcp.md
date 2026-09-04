@@ -3,8 +3,9 @@
 DraftPilot exposes a typed MCP boundary from the `mcp` Compose service. The discoverable
 `draftpilot://capabilities` resource lists the current capability names, scopes, and whether a
 mutation requires writer approval. The `workflow_turn` prompt carries page, artifact, and selection
-scope without exposing credentials. `propose_timeline_reorder` is read-safe and returns a reversible
-proposal; it does not modify screenplay data.
+scope without exposing credentials. `propose_timeline_reorder` persists a project/screenplay-scoped
+reversible proposal after checking the server-authoritative current order. `review_timeline_proposal`
+applies or rolls it back only with the matching grant and explicit writer approval.
 
 The `retrieve_project_context` tool uses the server-side RAG service and returns project-scoped
 results with source identifiers and content versions. Clients can inspect the response contract at
@@ -20,11 +21,13 @@ project.
 `propose_screenplay_change` accepts typed scene `heading`/`body` operations or semantic-block
 `element_type`/text/layout operations when `block_id` is supplied. It stores a reviewable agent
 proposal using the scene's current server-derived version. It never applies the operation;
-approval and optimistic-concurrency checks remain on the DraftPilot approval boundary.
+approval and optimistic-concurrency checks remain on the DraftPilot approval boundary. External
+clients use `review_screenplay_proposal` to approve or roll back the same proposal records; it
+delegates to the REST application logic rather than opening a second mutation path.
 
 Timeline reorders follow the same reversible lifecycle: `propose_timeline_reorder` creates a
-pending order with cumulative timings, approval applies it, and the REST timeline rollback
-endpoint can restore the original order when the approved order is still current.
+pending order with cumulative timings, approval applies it, and rollback restores the original
+order when the approved order is still current.
 
 `read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
 source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
