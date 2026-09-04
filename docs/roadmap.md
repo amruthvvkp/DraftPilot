@@ -68,7 +68,9 @@ disconnect, and approval invalidates downstream artifacts. New projects atomical
 Act One so the creation journey opens on a writable document. Project references now have scoped,
 versioned REST mutations and a single Alembic migration head. The React story studio can now create
 dependency-linked artifacts, and the portable browser suite covers reference editing. Phases A, B, D, E, and F remain in progress because the remaining
-work includes broader end-to-end smoke coverage, richer typed story operations beyond semantic
+The editor can now submit semantic block-format proposals to the Copilot approval rail with a
+server-derived scene version and rollback path. Remaining work includes broader end-to-end smoke
+coverage, richer typed story operations beyond semantic
 blocks, complete external
 MCP client workflows, and production hardening of deployment and recovery paths.
 
