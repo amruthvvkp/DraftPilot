@@ -104,6 +104,43 @@ def test_mark_dependents_stale_propagates_transitively(
     assert all(artifact.stale for artifact in artifacts[1:])
 
 
+def test_typed_story_operation_updates_artifact_and_preserves_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Apply a typed beat operation with optimistic versioning and durable metadata."""
+    client, session = _client()
+    artifact = StoryArtifact(id=1, project_id=9, kind="outline", title="Outline", version=2)
+    monkeypatch.setattr("draftpilot.api.artifacts.artifacts_crud.get", AsyncMock(return_value=artifact))
+    monkeypatch.setattr("draftpilot.api.artifacts.artifacts_crud.mark_dependents_stale", AsyncMock())
+    monkeypatch.setattr("draftpilot.api.artifacts._enqueue_index", AsyncMock())
+    response = client.post(
+        "/api/v1/projects/9/artifacts/1/operations",
+        headers={"If-Match": "2"},
+        json={
+            "operation": "add_beat",
+            "payload": {
+                "title": "The door opens",
+                "summary": "Mira discovers the hidden room.",
+                "sequence": 1,
+                "causal_predecessor_ids": [],
+            },
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["version"] == 3
+    assert response.json()["artifact_metadata"]["beats"][0]["title"] == "The door opens"
+    assert response.json()["artifact_metadata"]["operations"][0]["operation"] == "add_beat"
+    assert session.commits == 1
+
+
+def test_typed_story_operation_rejects_wrong_artifact_kind() -> None:
+    """Reject an operation that does not match the artifact's semantic kind."""
+    from draftpilot.core.story_operations import validate_story_operation
+
+    with pytest.raises(ValueError, match="not valid"):
+        validate_story_operation("canon", "add_beat", {"title": "Beat", "summary": "Text", "sequence": 1})
+
+
 def _project(project_id: int) -> Project:
     """Return a project fixture for the requested identifier."""
     return Project(id=project_id, title="Story")

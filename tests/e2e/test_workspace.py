@@ -136,7 +136,19 @@ def test_story_artifact_workspace_is_editable(page: Page) -> None:
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
     page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
-    page.route("**/api/v1/projects/9001/artifacts/31", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact)))
+    def artifact_update(route: Route) -> None:
+        """Validate optimistic text edits and typed story operations."""
+        if route.request.method == "POST":
+            assert route.request.headers.get("if-match") == "2"
+            assert route.request.post_data_json == {
+                "operation": "set_logline",
+                "payload": {"text": "A family returns to a house that remembers."},
+            }
+            route.fulfill(status=200, content_type="application/json", body=json.dumps({**artifact, "content": "A family returns to a house that remembers.", "version": 3}))
+        else:
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact))
+
+    page.route("**/api/v1/projects/9001/artifacts/31", artifact_update)
     page.goto("/projects/9001/studio")
     expect(page.get_by_role("heading", name="Creative artifacts")).to_be_visible()
     expect(page.get_by_label("New artifact kind")).to_have_value("brief")
@@ -144,6 +156,8 @@ def test_story_artifact_workspace_is_editable(page: Page) -> None:
     content = page.get_by_label("Artifact content")
     content.fill("A family returns to a house that remembers.")
     content.blur()
+    page.get_by_label("Operation logline").fill("A family returns to a house that remembers.")
+    page.get_by_role("button", name="Apply structured decision").click()
 
 
 def test_copilot_turn_polls_durable_run(page: Page) -> None:

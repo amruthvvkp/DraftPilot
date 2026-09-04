@@ -2,6 +2,7 @@
 
 import base64
 import json
+from datetime import datetime, timezone
 
 import httpx
 import logfire
@@ -26,6 +27,8 @@ from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.timeline import propose_reorder
+from draftpilot.core.story_operations import apply_story_operation as apply_operation
+from draftpilot.core.story_operations import validate_story_operation
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -40,7 +43,7 @@ from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import timeline_proposals as timeline_proposals_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunRead
+from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -204,6 +207,48 @@ async def read_project_artifacts(project_id: int, ctx: Context) -> dict[str, obj
     if len(encoded) > settings.mcp.max_output_chars:
         raise ValueError("Artifact response exceeds MCP output limit")
     return result
+
+
+@mcp.tool
+async def apply_story_operation(
+    project_id: int,
+    artifact_id: int,
+    operation: str,
+    payload: dict[str, object],
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Apply one approved typed story operation through the canonical artifact service."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "story.operation",
+                "apply",
+                {"artifact_id": artifact_id, "operation": operation},
+                approved=approved,
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        artifact = await artifacts_crud.get(session, artifact_id)
+        if artifact is None or artifact.project_id != project_id:
+            raise ValueError("Artifact is not in the requested project")
+        try:
+            parsed = validate_story_operation(artifact.kind, operation, payload)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        apply_operation(artifact, parsed)
+        artifact.updated_at = datetime.now(timezone.utc)
+        session.add(artifact)
+        await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
+        await session.commit()
+        await session.refresh(artifact)
+    return StoryArtifactRead.model_validate(artifact).model_dump(mode="json")
 
 
 @mcp.tool

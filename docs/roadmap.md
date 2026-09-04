@@ -70,7 +70,9 @@ versioned REST mutations and a single Alembic migration head. The React story st
 dependency-linked artifacts, and the portable browser suite covers reference editing. The
 editor can now submit semantic block-format proposals to the Copilot approval rail with a
 server-derived scene version and rollback path. Timeline proposals can also be rolled back after
-approval when their expected order is still current. Phases A, B, D, E, and F remain in progress.
+approval when their expected order is still current. Typed story operations now cover loglines,
+causal beats, character arcs, and canon rules through one shared REST/MCP service with versioning,
+stale propagation, and RAG refresh. Phases A, B, D, E, and F remain in progress.
 Remaining work includes broader end-to-end smoke
 coverage, richer typed story operations beyond semantic
 blocks, complete external

@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.story_operations import apply_story_operation, validate_story_operation
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.models import StoryArtifact, StoryArtifactRead
@@ -51,6 +52,13 @@ class ArtifactUpdateRequest(BaseModel):
     depends_on: list[int] | None = None
     metadata: dict[str, object] | None = None
     stale: bool | None = None
+
+
+class StoryOperationRequest(BaseModel):
+    """Describe one typed story-development mutation."""
+
+    operation: str = Field(min_length=1, max_length=50)
+    payload: dict[str, object] = Field(default_factory=dict)
 
 
 async def _validate_dependencies(
@@ -153,6 +161,36 @@ async def update_artifact(
         setattr(artifact, key, value)
     artifact.version += 1
     artifact.stale = False
+    artifact.updated_at = datetime.now(timezone.utc)
+    session.add(artifact)
+    await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
+    await session.commit()
+    await session.refresh(artifact)
+    await _enqueue_index(project_id, artifact)
+    return StoryArtifactRead.model_validate(artifact)
+
+
+@router.post("/{artifact_id}/operations", response_model=StoryArtifactRead)
+async def apply_artifact_operation(
+    project_id: int,
+    artifact_id: int,
+    data: StoryOperationRequest,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> StoryArtifactRead:
+    """Apply a typed story operation with optimistic concurrency and stale propagation."""
+    artifact = await artifacts_crud.get(session, artifact_id)
+    if artifact is None or artifact.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != artifact.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Artifact has changed")
+    try:
+        operation = validate_story_operation(artifact.kind, data.operation, data.payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+    apply_story_operation(artifact, operation)
     artifact.updated_at = datetime.now(timezone.utc)
     session.add(artifact)
     await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])

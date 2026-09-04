@@ -18,6 +18,13 @@ ordered screenplay blocks through the same project authorization boundary. Both 
 configured response-size limit, and screenplay reads reject a screenplay belonging to another
 project.
 
+`apply_story_operation` and `POST /api/v1/projects/{project_id}/artifacts/{artifact_id}/operations`
+share the typed story-operation service. Supported operations are `set_logline` for briefs,
+`add_beat` for outlines/timelines, `add_character_arc` for character artifacts, and
+`add_canon_rule` for canon artifacts. Operations are versioned, appended to artifact metadata,
+mark downstream artifacts stale, and trigger an incremental RAG refresh; MCP use additionally
+requires the `story.operation` grant and explicit approval.
+
 `propose_screenplay_change` accepts typed scene `heading`/`body` operations or semantic-block
 `element_type`/text/layout operations when `block_id` is supplied. It stores a reviewable agent
 proposal using the scene's current server-derived version. It never applies the operation;

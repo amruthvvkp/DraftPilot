@@ -26,6 +26,7 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "review_screenplay_proposal" in tools
     assert "create_screenplay_export" in tools
     assert "read_project_artifacts" in tools
+    assert "apply_story_operation" in tools
     assert "read_project_evaluations" in tools
     assert "read_screenplay_scenes" in tools
     assert "propose_screenplay_change" in tools

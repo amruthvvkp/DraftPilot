@@ -301,6 +301,10 @@ export function updateArtifact(projectId: number, artifactId: number, version: n
   return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts/${artifactId}`, { method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes) })
 }
 
+export function applyStoryOperation(projectId: number, artifactId: number, version: number, operation: string, payload: Record<string, unknown>): Promise<StoryArtifact> {
+  return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts/${artifactId}/operations`, { method: 'POST', headers: { 'If-Match': String(version) }, body: JSON.stringify({ operation, payload }) })
+}
+
 export function createProjectBackup(projectId: number): Promise<ProjectBackup> {
   return request<ProjectBackup>(`/api/v1/projects/${projectId}/backups`, { method: 'POST' })
 }

@@ -15,6 +15,7 @@ class Capability(BaseModel):
 
 CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="outline.read", description="Read the project brief and outline.", scope="project"),
+    Capability(name="story.operation", description="Apply a typed story-development operation.", scope="artifact", mutates=True, approval_required=True),
     Capability(name="timeline.propose", description="Calculate a reversible scene reorder proposal.", scope="screenplay"),
     Capability(name="timeline.approve", description="Approve a pending timeline reorder.", scope="screenplay", mutates=True, approval_required=True),
     Capability(name="timeline.rollback", description="Roll back an approved timeline reorder.", scope="screenplay", mutates=True, approval_required=True),
@@ -39,7 +40,7 @@ CAPABILITIES: tuple[Capability, ...] = (
 )
 
 _PAGE_CAPABILITIES: dict[str, tuple[str, ...]] = {
-    "studio": ("outline.read", "context.read", "knowledge_graph.read", "revisions.read"),
+    "studio": ("outline.read", "story.operation", "context.read", "knowledge_graph.read", "revisions.read"),
     "timeline": ("timeline.propose", "screenplay.read", "context.read", "revisions.read"),
     "review": ("evaluations.read", "screenplay.read", "context.read", "revisions.read"),
     "settings": ("context.read",),
