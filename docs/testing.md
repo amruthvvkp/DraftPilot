@@ -30,7 +30,8 @@ docker compose --profile test run --rm e2e
 ```
 
 The `e2e` service uses the pinned Playwright Python image and targets `http://ui:8000`, making the
-suite suitable for CI runners that do not have a developer browser session.
+suite suitable for CI runners that do not have a developer browser session. It includes a single
+end-to-end smoke journey as well as focused journeys; all currently use mocked API responses.
 
 GitHub Actions runs the same isolated command in `.github/workflows/ci.yml`. It uses Compose's
 ephemeral Postgres/Redis services only for application startup; browser API calls remain mocked and

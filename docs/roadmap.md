@@ -76,11 +76,13 @@ stale propagation, and RAG refresh. Phases A, B, D, E, and F remain in progress.
 Context-generation workflow contracts now cover reference scenes, visual language, camera, lighting,
 palettes, film/director/style research, and continuity as durable, citation-bearing, review-only
 runs; see `docs/context-workflows.md`. Reviewed context suggestions can now be explicitly applied
-as provenance-linked typed graph nodes with source-version checks. Remaining work includes a single broader end-to-end smoke
-journey, complete live
-external MCP client workflows, and production hardening of deployment and recovery paths. The
-portable browser gate and authenticated local Langfuse trace verification are release checks, not
-substitutes for those remaining workflows.
+as provenance-linked typed graph nodes with source-version checks. The portable browser suite now
+includes a single broader end-to-end smoke journey covering project creation, story artifacts,
+screenplay writing, translation, timeline proposal approval/rollback, agent proposal
+approval/rollback, exports, backup, and non-destructive restore. Remaining work is complete live
+external MCP client workflow validation and further production hardening of deployment and recovery
+paths. The portable browser gate and authenticated local Langfuse trace verification are release
+checks, not substitutes for those remaining workflows.
 
 ## Phases
 
