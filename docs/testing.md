@@ -32,6 +32,10 @@ docker compose --profile test run --rm e2e
 The `e2e` service uses the pinned Playwright Python image and targets `http://ui:8000`, making the
 suite suitable for CI runners that do not have a developer browser session.
 
+GitHub Actions runs the same isolated command in `.github/workflows/ci.yml`. It uses Compose's
+ephemeral Postgres/Redis services only for application startup; browser API calls remain mocked and
+the test job removes its containers and volumes after each run.
+
 Copilot browser turns use the persisted asynchronous run contract; tests should mock both the
 `respond-async` response and the project-scoped run polling response rather than invoking a live
 model provider.
