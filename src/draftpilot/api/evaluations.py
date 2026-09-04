@@ -20,6 +20,7 @@ class EvaluationRunRequest(BaseModel):
 
     screenplay_id: int = Field(ge=1)
     evaluator: str = Field(default="deterministic_review", min_length=1, max_length=100)
+    max_attempts: int = Field(default=3, ge=1, le=10)
 
 
 @router.post("/runs", response_model=WorkflowRunRead, status_code=status.HTTP_202_ACCEPTED)
@@ -42,6 +43,7 @@ async def start_evaluation(
             kind="evaluation",
             input={"screenplay_id": data.screenplay_id, "evaluator": data.evaluator},
             agent_role="audience_evaluator",
+            max_attempts=data.max_attempts,
         ),
     )
     await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)

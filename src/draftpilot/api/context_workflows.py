@@ -76,6 +76,7 @@ async def start_context_workflow(
             },
             agent_role=workflow.agent_role,
             permission_mode=data.permission_mode,
+            max_attempts=data.max_attempts,
         ),
     )
     await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)

@@ -65,7 +65,7 @@ def test_context_workflow_rejects_incompatible_source_artifact(
 
     response = _client().post(
         "/api/v1/projects/7/context/workflows/runs",
-        json={"workflow": "camera", "artifact_id": 3, "instruction": "Plan the opening coverage."},
+        json={"workflow": "camera", "artifact_id": 3, "instruction": "Plan the opening coverage.", "max_attempts": 5},
     )
 
     assert response.status_code == 422
@@ -98,12 +98,13 @@ def test_context_workflow_persists_source_version_and_enqueues_run(
     monkeypatch.setattr("draftpilot.api.context_workflows.get_arq_pool", get_pool)
     response = _client().post(
         "/api/v1/projects/7/context/workflows/runs",
-        json={"workflow": "camera", "artifact_id": 3, "instruction": "Plan the opening coverage."},
+        json={"workflow": "camera", "artifact_id": 3, "instruction": "Plan the opening coverage.", "max_attempts": 5},
     )
 
     assert response.status_code == 202
     assert captured[0].input["source_version"] == 4
     assert captured[0].permission_mode == "suggest"
+    assert captured[0].max_attempts == 5
     assert pool.jobs == [("execute_workflow", 44)]
 
 

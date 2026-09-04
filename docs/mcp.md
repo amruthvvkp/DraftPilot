@@ -122,6 +122,8 @@ work to resume without direct database intervention.
 Run responses also expose `attempt_count` and `max_attempts`. Provider or worker failures are
 persisted as queued retries and the same run id is re-enqueued until the bounded budget is
 exhausted; the final failure is durable and can be explicitly resumed by an authorized client.
+REST run creation accepts `max_attempts` from 1 through 10 for workflow, evaluation, and context
+runs; omitted values use the default of three.
 
 Copilot turns are persisted at `/api/v1/projects/{project_id}/copilot/messages`. Each message
 records its page, artifact, selection, instruction layers, retrieved citations, and active typed

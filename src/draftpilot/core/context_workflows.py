@@ -112,3 +112,4 @@ class ContextWorkflowRequest(BaseModel):
     artifact_id: int | None = Field(default=None, ge=1)
     instruction: str = Field(min_length=1, max_length=12_000)
     permission_mode: WorkflowPermission = "suggest"
+    max_attempts: int = Field(default=3, ge=1, le=10)

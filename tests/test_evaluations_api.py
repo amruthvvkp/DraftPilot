@@ -112,8 +112,9 @@ def test_start_evaluation_validates_screenplay_and_enqueues_run(monkeypatch: obj
     monkeypatch.setattr("draftpilot.api.evaluations.get_arq_pool", get_pool)
     response = TestClient(app).post(
         "/api/v1/projects/9/evaluations/runs",
-        json={"screenplay_id": 2, "evaluator": "continuity_supervisor"},
+        json={"screenplay_id": 2, "evaluator": "continuity_supervisor", "max_attempts": 4},
     )
     assert response.status_code == 202
     assert response.json()["kind"] == "evaluation"
     assert captured[0].input["evaluator"] == "continuity_supervisor"  # type: ignore[union-attr]
+    assert captured[0].max_attempts == 4  # type: ignore[union-attr]

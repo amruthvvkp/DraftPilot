@@ -22,6 +22,7 @@ class RunCreateRequest(BaseModel):
     screenplay_id: int
     agent_role: AgentRoleKey = "story_architect"
     permission_mode: PermissionMode = "chat_only"
+    max_attempts: int = Field(default=3, ge=1, le=10)
 
 
 @router.post("", response_model=WorkflowRunRead, status_code=status.HTTP_202_ACCEPTED)
@@ -45,6 +46,7 @@ async def start_run(
             input={"screenplay_id": data.screenplay_id},
             agent_role=data.agent_role,
             permission_mode=data.permission_mode,
+            max_attempts=data.max_attempts,
         ),
     )
     await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
