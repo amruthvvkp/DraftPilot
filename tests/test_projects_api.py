@@ -461,3 +461,33 @@ def test_cancel_run_preserves_durable_history(
     response = client.post("/api/v1/projects/9/runs/31/cancel")
     assert response.status_code == 200
     assert response.json()["status"] == "cancelled"
+
+
+def test_resume_run_resets_exhausted_attempt_budget(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Start a fresh retry window when a failed run is explicitly resumed."""
+    run = WorkflowRun(id=32, project_id=9, status="failed", attempt_count=3, max_attempts=3)
+
+    async def get_run(_session: _Session, _run_id: int) -> WorkflowRun:
+        """Return the exhausted run fixture."""
+        return run
+
+    class Pool:
+        """Capture the resumed workflow job."""
+
+        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+            """Verify the same run is requeued."""
+            assert (name, run_id) == ("execute_workflow", 32)
+
+    async def get_pool() -> Pool:
+        """Return the isolated queue fixture."""
+        return Pool()
+
+    monkeypatch.setattr("draftpilot.api.runs.runs_crud.get", get_run)
+    monkeypatch.setattr("draftpilot.api.runs.get_arq_pool", get_pool)
+    response = client.post("/api/v1/projects/9/runs/32/resume")
+
+    assert response.status_code == 202
+    assert response.json()["attempt_count"] == 0
+    assert run.status == "queued"

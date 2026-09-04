@@ -917,6 +917,7 @@ async def control_workflow_run(
             if run.status == "succeeded":
                 raise ValueError("Run already succeeded")
             run.status = "queued"
+            run.attempt_count = 0
             run.error = None
             session.add(run)
             await session.commit()

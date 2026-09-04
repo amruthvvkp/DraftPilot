@@ -87,6 +87,7 @@ async def resume_run(
     if run.status in {"succeeded", "cancelled"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is terminal")
     run.status = "queued"
+    run.attempt_count = 0
     run.error = None
     session.add(run)
     await session.commit()
