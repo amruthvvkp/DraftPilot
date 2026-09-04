@@ -162,6 +162,8 @@ export type KnowledgeGraph = {
 
 export type AgentRole = { key: string; label: string; description: string; default_permission: 'chat_only' | 'suggest' | 'scoped_edit' | 'project_edit' }
 
+export type Capability = { name: string; description: string; scope: string; mutates: boolean; approval_required: boolean }
+
 export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null }
 
 export type EvaluationResult = { id: number; project_id: number; target_kind: string; target_id: number | null; evaluator: string; score: number | null; summary: string; findings: Record<string, unknown>; created_at: string }
@@ -327,6 +329,10 @@ export async function importScreenplay(projectId: number, screenplayId: number, 
 
 export function listProviderProfiles(): Promise<ProviderProfile[]> {
   return request<ProviderProfile[]>('/api/v1/settings/providers')
+}
+
+export function listCapabilities(page: string): Promise<Capability[]> {
+  return request<Capability[]>(`/api/v1/capabilities?page=${encodeURIComponent(page)}`)
 }
 
 export function createProviderProfile(payload: { name: string; provider: string; model: string; base_url?: string; enabled: boolean; api_key?: string }): Promise<ProviderProfile> {

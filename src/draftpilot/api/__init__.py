@@ -15,6 +15,7 @@ from draftpilot.api.providers import router as providers_router
 from draftpilot.api.copilot import router as copilot_router
 from draftpilot.api.knowledge_graph import router as knowledge_graph_router
 from draftpilot.api.agent_roles import router as agent_roles_router
+from draftpilot.api.capabilities import router as capabilities_router
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(projects_router)
@@ -30,5 +31,6 @@ router.include_router(providers_router)
 router.include_router(copilot_router)
 router.include_router(knowledge_graph_router)
 router.include_router(agent_roles_router)
+router.include_router(capabilities_router)
 
 __all__ = ["router"]
