@@ -211,3 +211,12 @@ def test_mcp_server_resolves_client_id_from_access_token(monkeypatch: pytest.Mon
         lambda: AccessToken(token="redacted", client_id="external-writer", scopes=[]),
     )
     assert server._client_id(SimpleNamespace(client_id=None)) == "external-writer"
+
+
+def test_mcp_server_uses_configured_stdio_client_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve local stdio calls to the explicitly configured grant identity."""
+    from draftpilot.mcp import server
+
+    monkeypatch.setattr(server.settings.mcp, "stdio_client_id", "local-writer")
+    monkeypatch.setattr(server, "get_access_token", lambda: None)
+    assert server._client_id(SimpleNamespace(client_id=None)) == "local-writer"

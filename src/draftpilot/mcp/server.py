@@ -60,7 +60,7 @@ def _client_id(ctx: Context) -> str:
     if context_client_id:
         return context_client_id
     access_token = get_access_token()
-    return access_token.client_id if access_token is not None else "unknown"
+    return access_token.client_id if access_token is not None else settings.mcp.stdio_client_id
 
 
 class StaticTokenVerifier(TokenVerifier):

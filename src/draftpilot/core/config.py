@@ -150,6 +150,7 @@ class MCPSettings(BaseSettings):
     auth_token: SecretStr = SecretStr("draftpilot-local-token")
     admin_token: SecretStr = SecretStr("draftpilot-local-admin-token")
     client_tokens: dict[str, SecretStr] = Field(default_factory=dict)
+    stdio_client_id: str = Field(default="mcp-stdio", min_length=1, max_length=200)
     request_timeout_seconds: float = 10.0
     max_output_chars: int = 100_000
 

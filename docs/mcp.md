@@ -111,6 +111,8 @@ client ids to distinct bearer tokens; those identities are used for project gran
 Local stdio transport is available for a process launched by the same user and does
 not need an HTTP bearer header. Start it with `uv run python -m draftpilot.mcp`; the process
 speaks MCP on stdin/stdout with the human-readable FastMCP banner disabled.
+Its project scope is still server-authoritative: register a client whose id matches
+`MCP__STDIO_CLIENT_ID` (default `mcp-stdio`) and grant it only the required capabilities.
 
 Mutation tools are added only through the same capability service, with audit records, redaction,
 timeouts, output limits, and explicit consent. Project evaluations are available through the
