@@ -17,9 +17,10 @@ ordered screenplay blocks through the same project authorization boundary. Both 
 configured response-size limit, and screenplay reads reject a screenplay belonging to another
 project.
 
-`propose_screenplay_change` accepts only typed `heading` or `body` operations and stores a
-reviewable agent proposal using the scene's current server-derived version. It never applies the
-operation; approval and optimistic-concurrency checks remain on the DraftPilot approval boundary.
+`propose_screenplay_change` accepts typed scene `heading`/`body` operations or semantic-block
+`element_type`/text/layout operations when `block_id` is supplied. It stores a reviewable agent
+proposal using the scene's current server-derived version. It never applies the operation;
+approval and optimistic-concurrency checks remain on the DraftPilot approval boundary.
 
 `read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
 source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
