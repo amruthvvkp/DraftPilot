@@ -37,7 +37,7 @@ from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, EvaluationResultRead, WorkflowRunRead
+from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -695,11 +695,20 @@ async def propose_screenplay_change(
     block_id: int | None = None,
 ) -> dict[str, object]:
     """Persist a typed scene or semantic-block proposal without applying changes."""
-    client_id = ctx.client_id or "unknown"
     target_kind = "block" if block_id is not None else "scene"
     allowed = {"element_type", "text", "is_dual", "dual_group"} if block_id is not None else {"heading", "body"}
     if not operation or set(operation) - allowed:
         raise ValueError("Unsupported typed screenplay operation")
+    if block_id is not None:
+        if "element_type" in operation and operation["element_type"] not in {item.value for item in BlockType}:
+            raise ValueError("Invalid screenplay block type")
+        if "text" in operation and not isinstance(operation["text"], str):
+            raise ValueError("Invalid screenplay block text")
+        if "is_dual" in operation and not isinstance(operation["is_dual"], bool):
+            raise ValueError("Invalid dual-dialogue marker")
+        if "dual_group" in operation and operation["dual_group"] is not None and not isinstance(operation["dual_group"], int):
+            raise ValueError("Invalid dual-dialogue group")
+    client_id = ctx.client_id or "unknown"
     async with session_scope() as session:
         try:
             await authorize_invocation(

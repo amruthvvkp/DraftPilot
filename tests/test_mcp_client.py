@@ -33,3 +33,20 @@ def test_mcp_client_rejects_invalid_prompt_and_resource_inputs() -> None:
         run_async(client.get_prompt(""))
     with pytest.raises(MCPClientError):
         run_async(client.read_resource(""))
+
+
+def test_mcp_block_proposal_rejects_invalid_semantic_values() -> None:
+    """Reject malformed block proposals before opening a database session."""
+    from draftpilot.mcp.server import propose_screenplay_change
+
+    with pytest.raises(ValueError, match="block type"):
+        run_async(
+            propose_screenplay_change(
+                9,
+                7,
+                {"element_type": "not-a-screenplay-element"},
+                {},
+                object(),
+                block_id=11,
+            )
+        )
