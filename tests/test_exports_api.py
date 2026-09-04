@@ -30,7 +30,13 @@ def test_benchmark_manifest_is_project_scoped_and_metadata_bearing(
     app.dependency_overrides[async_get_db] = session
     app.include_router(router, prefix="/api/v1")
     project = Project(id=9, title="Story", primary_language="Hindi", languages=["English"])
-    screenplay = Screenplay(id=2, project_id=9, title="Draft", format="feature")
+    screenplay = Screenplay(
+        id=2,
+        project_id=9,
+        title="Draft",
+        format="feature",
+        source_sha256="a" * 64,
+    )
 
     async def get(_session: _Session, item_id: int) -> Project | Screenplay | None:
         """Return only the scoped project and screenplay fixtures."""
@@ -49,6 +55,7 @@ def test_benchmark_manifest_is_project_scoped_and_metadata_bearing(
     assert response.json()["track"] == "redevelopment"
     assert response.json()["primary_language"] == "Hindi"
     assert response.json()["translation_languages"] == ["English"]
+    assert response.json()["source_sha256"] == "a" * 64
 
     control_response = TestClient(app).get(
         "/api/v1/projects/9/screenplays/2/benchmark-manifest?track=import_compare"
@@ -105,6 +112,7 @@ def test_fountain_import_creates_a_new_screenplay(
     assert response.status_code == 201
     assert response.json()["id"] == 3
     assert created[0].title == "Draft (Imported)"
+    assert created[0].source_sha256
     assert saved == [3]
 
 

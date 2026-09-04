@@ -60,6 +60,7 @@ def manifest_from_document(
     primary_language: str = "English",
     translation_languages: list[str] | None = None,
     source_data: bytes | None = None,
+    source_sha256: str | None = None,
     runtime_seconds: int = 0,
 ) -> BenchmarkManifest:
     """Build a benchmark manifest from canonical screenplay semantics."""
@@ -69,7 +70,7 @@ def manifest_from_document(
     return BenchmarkManifest(
         track=track,
         label=label,
-        source_sha256=source_digest(source_data) if source_data is not None else None,
+        source_sha256=source_sha256 or (source_digest(source_data) if source_data is not None else None),
         screenplay_title=document.title_page.get("Title", ""),
         primary_language=primary_language,
         translation_languages=translation_languages or [],

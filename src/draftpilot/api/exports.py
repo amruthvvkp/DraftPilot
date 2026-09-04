@@ -5,7 +5,7 @@ from fastapi.responses import PlainTextResponse, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
-from draftpilot.core.benchmark import BenchmarkManifest, BenchmarkTrack, manifest_from_document
+from draftpilot.core.benchmark import BenchmarkManifest, BenchmarkTrack, manifest_from_document, source_digest
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
@@ -41,6 +41,7 @@ async def benchmark_manifest(
         label=f"{track}-project-{project_id}-screenplay-{screenplay_id}",
         primary_language=project.primary_language,
         translation_languages=project.languages,
+        source_sha256=screenplay.source_sha256,
     )
 
 
@@ -123,6 +124,7 @@ async def import_screenplay(
             title=f"{source.title} (Imported)"[:200],
             format=source.format,
             status="draft",
+            source_sha256=source_digest(raw),
         ),
     )
     if imported.id is None:

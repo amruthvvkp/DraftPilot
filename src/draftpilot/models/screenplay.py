@@ -17,6 +17,7 @@ class ScreenplayBase(SQLModel):
     title: str = Field(index=True, min_length=1, max_length=200)
     format: str = Field(default="feature", max_length=50)  # feature, short, pilot...
     status: str = Field(default="draft", max_length=50)  # draft, revision, final...
+    source_sha256: str | None = Field(default=None, max_length=64)
 
 
 class Screenplay(ScreenplayBase, TimestampMixin, table=True):  # type: ignore[call-arg]
