@@ -692,12 +692,14 @@ async def propose_screenplay_change(
     operation: dict[str, object],
     diff: dict[str, object],
     ctx: Context,
+    block_id: int | None = None,
 ) -> dict[str, object]:
-    """Persist a typed screenplay proposal without applying creative changes."""
+    """Persist a typed scene or semantic-block proposal without applying changes."""
     client_id = ctx.client_id or "unknown"
-    allowed = {"heading", "body"}
+    target_kind = "block" if block_id is not None else "scene"
+    allowed = {"element_type", "text", "is_dual", "dual_group"} if block_id is not None else {"heading", "body"}
     if not operation or set(operation) - allowed:
-        raise ValueError("Only heading and body operations are supported")
+        raise ValueError("Unsupported typed screenplay operation")
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -717,13 +719,31 @@ async def propose_screenplay_change(
         )
         if scene is None or screenplay is None or screenplay.project_id != project_id:
             raise ValueError("Scene is not in the requested project")
-        before = {key: getattr(scene, key) for key in operation}
+        target_id = scene_id
+        if block_id is not None:
+            block = await blocks_crud.get(session, block_id)
+            if block is None or block.scene_id != scene_id:
+                raise ValueError("Block is not in the requested scene")
+            target_id = block_id
+            before = {
+                "scene_id": scene_id,
+                **{
+                    key: (
+                        getattr(block, key).value
+                        if key == "element_type"
+                        else getattr(block, key)
+                    )
+                    for key in operation
+                },
+            }
+        else:
+            before = {key: getattr(scene, key) for key in operation}
         proposal = await proposals_crud.create(
             session,
             AgentProposal(
                 project_id=project_id,
-                target_kind="scene",
-                target_id=scene_id,
+                target_kind=target_kind,
+                target_id=target_id,
                 operation=operation,
                 diff=diff,
                 before=before,
