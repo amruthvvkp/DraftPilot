@@ -6,7 +6,7 @@ import pytest
 
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.api.providers import test_provider as probe_provider
-from draftpilot.core.providers import provider_base_url, settings_from_profile, validate_provider_url
+from draftpilot.core.providers import create_chat_model, provider_base_url, settings_from_profile, validate_provider_url
 from draftpilot.core.security import encrypt_secret
 from draftpilot.models import ProviderProfile
 from _async import run_async
@@ -58,6 +58,12 @@ def test_provider_url_rejects_private_ip_literal() -> None:
     with pytest.raises(ValueError, match="Private"):
         validate_provider_url("http://10.0.0.8:11434/v1")
     assert validate_provider_url("http://127.0.0.1:11434/v1") == "http://127.0.0.1:11434/v1"
+
+
+def test_model_construction_enforces_provider_url_validation() -> None:
+    """Reject an unsafe explicit endpoint before constructing a provider model."""
+    with pytest.raises(ValueError, match="Private"):
+        create_chat_model(LLMSettings(provider="ollama", base_url="http://10.0.0.8:11434/v1"))
 
 
 def test_provider_probe_returns_safe_success(monkeypatch: pytest.MonkeyPatch) -> None:
