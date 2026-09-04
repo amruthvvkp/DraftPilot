@@ -2,13 +2,15 @@
 
 import difflib
 import json
+from uuid import uuid4
 
 import logfire
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.config import settings
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -40,6 +42,13 @@ from draftpilot.models import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+MAX_ARTWORK_BYTES = 5 * 1024 * 1024
+_ARTWORK_SIGNATURES = {
+    "image/png": (b"\x89PNG\r\n\x1a\n", ".png"),
+    "image/jpeg": (b"\xff\xd8\xff", ".jpg"),
+    "image/gif": (b"GIF8", ".gif"),
+    "image/webp": (b"RIFF", ".webp"),
+}
 
 
 async def _enqueue_rag_index(
@@ -166,6 +175,44 @@ async def create_project(
         **ProjectRead.model_validate(project).model_dump(),
         references=[ProjectReferenceRead.model_validate(reference) for reference in references],
     )
+
+
+@router.post("/{project_id}/artwork", response_model=ProjectRead)
+async def upload_project_artwork(
+    project_id: int,
+    artwork: UploadFile = File(...),
+    session: AsyncSession = Depends(async_get_db),
+) -> ProjectRead:
+    """Store bounded validated artwork without exposing an arbitrary filesystem path."""
+    project = await projects_crud.get(session, project_id)
+    if project is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    signature = _ARTWORK_SIGNATURES.get(artwork.content_type or "")
+    if signature is None:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported artwork type")
+    content = await artwork.read(MAX_ARTWORK_BYTES + 1)
+    if len(content) > MAX_ARTWORK_BYTES or not content.startswith(signature[0]):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid or oversized artwork")
+    artwork_root = (settings.backup.root / "artwork").resolve()
+    artwork_root.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid4().hex}{signature[1]}"
+    target = (artwork_root / filename).resolve()
+    if target.parent != artwork_root:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid artwork path")
+    temporary = target.with_suffix(target.suffix + ".tmp")
+    try:
+        temporary.write_bytes(content)
+        temporary.replace(target)
+    except OSError as exc:
+        temporary.unlink(missing_ok=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Unable to store artwork") from exc
+    project.artwork_path = f"artwork/{filename}"
+    project.artwork_url = f"/artwork/{filename}"
+    project.version += 1
+    session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    return ProjectRead.model_validate(project)
 
 
 @router.get("/{project_id}/references", response_model=list[ProjectReferenceRead])

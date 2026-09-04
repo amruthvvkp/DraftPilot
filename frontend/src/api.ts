@@ -193,6 +193,12 @@ export function createProject(payload: ProjectCreatePayload): Promise<Project> {
   })
 }
 
+export function uploadProjectArtwork(projectId: number, file: File): Promise<Project> {
+  const body = new FormData()
+  body.append('artwork', file)
+  return request<Project>(`/api/v1/projects/${projectId}/artwork`, { method: 'POST', body })
+}
+
 export function getProjectWorkspace(projectId: number): Promise<ProjectWorkspace> {
   return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace`)
 }

@@ -1,6 +1,7 @@
 """Test the versioned project REST boundary without a live database."""
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
@@ -25,6 +26,15 @@ from draftpilot.models import (
 
 class _Session:
     """Stand in for an async SQLModel session in API tests."""
+
+    def add(self, _value: object) -> None:
+        """Accept a model mutation in the isolated session."""
+
+    async def commit(self) -> None:
+        """Commit the isolated model mutation."""
+
+    async def refresh(self, _value: object) -> None:
+        """Refresh the isolated model mutation."""
 
 
 @pytest.fixture
@@ -121,6 +131,43 @@ def test_create_project_rejects_primary_language_translation_target(client: Test
             "genres": [],
             "languages": ["Bengali", "hindi"],
         },
+    )
+    assert response.status_code == 422
+
+
+def test_project_artwork_upload_is_bounded_and_persisted_locally(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Persist a validated image in the configured local artwork volume."""
+    project = Project(id=9, title="Artwork story", version=4)
+
+    async def get_project(_session: _Session, _project_id: int) -> Project:
+        """Return the isolated artwork project."""
+        return project
+
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
+    monkeypatch.setattr("draftpilot.api.projects.settings.backup", type("Backup", (), {"root": tmp_path})())
+    response = client.post(
+        "/api/v1/projects/9/artwork",
+        files={"artwork": ("cover.png", b"\x89PNG\r\n\x1a\ncover", "image/png")},
+    )
+    assert response.status_code == 200
+    assert response.json()["artwork_url"].startswith("/artwork/")
+    assert project.artwork_path is not None
+    assert (tmp_path / project.artwork_path).read_bytes() == b"\x89PNG\r\n\x1a\ncover"
+
+
+def test_project_artwork_upload_rejects_mismatched_signature(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject an image MIME type whose bytes do not match its declared format."""
+    monkeypatch.setattr(
+        "draftpilot.api.projects.projects_crud.get",
+        AsyncMock(return_value=Project(id=9, title="Artwork story")),
+    )
+    response = client.post(
+        "/api/v1/projects/9/artwork",
+        files={"artwork": ("cover.png", b"not-an-image", "image/png")},
     )
     assert response.status_code == 422
 
