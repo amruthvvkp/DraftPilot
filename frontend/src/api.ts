@@ -221,6 +221,10 @@ export function getAgentProposals(projectId: number): Promise<AgentProposal[]> {
   return request<AgentProposal[]>(`/api/v1/projects/${projectId}/agent-proposals`)
 }
 
+export function createAgentProposal(projectId: number, payload: { target_kind: 'scene' | 'block' | 'artifact' | 'dialogue_translation'; target_id: number; scene_id?: number; operation: Record<string, unknown>; diff?: Record<string, unknown>; base_version: number }): Promise<AgentProposal> {
+  return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals`, { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export function approveAgentProposal(projectId: number, proposalId: number): Promise<AgentProposal> {
   return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals/${proposalId}/approve`, { method: 'POST' })
 }

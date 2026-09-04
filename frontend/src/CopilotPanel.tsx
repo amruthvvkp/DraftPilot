@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { AgentProposal, AgentRole, approveAgentProposal, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, getWorkflowRun, listProviderProfiles, ProviderProfile, rollbackAgentProposal, startCopilotRun } from './api'
 
-type CopilotPanelProps = { projectId: number; page?: string; artifact?: string | null; selection?: string | null }
+type CopilotPanelProps = { projectId: number; page?: string; artifact?: string | null; selection?: string | null; refreshToken?: number }
 
-export default function CopilotPanel({ projectId, page = window.location.pathname, artifact = null, selection = null }: CopilotPanelProps) {
+export default function CopilotPanel({ projectId, page = window.location.pathname, artifact = null, selection = null, refreshToken = 0 }: CopilotPanelProps) {
   const [proposals, setProposals] = useState<AgentProposal[]>([])
   const [messages, setMessages] = useState<CopilotMessage[]>([])
   const [roles, setRoles] = useState<AgentRole[]>([])
@@ -29,7 +29,7 @@ export default function CopilotPanel({ projectId, page = window.location.pathnam
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load Copilot context') }
   }
 
-  useEffect(() => { void refresh() }, [projectId])
+  useEffect(() => { void refresh() }, [projectId, refreshToken])
 
   async function approve(proposalId: number): Promise<void> {
     try { await approveAgentProposal(projectId, proposalId); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to approve proposal') }

@@ -52,11 +52,24 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
         route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace["scenes"][0]))
 
     page.route("**/api/v1/projects/9001/scenes/7/revisions/30/restore", restore_revision)
+    proposals: list[dict[str, object]] = []
+
+    def agent_proposals(route: Route) -> None:
+        """Persist a typed formatting proposal in the browser fixture."""
+        if route.request.method == "POST":
+            payload = route.request.post_data_json
+            assert payload["target_kind"] == "block"
+            assert payload["target_id"] == 20
+            assert payload["operation"] == {"element_type": "dialogue"}
+            proposal = {"id": 80, "project_id": 9001, "run_id": None, "target_kind": "block", "target_id": 20, "operation": payload["operation"], "diff": payload["diff"], "before": {"scene_id": 7, "element_type": "action"}, "base_version": 2, "status": "proposed"}
+            proposals.append(proposal)
+            route.fulfill(status=201, content_type="application/json", body=json.dumps(proposal))
+        else:
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(proposals))
+
     backup = {"filename": "9001-20260101T000000Z.json.gz", "manifest": {"schema_version": 1, "project_id": 9001, "created_at": "2026-01-01T00:00:00Z", "app_version": "0.1.0", "sha256": "abcdef1234567890"}}
     page.route("**/api/v1/projects/9001/backups", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([backup])))
-    page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
-        status=200, content_type="application/json", body="[]"
-    ))
+    page.route("**/api/v1/projects/9001/agent-proposals", agent_proposals)
     page.route("**/api/v1/projects/9001/evaluations", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
@@ -91,6 +104,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
+    page.get_by_label("Format action").select_option("dialogue")
+    page.get_by_role("button", name="Review format").first.click()
+    expect(page.get_by_text("#80 block")).to_be_visible()
     page.get_by_role("button", name="Timeline board →").click()
     lanes = page.get_by_role("region", name="Act and character lanes")
     expect(lanes).to_contain_text("Act One")
