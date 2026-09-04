@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
 from draftpilot.crud import mcp_access as access_crud
 from draftpilot.crud import projects as projects_crud
@@ -90,6 +91,8 @@ async def create_project_grant(
     """Create a project grant only for a registered client."""
     if await projects_crud.get(session, project_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    if data.capability not in {capability.name for capability in capability_catalog()}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unknown capability")
     client = await access_crud.get_client(session, data.client_id)
     if client is None or client.id is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")

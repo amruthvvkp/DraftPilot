@@ -28,3 +28,10 @@ def test_capabilities_for_review_and_settings_cover_page_actions() -> None:
     assert "context.apply" in capabilities_for_page("context")
     assert "providers.write" in settings
     assert "backups.restore" in settings
+
+
+def test_capability_catalog_is_the_source_of_truth_for_external_grants() -> None:
+    """Expose only named capabilities that the server can authorize."""
+    catalog = capability_catalog()
+    assert all(item.name and item.scope for item in catalog)
+    assert len({item.name for item in catalog}) == len(catalog)
