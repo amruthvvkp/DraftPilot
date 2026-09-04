@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Build application and browser images
+        run: docker compose --profile test build ui e2e
       - name: Run isolated Compose browser suite
         run: docker compose --profile test run --rm -T e2e
       - name: Collect service logs on failure
