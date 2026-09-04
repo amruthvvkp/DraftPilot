@@ -242,3 +242,41 @@ def test_context_page_links_project_nodes(page: Page) -> None:
     expect(relationship).to_contain_text("Apu")
     page.get_by_role("button", name="Delete relationship inspires").click()
     expect(relationship).not_to_be_visible()
+
+
+def test_context_page_edits_versioned_project_reference(page: Page) -> None:
+    """Edit and remove a typed project reference through the React context page."""
+    reference = {"id": 12, "project_id": 9001, "kind": "film", "label": "Pather Panchali", "url": "https://example.test/pather", "note": "Texture", "version": 1}
+    deleted = {"value": False}
+
+    def references(route: Route) -> None:
+        """Return the current project reference."""
+        route.fulfill(status=200, content_type="application/json", body=json.dumps([] if deleted["value"] else [reference]))
+
+    def update_reference(route: Route) -> None:
+        """Validate the reference optimistic concurrency header and update it."""
+        assert route.request.headers.get("if-match") == "1"
+        assert route.request.post_data_json["label"] == "Pather Panchali revised"
+        reference.update(label="Pather Panchali revised", version=2)
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(reference))
+
+    def delete_reference(route: Route) -> None:
+        """Delete the project reference."""
+        deleted["value"] = True
+        route.fulfill(status=204)
+
+    page.route("**/api/v1/projects/9001/references", references)
+    page.route("**/api/v1/projects/9001/references/12", lambda route: update_reference(route) if route.request.method == "PATCH" else delete_reference(route))
+    page.route("**/api/v1/projects/9001/knowledge-graph", lambda route: route.fulfill(status=200, content_type="application/json", body='{"nodes": [], "edges": []}'))
+    page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.goto("/projects/9001/context")
+    reference_label = page.locator(".reference-card input").first
+    expect(reference_label).to_have_value("Pather Panchali")
+    reference_label.fill("Pather Panchali revised")
+    page.get_by_role("button", name="Save").click()
+    expect(reference_label).to_have_value("Pather Panchali revised")
+    page.on("dialog", lambda dialog: dialog.accept())
+    page.get_by_role("button", name="Remove").click()
+    expect(page.locator(".reference-card")).not_to_be_visible()
