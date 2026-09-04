@@ -2,6 +2,7 @@
 
 import ipaddress
 import json
+import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
@@ -17,7 +18,7 @@ class MCPClientError(ValueError):
 
 
 def validate_mcp_endpoint(endpoint: str) -> str:
-    """Validate an MCP HTTP endpoint while blocking cloud metadata targets."""
+    """Validate an MCP HTTP endpoint while blocking metadata and private DNS targets."""
     parsed = urlsplit(endpoint)
     blocked_hosts = {
         "169.254.169.254",
@@ -37,6 +38,30 @@ def validate_mcp_endpoint(endpoint: str) -> str:
             ) and not address.is_loopback
         except ValueError:
             pass
+    unsafe_dns = False
+    if hostname and hostname.casefold() != "localhost" and not unsafe_literal:
+        try:
+            addresses = socket.getaddrinfo(
+                hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        except socket.gaierror as exc:
+            raise MCPClientError("MCP endpoint hostname could not be resolved") from exc
+        for result in addresses:
+            address_text = result[4][0]
+            try:
+                address = ipaddress.ip_address(address_text)
+            except ValueError:
+                continue
+            if (
+                address.is_private
+                or address.is_link_local
+                or address.is_reserved
+                or address.is_multicast
+            ) and not address.is_loopback:
+                unsafe_dns = True
+                break
     if (
         parsed.scheme not in {"http", "https"}
         or not hostname
@@ -44,6 +69,7 @@ def validate_mcp_endpoint(endpoint: str) -> str:
         or parsed.password
         or hostname.casefold() in blocked_hosts
         or unsafe_literal
+        or unsafe_dns
     ):
         raise MCPClientError("MCP endpoint must be an HTTP(S) URL without embedded credentials")
     return endpoint.rstrip("/")

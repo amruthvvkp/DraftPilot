@@ -1,6 +1,7 @@
 """Test the bounded outbound MCP client boundary."""
 
 import pytest
+import socket
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -20,6 +21,17 @@ def test_validate_mcp_endpoint_blocks_metadata_and_credentials() -> None:
         validate_mcp_endpoint("http://[fe80::1]:9001/mcp")
     assert validate_mcp_endpoint("http://localhost:9001/mcp") == "http://localhost:9001/mcp"
     assert validate_mcp_endpoint("http://127.0.0.1:9001/mcp") == "http://127.0.0.1:9001/mcp"
+
+
+def test_validate_mcp_endpoint_blocks_private_dns_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject a hostname that resolves to a private non-loopback address."""
+    monkeypatch.setattr(
+        socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.8", 9001))],
+    )
+    with pytest.raises(MCPClientError):
+        validate_mcp_endpoint("https://mcp.example.test/mcp")
 
 
 def test_bounded_result_rejects_oversized_mcp_payload() -> None:
