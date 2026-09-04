@@ -55,7 +55,7 @@ FDX import/export rather than relying only on synthetic fixtures.
 ## Implementation checkpoint — 2026-09-04
 
 The React/Vite studio now covers the project vault, multilingual creation flow, and typed repeatable
-creative references, screenplay
+creative references, local artwork uploads, screenplay
 workspace, semantic editor blocks, dialogue translations, revisions, timeline proposals, durable
 Copilot turns, evaluations, typed agent proposals, creative-context nodes and relationships,
 project-scoped RAG retrieval, MCP prompts/resources/tools, provider settings, exports, and backups.
@@ -80,7 +80,8 @@ as provenance-linked typed graph nodes with source-version checks. The portable 
 includes a single broader end-to-end smoke journey covering project creation, story artifacts,
 screenplay writing, translation, timeline proposal approval/rollback, agent proposal
 approval/rollback, exports, backup, and non-destructive restore. Live external MCP client validation
-now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-scoped resource read);
+now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-scoped resource and
+typed-tool reads);
 continue with broader production hardening and external-client compatibility checks. The portable
 browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
 for those remaining workflows.

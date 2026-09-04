@@ -9,6 +9,10 @@ UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui mypy src
 UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui interrogate src migrations
 ```
 
+The isolated Python suite includes `tests/test_migrations.py`, which verifies that the Alembic
+history has one current head without connecting to the developer database. Compose startup also
+runs `alembic upgrade head` against its dedicated Postgres service.
+
 Browser tests mock every project/workspace API response and never use the Compose database as test
 state. The repository default is `http://localhost:9000`; use the portable Linux browser image and
 Compose network for CI-style execution:
