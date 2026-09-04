@@ -5,6 +5,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import knowledge_graph as graph_crud
+from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import KnowledgeNode, KnowledgeNodeCreate
 
@@ -26,6 +27,14 @@ async def apply_context_suggestion(
     source_version = run.result.get("source_version")
     if source_version != expected_source_version:
         raise ValueError("Source artifact version has changed")
+    source_artifact_id = run.input.get("artifact_id")
+    if not isinstance(source_artifact_id, int):
+        raise ValueError("Context run has no source artifact")
+    source_artifact = await artifacts_crud.get(session, source_artifact_id)
+    if source_artifact is None or source_artifact.project_id != project_id:
+        raise ValueError("Context source artifact not found")
+    if source_artifact.version != expected_source_version:
+        raise ValueError("Source artifact version has changed")
     suggestion = run.result.get("suggestion")
     output_kind = run.result.get("output_kind")
     if not isinstance(suggestion, str) or not suggestion.strip() or not isinstance(output_kind, str):
@@ -39,7 +48,7 @@ async def apply_context_suggestion(
             description=suggestion,
             node_metadata={
                 "source_run_id": run_id,
-                "source_artifact_id": run.input.get("artifact_id"),
+                "source_artifact_id": source_artifact_id,
                 "source_version": source_version,
                 "citations": run.result.get("citations", []),
             },

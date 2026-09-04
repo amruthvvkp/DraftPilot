@@ -123,6 +123,7 @@ def test_context_suggestion_apply_is_explicit_provenance_linked_and_version_chec
     updated: list[tuple[WorkflowRun, str]] = []
 
     monkeypatch.setattr("draftpilot.core.context_operations.runs_crud.get", AsyncMock(return_value=run))
+    monkeypatch.setattr("draftpilot.core.context_operations.artifacts_crud.get", AsyncMock(return_value=StoryArtifact(id=3, project_id=7, kind="outline", title="Outline", version=4)))
     monkeypatch.setattr("draftpilot.core.context_operations.graph_crud.create_node", AsyncMock(return_value=node))
 
     async def update_status(_session: object, item: WorkflowRun, state: str, result: object = None, error: str = None) -> WorkflowRun:
@@ -140,3 +141,26 @@ def test_context_suggestion_apply_is_explicit_provenance_linked_and_version_chec
     assert response.json()["id"] == 51
     assert updated == [(run, "applied")]
     assert run.result is not None and run.result["applied_node_id"] == 51
+
+
+def test_context_suggestion_apply_rejects_a_changed_source_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reject a suggestion when the reviewed source changed before approval."""
+    run = WorkflowRun(
+        id=44,
+        project_id=7,
+        kind="context_generation",
+        status="succeeded",
+        input={"artifact_id": 3},
+        result={"suggestion": "Use a long lens.", "output_kind": "camera", "source_version": 4},
+    )
+    monkeypatch.setattr("draftpilot.core.context_operations.runs_crud.get", AsyncMock(return_value=run))
+    monkeypatch.setattr("draftpilot.core.context_operations.artifacts_crud.get", AsyncMock(return_value=StoryArtifact(id=3, project_id=7, kind="outline", title="Outline", version=5)))
+
+    response = _client().post(
+        "/api/v1/projects/7/context/workflows/runs/44/apply",
+        json={"expected_source_version": 4},
+    )
+
+    assert response.status_code == 409

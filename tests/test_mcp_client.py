@@ -172,6 +172,7 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     monkeypatch.setattr(server, "session_scope", lambda: SessionScope())
     monkeypatch.setattr(server, "authorize_invocation", AsyncMock())
     monkeypatch.setattr(server.runs_crud, "get", AsyncMock(return_value=run))
+    monkeypatch.setattr(server.artifacts_crud, "get", AsyncMock(return_value=SimpleNamespace(id=3, project_id=9, version=4)))
     monkeypatch.setattr(server.graph_crud, "create_node", AsyncMock(return_value=node))
     monkeypatch.setattr(server.runs_crud, "update_status", update)
     monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
