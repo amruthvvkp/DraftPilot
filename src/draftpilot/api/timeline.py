@@ -11,6 +11,7 @@ from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import timeline_proposals as proposals_crud
 from draftpilot.models import TimelineProposalRead, TimelineProposalRecord
 
@@ -106,6 +107,14 @@ async def approve_timeline_proposal(
         scene.position = position
         scene.version += 1
         session.add(scene)
+    timeline_artifacts = await artifacts_crud.list_for_project(session, project_id)
+    timeline_ids = [
+        artifact.id
+        for artifact in timeline_artifacts
+        if artifact.id is not None and artifact.kind == "timeline"
+    ]
+    if timeline_ids:
+        await artifacts_crud.mark_dependents_stale(session, project_id, timeline_ids)
     proposal.status = "approved"
     proposal.updated_at = datetime.now(timezone.utc)
     session.add(proposal)
