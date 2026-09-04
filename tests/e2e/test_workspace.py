@@ -369,7 +369,7 @@ def test_timeline_supports_drag_keyboard_reorder_and_proposal(page: Page) -> Non
 
 
 def test_context_workflow_is_review_only_and_reconnectable(page: Page) -> None:
-    """Start a mocked context-generation run and render its review result."""
+    """Review and explicitly apply a mocked context-generation run after reconnecting."""
     artifact = {"id": 31, "project_id": 9001, "kind": "outline", "title": "Outline", "content": "The reveal happens.", "version": 4, "stale": False, "depends_on": [], "artifact_metadata": {}}
     workflow = {"key": "camera", "label": "Camera plan", "description": "Plan coverage.", "input_artifact_kinds": ["outline"], "output_kind": "camera", "evaluator": "production_feasibility_review", "agent_role": "associate_director", "permission_mode": "suggest"}
 
@@ -388,13 +388,21 @@ def test_context_workflow_is_review_only_and_reconnectable(page: Page) -> None:
 
     def read_run(route: Route) -> None:
         """Return a completed review-only result after the worker poll."""
-        result = {"workflow": "camera", "output_kind": "camera", "suggestion": "Use a slow push into the reveal.", "citations": [{"source_id": "artifact:31", "content_version": 4}], "requires_review": True}
+        result = {"workflow": "camera", "output_kind": "camera", "suggestion": "Use a slow push into the reveal.", "citations": [{"source_id": "artifact:31", "content_version": 4}], "source_version": 4, "requires_review": True}
         route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "context_generation", "status": "succeeded", "result": result, "error": None}))
 
+    def apply_run(route: Route) -> None:
+        """Validate explicit source-version approval and return the graph node."""
+        assert route.request.post_data_json == {"expected_source_version": 4}
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 51, "project_id": 9001, "kind": "camera", "label": "Camera from run 44", "description": "Use a slow push into the reveal.", "node_metadata": {"source_run_id": 44}, "version": 1}))
+
     page.route("**/api/v1/projects/9001/context/workflows/runs", start_run)
+    page.route("**/api/v1/projects/9001/context/workflows/runs/44/apply", apply_run)
     page.route("**/api/v1/projects/9001/runs/44", read_run)
     page.goto("/projects/9001/context")
     page.get_by_label("Context workflow instruction").fill("Plan coverage for the reveal.")
     page.get_by_role("button", name="Generate review suggestion").click()
     expect(page.get_by_text("Use a slow push into the reveal.")).to_be_visible()
     expect(page.get_by_text("Retrieved citations attached · output kind: camera")).to_be_visible()
+    page.get_by_role("button", name="Apply to knowledge graph").click()
+    expect(page.get_by_text("Applied as a new versioned graph node.")).to_be_visible()
