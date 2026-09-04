@@ -17,3 +17,12 @@ def test_page_capabilities_are_server_authoritative() -> None:
     assert "timeline.propose" in capabilities_for_page("/projects/7/timeline")
     assert "outline.read" not in capabilities_for_page("/projects/7/timeline")
     assert capabilities_for_page("unknown") == ["screenplay.read", "context.read", "revisions.read"]
+
+
+def test_capabilities_for_review_and_settings_cover_page_actions() -> None:
+    """Expose proposal review and provider/backup actions on their owning pages."""
+    review = capabilities_for_page("/projects/7/review")
+    settings = capabilities_for_page("/settings")
+    assert "screenplay.approve" in review
+    assert "providers.write" in settings
+    assert "backups.restore" in settings

@@ -32,6 +32,8 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="evaluations.read", description="Read persisted evaluation results.", scope="project"),
     Capability(name="exports.read", description="Render a screenplay export for download.", scope="project"),
     Capability(name="exports.create", description="Create a screenplay export artifact.", scope="project", mutates=True, approval_required=True),
+    Capability(name="providers.read", description="Read redacted provider profiles and availability.", scope="installation"),
+    Capability(name="providers.write", description="Create or update an encrypted provider profile.", scope="installation", mutates=True, approval_required=True),
     Capability(name="backups.read", description="List project backup manifests.", scope="project"),
     Capability(name="backups.create", description="Create a project backup artifact.", scope="project", mutates=True, approval_required=True),
     Capability(name="backups.restore", description="Restore a project backup into a new project.", scope="project", mutates=True, approval_required=True),
@@ -42,8 +44,9 @@ CAPABILITIES: tuple[Capability, ...] = (
 _PAGE_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "studio": ("outline.read", "story.operation", "context.read", "knowledge_graph.read", "revisions.read"),
     "timeline": ("timeline.propose", "screenplay.read", "context.read", "revisions.read"),
-    "review": ("evaluations.read", "screenplay.read", "context.read", "revisions.read"),
-    "settings": ("context.read",),
+    "review": ("evaluations.read", "screenplay.read", "context.read", "revisions.read", "screenplay.propose", "screenplay.approve", "screenplay.rollback"),
+    "exports": ("exports.read", "exports.create", "backups.read", "backups.create", "backups.restore"),
+    "settings": ("providers.read", "providers.write", "backups.read", "backups.create", "backups.restore"),
     "workspace": ("screenplay.read", "context.read", "revisions.read"),
 }
 
