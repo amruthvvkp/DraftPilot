@@ -6,11 +6,13 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.models import (
+    Act,
     Project,
     ProjectCreate,
     ProjectReference,
     ProjectReferenceBase,
     ProjectUpdate,
+    Screenplay,
 )
 
 
@@ -37,6 +39,11 @@ async def create_with_references(
         session.add(
             ProjectReference(project_id=project.id, **reference_data.model_dump())
         )
+    screenplay = Screenplay(project_id=project.id, title=project.title, format="feature", status="draft")
+    session.add(screenplay)
+    await session.flush()
+    assert screenplay.id is not None
+    session.add(Act(screenplay_id=screenplay.id, title="Act One", position=0))
     await session.commit()
     await session.refresh(project)
     return project
