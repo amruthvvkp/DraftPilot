@@ -82,7 +82,8 @@ screenplay writing, translation, timeline proposal approval/rollback, agent prop
 approval/rollback, exports, backup, and non-destructive restore. Live external MCP client validation
 now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-scoped resource and
 typed-tool reads). Monty executions now have project-scoped redacted audit records with code hashes
-and bounded telemetry fields; continue with broader production hardening and external-client
+and bounded telemetry fields. Translation writes now enforce configured dialogue targets and reject
+the primary screenplay language across REST and MCP; continue with broader production hardening and external-client
 compatibility checks. The portable
 browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
 for those remaining workflows.

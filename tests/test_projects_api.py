@@ -312,6 +312,7 @@ def test_translation_update_is_scoped_and_preserves_source(
     scene = Scene(id=7, act_id=4, heading="INT. HOUSE - DAY", version=3)
     act = Act(id=4, screenplay_id=2, position=0)
     screenplay = Screenplay(id=2, project_id=9, title="Story")
+    project = Project(id=9, title="Story", primary_language="English", languages=["Hindi"])
     block = Block(id=11, scene_id=7, element_type=BlockType.DIALOGUE, text="We should go.")
 
     async def get_scene(_session: _Session, _scene_id: int) -> Scene:
@@ -345,6 +346,7 @@ def test_translation_update_is_scoped_and_preserves_source(
     monkeypatch.setattr("draftpilot.api.projects.blocks_crud.get", get_block)
     monkeypatch.setattr("draftpilot.api.projects.acts_crud.get", get_act)
     monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.get", get_screenplay)
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", AsyncMock(return_value=project))
     monkeypatch.setattr("draftpilot.api.projects.translations_crud.upsert", upsert)
     response = client.put(
         "/api/v1/projects/9/scenes/7/blocks/11/translations/Hindi",
@@ -355,6 +357,26 @@ def test_translation_update_is_scoped_and_preserves_source(
     assert response.json()["text"] == "हमें जाना चाहिए।"
     assert response.json()["source_version"] == 3
     assert block.text == "We should go."
+
+
+def test_translation_update_rejects_unconfigured_language(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject a translation target not enabled in project metadata."""
+    scene = Scene(id=7, act_id=4, heading="INT. HOUSE - DAY", version=3)
+    act = Act(id=4, screenplay_id=2, position=0)
+    block = Block(id=11, scene_id=7, element_type=BlockType.DIALOGUE, text="We should go.")
+    monkeypatch.setattr("draftpilot.api.projects.scenes_crud.get", AsyncMock(return_value=scene))
+    monkeypatch.setattr("draftpilot.api.projects.blocks_crud.get", AsyncMock(return_value=block))
+    monkeypatch.setattr("draftpilot.api.projects.acts_crud.get", AsyncMock(return_value=act))
+    monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.get", AsyncMock(return_value=Screenplay(id=2, project_id=9, title="Story")))
+    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", AsyncMock(return_value=Project(id=9, title="Story", primary_language="English", languages=["Hindi"])))
+    response = client.put(
+        "/api/v1/projects/9/scenes/7/blocks/11/translations/Bengali",
+        headers={"If-Match": "3"},
+        json={"text": "আমাদের যেতে হবে।"},
+    )
+    assert response.status_code == 422
 
 
 def test_start_run_persists_before_enqueue(

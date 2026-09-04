@@ -505,7 +505,23 @@ async def save_dialogue_translation(
     if screenplay is None or screenplay.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dialogue block not found")
     if block.element_type.value != "dialogue":
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Block is not dialogue")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Block is not dialogue")
+    project = await projects_crud.get(session, project_id)
+    allowed_languages = {
+        item.strip().casefold()
+        for item in project.languages
+    } if project is not None else set()
+    normalized_language = language.strip().casefold()
+    if project is None or normalized_language not in allowed_languages:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Translation language is not enabled for this project",
+        )
+    if normalized_language == project.primary_language.strip().casefold():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Primary screenplay language cannot be a translation target",
+        )
     if if_match is None:
         raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
     if if_match != scene.version:
