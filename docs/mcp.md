@@ -74,6 +74,8 @@ Client registration and grant administration are protected separately from MCP i
 `MCP__AUTH_TOKEN`; the local default is only for development.
 Grant creation also validates the capability against the server catalog, so arbitrary database or
 unregistered tool permissions cannot be persisted.
+Administrators can revoke a project grant with `DELETE /api/v1/mcp/projects/{project_id}/grants/{grant_id}`;
+the endpoint is project-scoped and does not expose client bearer tokens.
 
 The Streamable HTTP transport requires `Authorization: Bearer <MCP__AUTH_TOKEN>`. Compose uses
 `draftpilot-local-token` for local development; replace it before exposing port 9001 outside the

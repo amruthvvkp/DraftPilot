@@ -101,3 +101,18 @@ async def create_project_grant(
     await session.commit()
     await session.refresh(grant)
     return MCPGrantRead.model_validate(grant)
+
+
+@router.delete("/projects/{project_id}/grants/{grant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_project_grant(
+    project_id: int,
+    grant_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    _admin: None = Depends(require_mcp_admin),
+) -> None:
+    """Revoke one project grant without crossing client or project boundaries."""
+    grant = await session.get(MCPGrant, grant_id)
+    if grant is None or grant.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant not found")
+    await session.delete(grant)
+    await session.commit()
