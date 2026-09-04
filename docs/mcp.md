@@ -68,7 +68,7 @@ order when the approved order is still current.
 `read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
 source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
 than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
-diff and rollback planning. `render_screenplay_export` renders bounded Fountain, FDX, or PDF
+diff and rollback planning. `render_screenplay_export` renders bounded Fountain, FDX, HTML, or PDF
 content (PDF is returned as base64),
 and `create_screenplay_export` persists an approved, checksummed export beneath the configured
 backup volume without changing canonical screenplay data.

@@ -11,6 +11,7 @@ from draftpilot.core.screenplay.editor import (
     next_element,
 )
 from draftpilot.core.screenplay.pdf import render_pdf
+from draftpilot.core.screenplay.html import render_html
 from draftpilot.core.screenplay.schema import SceneDoc
 from draftpilot.models.enums import BlockType
 from draftpilot.models import Block, DialogueTranslationCreate
@@ -93,6 +94,16 @@ def test_pdf_rendering_returns_a_valid_pdf_document() -> None:
     rendered = render_pdf(document)
     assert rendered.startswith(b"%PDF-")
     assert len(rendered) > 500
+
+
+def test_html_rendering_escapes_content_and_preserves_semantics() -> None:
+    """Render print-ready HTML without allowing screenplay text to become markup."""
+    document = parse_fountain("Title: <Unsafe>\n\nINT. HOUSE - DAY\n\n<script>alert(1)</script>")
+    rendered = render_html(document)
+    assert "&lt;Unsafe&gt;" in rendered
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in rendered
+    assert "<script>alert(1)</script>" not in rendered
+    assert 'class="scene-heading"' in rendered
 
 
 def test_dialogue_translation_keeps_source_block_unchanged() -> None:

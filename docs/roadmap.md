@@ -11,8 +11,8 @@ Tracking epic: [#13](https://github.com/amruthvvkp/DraftPilot/issues/13).
 - **Look** — neutral white / dark-grey shell; retain the clapperboard amber (`#e0a458`) as
   the single accent.
 - **Import/export** — built on [`screenplay-tools`](https://github.com/wildwinter/screenplay-tools)
-  (MIT). `trelby` is **GPLv2+** and is used as inspiration only — never vendored. PDF/HTML
-  export (via `screenplain` + `reportlab`) is deferred to Phase E.
+  (MIT). `trelby` is **GPLv2+** and is used as inspiration only — never vendored. PDF export
+  uses the local ReportLab renderer and HTML export uses a self-contained safe renderer.
 - **Data** — the database is the structured ground truth: deeply-nested Pydantic models,
   revisioned at the scene level. Import/export translates through that ground truth.
 - **Agent code execution** — model-written glue code runs through Pydantic Monty behind a

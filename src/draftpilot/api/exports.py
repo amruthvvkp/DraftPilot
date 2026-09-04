@@ -11,6 +11,7 @@ from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain
 from draftpilot.core.screenplay.adapters.pdf import parse_pdf
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
+from draftpilot.core.screenplay.html import render_html
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
@@ -27,12 +28,12 @@ async def export_screenplay(
     file_format: str,
     session: AsyncSession = Depends(async_get_db),
 ) -> Response:
-    """Export canonical screenplay data as Fountain, FDX, or PDF without mutation."""
+    """Export canonical screenplay data as Fountain, FDX, HTML, or PDF without mutation."""
     project = await projects_crud.get(session, project_id)
     screenplay = await screenplays_crud.get(session, screenplay_id)
     if project is None or screenplay is None or screenplay.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
-    if file_format not in {"fountain", "fdx", "pdf"}:
+    if file_format not in {"fountain", "fdx", "html", "pdf"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unsupported export format")
     document = await load_screenplay_doc(session, screenplay_id)
     if file_format == "fountain":
@@ -43,6 +44,10 @@ async def export_screenplay(
         content = render_fdx(document)
         media_type = "application/xml"
         filename = f"{screenplay.title}.fdx"
+    elif file_format == "html":
+        content = render_html(document)
+        media_type = "text/html"
+        filename = f"{screenplay.title}.html"
     else:
         return Response(
             render_pdf(document),

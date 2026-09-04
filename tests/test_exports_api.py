@@ -10,6 +10,7 @@ from draftpilot.api.exports import router
 from draftpilot.core.db import async_get_db
 from draftpilot.models import Project, Screenplay, ScreenplayCreate
 from draftpilot.core.screenplay.adapters.pdf import parse_pdf
+from draftpilot.core.screenplay.schema import ScreenplayDoc
 
 
 class _Session:
@@ -110,3 +111,34 @@ def test_pdf_parser_recovers_scene_and_dialogue() -> None:
     recovered = parse_pdf(render_pdf(document))
     assert recovered.acts[0].scenes[0].heading == "INT. HOUSE - DAY"
     assert [block.element_type for block in recovered.acts[0].scenes[0].blocks][-2:] == [BlockType.CHARACTER, BlockType.DIALOGUE]
+
+
+def test_html_export_returns_safe_print_document(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Return canonical screenplay data as escaped HTML without mutation."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+    project = Project(id=9, title="Story")
+    screenplay = Screenplay(id=2, project_id=9, title="Draft", format="feature")
+
+    async def get(_session: _Session, item_id: int) -> Project | Screenplay | None:
+        """Return the export fixtures."""
+        return project if item_id == 9 else screenplay if item_id == 2 else None
+
+    async def load(_session: _Session, _screenplay_id: int) -> ScreenplayDoc:
+        """Return a document containing markup-like title text."""
+        return ScreenplayDoc(title_page={"Title": "<Unsafe>"})
+
+    monkeypatch.setattr("draftpilot.api.exports.projects_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.screenplays_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.load_screenplay_doc", load)
+    response = TestClient(app).get("/api/v1/projects/9/screenplays/2/exports/html")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "&lt;Unsafe&gt;" in response.text
+    assert response.headers["content-disposition"].endswith('filename="Draft.html"')

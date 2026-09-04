@@ -23,7 +23,8 @@ with this project's MIT license (e.g. GPL).
 - **screenplay-tools** — Fountain ⇄ Final Draft (FDX) parsing/writing; the foundation of
   DraftPilot's import/export adapters. MIT, © Ian Thomas.
   <https://github.com/wildwinter/screenplay-tools>
-- **screenplain** — planned PDF/HTML export backend (deferred). MIT, © Martin Vilcans.
+- **screenplain** — evaluated as a possible PDF/HTML export backend; DraftPilot currently uses
+  its own ReportLab PDF and safe self-contained HTML renderers. MIT, © Martin Vilcans.
   <https://github.com/vilcans/screenplain>
 
 ## Inspiration only — not used as code

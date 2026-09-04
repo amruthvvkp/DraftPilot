@@ -27,6 +27,7 @@ from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc
+from draftpilot.core.screenplay.html import render_html
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
@@ -616,9 +617,9 @@ async def read_scene_revisions(
 async def render_screenplay_export(
     project_id: int, screenplay_id: int, file_format: str, ctx: Context
 ) -> dict[str, object]:
-    """Render a bounded, project-authorized Fountain, FDX, or PDF export."""
-    if file_format not in {"fountain", "fdx", "pdf"}:
-        raise ValueError("Only Fountain, FDX, and PDF exports are available through MCP")
+    """Render a bounded, project-authorized Fountain, FDX, HTML, or PDF export."""
+    if file_format not in {"fountain", "fdx", "html", "pdf"}:
+        raise ValueError("Only Fountain, FDX, HTML, and PDF exports are available through MCP")
     client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
@@ -647,7 +648,7 @@ async def render_screenplay_export(
             "format": file_format,
             "content_base64": content_base64,
         }
-    content = render_fountain(document) if file_format == "fountain" else render_fdx(document)
+    content = render_fountain(document) if file_format == "fountain" else render_fdx(document) if file_format == "fdx" else render_html(document)
     if len(content) > settings.mcp.max_output_chars:
         raise ValueError("Export response exceeds MCP output limit")
     return {
@@ -669,8 +670,8 @@ async def create_screenplay_export(
     """Persist an approved, bounded screenplay export artifact without changing its source."""
     if ctx is None:
         raise ValueError("MCP context is required")
-    if file_format not in {"fountain", "fdx", "pdf"}:
-        raise ValueError("Only Fountain, FDX, and PDF exports are available through MCP")
+    if file_format not in {"fountain", "fdx", "html", "pdf"}:
+        raise ValueError("Only Fountain, FDX, HTML, and PDF exports are available through MCP")
     client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
@@ -694,6 +695,8 @@ async def create_screenplay_export(
         content = render_pdf(document)
     elif file_format == "fountain":
         content = render_fountain(document).encode()
+    elif file_format == "html":
+        content = render_html(document).encode()
     else:
         content = render_fdx(document).encode()
     try:
