@@ -51,7 +51,7 @@ endpoint at `http://localhost:9010/health`. It uses the same bearer token conven
 volume. The lexical implementation is intentionally replaceable with a vector-store adapter.
 
 Screenplay exports are non-mutating: use `/api/v1/projects/{project_id}/screenplays/{screenplay_id}/exports/fountain`,
-`.../fdx`, or `.../pdf`. PDF import is best-effort text recovery via `pypdf` (scene headings and
+`.../fdx`, `.../html`, or `.../pdf`. PDF import is best-effort text recovery via `pypdf` (scene headings and
 basic character/dialogue/action cues are inferred); encrypted, malformed, oversized, and unreadable
 inputs are rejected. PDF export uses ReportLab's installed fonts; deployments that
 need Indian-language or other non-Latin glyphs should add and register a suitable Unicode font.
