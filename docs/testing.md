@@ -17,6 +17,10 @@ Compose network for CI-style execution:
 docker compose --profile test run --rm e2e
 ```
 
+When the stack is not already running, start it first with `docker compose up -d --build`; the
+test service waits for the UI health check and uses only mocked browser API responses. For a
+repeatable CI run, use `docker compose build e2e ui` followed by the command above.
+
 Rebuild the test image after changing Python Playwright tests or dependencies so Docker does not
 reuse a cached test source layer:
 

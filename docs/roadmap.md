@@ -73,10 +73,10 @@ server-derived scene version and rollback path. Timeline proposals can also be r
 approval when their expected order is still current. Typed story operations now cover loglines,
 causal beats, character arcs, and canon rules through one shared REST/MCP service with versioning,
 stale propagation, and RAG refresh. Phases A, B, D, E, and F remain in progress.
-Remaining work includes broader end-to-end smoke
-coverage, richer typed story operations beyond semantic
-blocks, complete external
-MCP client workflows, and production hardening of deployment and recovery paths.
+Remaining work includes a single broader end-to-end smoke journey, richer typed operations for
+context-generation workflows, complete live external MCP client workflows, and production
+hardening of deployment and recovery paths. The portable browser gate and authenticated local
+Langfuse trace verification are release checks, not substitutes for those remaining workflows.
 
 ## Phases
 
