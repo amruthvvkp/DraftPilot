@@ -7,7 +7,7 @@ Compose stack running and a project-scoped `outline.read` grant for the default 
 
 ```bash
 UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run python scripts/mcp_smoke.py
-# tools=22 resources=3 artifact_type=dict
+# tools=22 resources=3 artifact_type=dict tool_type=dict
 ```
 
 Set `DRAFTPILOT_MCP_ENDPOINT`, `DRAFTPILOT_MCP_TOKEN`, and `DRAFTPILOT_MCP_RESOURCE` to target
