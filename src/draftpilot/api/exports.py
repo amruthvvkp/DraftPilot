@@ -1,11 +1,11 @@
 """Canonical screenplay export endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
-from draftpilot.core.benchmark import BenchmarkManifest, manifest_from_document
+from draftpilot.core.benchmark import BenchmarkManifest, BenchmarkTrack, manifest_from_document
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
@@ -26,6 +26,7 @@ MAX_IMPORT_BYTES = 10 * 1024 * 1024
 async def benchmark_manifest(
     project_id: int,
     screenplay_id: int,
+    track: BenchmarkTrack = Query(default="redevelopment"),
     session: AsyncSession = Depends(async_get_db),
 ) -> BenchmarkManifest:
     """Build an isolated benchmark manifest from a project screenplay."""
@@ -36,8 +37,8 @@ async def benchmark_manifest(
     document = await load_screenplay_doc(session, screenplay_id)
     return manifest_from_document(
         document,
-        track="redevelopment",
-        label=f"project-{project_id}-screenplay-{screenplay_id}",
+        track=track,
+        label=f"{track}-project-{project_id}-screenplay-{screenplay_id}",
         primary_language=project.primary_language,
         translation_languages=project.languages,
     )

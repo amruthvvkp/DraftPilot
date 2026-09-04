@@ -50,6 +50,18 @@ def test_benchmark_manifest_is_project_scoped_and_metadata_bearing(
     assert response.json()["primary_language"] == "Hindi"
     assert response.json()["translation_languages"] == ["English"]
 
+    control_response = TestClient(app).get(
+        "/api/v1/projects/9/screenplays/2/benchmark-manifest?track=import_compare"
+    )
+    assert control_response.status_code == 200
+    assert control_response.json()["track"] == "import_compare"
+    assert control_response.json()["label"].startswith("import_compare-")
+
+    invalid_response = TestClient(app).get(
+        "/api/v1/projects/9/screenplays/2/benchmark-manifest?track=unknown"
+    )
+    assert invalid_response.status_code == 422
+
 
 def test_fountain_import_creates_a_new_screenplay(
     monkeypatch: pytest.MonkeyPatch,
