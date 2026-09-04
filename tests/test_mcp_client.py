@@ -175,6 +175,7 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     monkeypatch.setattr(server.graph_crud, "create_node", AsyncMock(return_value=node))
     monkeypatch.setattr(server.runs_crud, "update_status", update)
     monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr("draftpilot.core.context_operations.get_arq_pool", AsyncMock(return_value=pool))
 
     with pytest.raises(ValueError, match="approval"):
         run_async(server.apply_context_workflow(9, 44, 4, ctx=SimpleNamespace(client_id="writer")))

@@ -122,15 +122,15 @@ def test_context_suggestion_apply_is_explicit_provenance_linked_and_version_chec
     node = KnowledgeNode(id=51, project_id=7, kind="camera", label="Camera from run 44", description="Use a long lens.")
     updated: list[tuple[WorkflowRun, str]] = []
 
-    monkeypatch.setattr("draftpilot.api.context_workflows.runs_crud.get", AsyncMock(return_value=run))
-    monkeypatch.setattr("draftpilot.api.context_workflows.graph_crud.create_node", AsyncMock(return_value=node))
+    monkeypatch.setattr("draftpilot.core.context_operations.runs_crud.get", AsyncMock(return_value=run))
+    monkeypatch.setattr("draftpilot.core.context_operations.graph_crud.create_node", AsyncMock(return_value=node))
 
     async def update_status(_session: object, item: WorkflowRun, state: str, result: object = None, error: str = None) -> WorkflowRun:
         """Capture the explicit applied transition."""
         updated.append((item, state))
         return item
 
-    monkeypatch.setattr("draftpilot.api.context_workflows.runs_crud.update_status", update_status)
+    monkeypatch.setattr("draftpilot.core.context_operations.runs_crud.update_status", update_status)
     response = _client().post(
         "/api/v1/projects/7/context/workflows/runs/44/apply",
         json={"expected_source_version": 4},

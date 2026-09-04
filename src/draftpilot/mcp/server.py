@@ -31,6 +31,7 @@ from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
 from draftpilot.core.story_operations import validate_story_operation
 from draftpilot.core.context_workflows import context_workflow_catalog, get_context_workflow, validate_context_source
+from draftpilot.core.context_operations import apply_context_suggestion
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -45,7 +46,7 @@ from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import timeline_proposals as timeline_proposals_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, KnowledgeNodeCreate, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
+from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -237,41 +238,7 @@ async def apply_context_workflow(
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
-        run = await runs_crud.get(session, run_id)
-        if run is None or run.project_id != project_id or run.kind != "context_generation":
-            raise ValueError("Context run not found")
-        if run.status != "succeeded" or run.result is None:
-            raise ValueError("Context run is not ready to apply")
-        if run.result.get("applied_node_id") is not None:
-            raise ValueError("Context suggestion was already applied")
-        if run.result.get("source_version") != expected_source_version:
-            raise ValueError("Source artifact version has changed")
-        suggestion = run.result.get("suggestion")
-        output_kind = run.result.get("output_kind")
-        if not isinstance(suggestion, str) or not suggestion.strip() or not isinstance(output_kind, str):
-            raise ValueError("Context run has no applicable suggestion")
-        node = await graph_crud.create_node(
-            session,
-            KnowledgeNodeCreate(
-                project_id=project_id,
-                kind=output_kind,
-                label=f"{output_kind.replace('_', ' ').title()} from run {run_id}",
-                description=suggestion,
-                node_metadata={"source_run_id": run_id, "source_artifact_id": run.input.get("artifact_id"), "source_version": expected_source_version, "citations": run.result.get("citations", [])},
-            ),
-        )
-        await (await get_arq_pool()).enqueue_job(
-            "index_rag_document",
-            {
-                "project_id": project_id,
-                "source_id": f"knowledge_node:{node.id}",
-                "source_kind": f"knowledge_node:{node.kind}",
-                "text": f"{node.label}\n{node.description or ''}",
-                "content_version": node.version,
-            },
-        )
-        run.result = {**run.result, "applied_node_id": node.id}
-        await runs_crud.update_status(session, run, "applied", result=run.result)
+        node = await apply_context_suggestion(session, project_id, run_id, expected_source_version)
     return {"project_id": project_id, "node": node.model_dump(mode="json"), "run_id": run_id}
 
 
