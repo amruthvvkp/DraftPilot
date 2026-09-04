@@ -285,8 +285,8 @@ export function startEvaluation(projectId: number, screenplayId: number, evaluat
   return request<WorkflowRun>(`/api/v1/projects/${projectId}/evaluations/runs`, { method: 'POST', body: JSON.stringify({ screenplay_id: screenplayId, evaluator }) })
 }
 
-export function createArtifact(projectId: number, kind: string, title: string): Promise<StoryArtifact> {
-  return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts`, { method: 'POST', body: JSON.stringify({ kind, title }) })
+export function createArtifact(projectId: number, kind: string, title: string, dependsOn: number[] = []): Promise<StoryArtifact> {
+  return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts`, { method: 'POST', body: JSON.stringify({ kind, title, depends_on: dependsOn }) })
 }
 
 export function updateArtifact(projectId: number, artifactId: number, version: number, changes: { title?: string; content?: string }): Promise<StoryArtifact> {
