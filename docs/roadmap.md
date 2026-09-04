@@ -85,7 +85,9 @@ typed-tool reads). Monty executions now have project-scoped redacted audit recor
 and bounded telemetry fields. Translation writes now enforce configured dialogue targets and reject
 the primary screenplay language across REST and MCP; continue with broader production hardening and external-client
 compatibility checks. Copilot proposal creation now enforces the originating run permission mode
-server-side. The portable
+server-side. Durable workflow runs now persist bounded attempt counters: provider or worker
+failures return the same run to `queued`, re-enqueue it until its budget is exhausted, and preserve
+cancellation and worker-restart recovery. The portable
 browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
 for those remaining workflows.
 

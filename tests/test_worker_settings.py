@@ -51,6 +51,43 @@ class _Pool:
         self.jobs.append((name, run_id))
 
 
+def test_retry_state_requeues_until_attempt_budget(monkeypatch) -> None:
+    """Persist a retrying state and enqueue the same durable run."""
+    from draftpilot.worker import functions
+
+    session = _Session()
+    pool = _Pool()
+    run = SimpleNamespace(id=23, status="running", attempt_count=1, max_attempts=3)
+    monkeypatch.setattr(functions, "session_scope", lambda: _SessionScope(session))
+    monkeypatch.setattr(functions.workflow_runs_crud, "get", lambda _session, _run_id: _run(run))
+    monkeypatch.setattr(functions.workflow_runs_crud, "update_status", _update_status)
+    monkeypatch.setattr(functions, "get_arq_pool", lambda: _pool(pool))
+
+    result = run_async(functions._retry_or_fail({}, 23, RuntimeError("provider offline")))
+
+    assert result == {"status": "retrying", "attempt": 1}
+    assert run.status == "queued"
+    assert "Attempt 1/3 failed" in run.error
+    assert pool.jobs == [("execute_workflow", 23)]
+
+
+def test_retry_state_marks_run_failed_after_budget(monkeypatch) -> None:
+    """Stop retrying once the persisted attempt budget is exhausted."""
+    from draftpilot.worker import functions
+
+    session = _Session()
+    run = SimpleNamespace(id=24, status="running", attempt_count=3, max_attempts=3)
+    monkeypatch.setattr(functions, "session_scope", lambda: _SessionScope(session))
+    monkeypatch.setattr(functions.workflow_runs_crud, "get", lambda _session, _run_id: _run(run))
+    monkeypatch.setattr(functions.workflow_runs_crud, "update_status", _update_status)
+
+    result = run_async(functions._retry_or_fail({}, 24, RuntimeError("permanent failure")))
+
+    assert result == {"error": "permanent failure", "status": "failed"}
+    assert run.status == "failed"
+    assert run.error == "permanent failure"
+
+
 def test_startup_requeues_interrupted_runs(monkeypatch) -> None:
     """Requeue running runs and preserve an explicit restart diagnostic."""
     session = _Session()
@@ -72,6 +109,19 @@ def test_startup_requeues_interrupted_runs(monkeypatch) -> None:
 async def _runs(runs: list[object]) -> list[object]:
     """Return fake interrupted runs from an async CRUD boundary."""
     return runs
+
+
+async def _run(run: object) -> object:
+    """Return one fake workflow run from the isolated CRUD boundary."""
+    return run
+
+
+async def _update_status(_session: object, run: object, status: str, result=None, error=None) -> object:
+    """Apply a captured workflow transition to a fake run."""
+    run.status = status
+    run.result = result
+    run.error = error
+    return run
 
 
 async def _pool(pool: _Pool) -> _Pool:

@@ -119,6 +119,9 @@ The durable run API currently supports `GET` inspection, `POST /resume`, and `PO
 checks the persisted state before recording success. On worker startup, runs left in `running` are
 marked queued and re-enqueued, allowing browser-disconnected or interrupted Copilot/evaluation
 work to resume without direct database intervention.
+Run responses also expose `attempt_count` and `max_attempts`. Provider or worker failures are
+persisted as queued retries and the same run id is re-enqueued until the bounded budget is
+exhausted; the final failure is durable and can be explicitly resumed by an authorized client.
 
 Copilot turns are persisted at `/api/v1/projects/{project_id}/copilot/messages`. Each message
 records its page, artifact, selection, instruction layers, retrieved citations, and active typed

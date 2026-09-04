@@ -13,6 +13,7 @@ import logfire
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.providers import create_chat_model
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.copilot import generate_reply, retrieve_context
@@ -125,35 +126,66 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
             run = await workflow_runs_crud.get(session, run_id)
             if run is None:
                 return {"error": "not_found"}
+            if run.status in {"succeeded", "cancelled"}:
+                return {"status": run.status}
+            if run.attempt_count >= run.max_attempts:
+                await workflow_runs_crud.update_status(
+                    session, run, "failed", error="Maximum workflow attempts exceeded"
+                )
+                return {"error": "maximum_attempts_exceeded"}
+            run.attempt_count += 1
             await workflow_runs_crud.update_status(session, run, "running")
             copilot_run = run.kind == "copilot_response"
             evaluation_run = run.kind == "evaluation"
             context_run = run.kind == "context_generation"
             screenplay_id = run.input.get("screenplay_id")
-            if context_run:
-                return await _execute_context_generation(ctx, run)
             if not copilot_run and not isinstance(screenplay_id, int):
                 await workflow_runs_crud.update_status(
                     session, run, "failed", error="screenplay_id is required"
                 )
                 return {"error": "invalid_input"}
-        if copilot_run:
-            return await _execute_copilot_run(ctx, run)
-        assert isinstance(screenplay_id, int)
         try:
+            if context_run:
+                return await _execute_context_generation(ctx, run)
+            if copilot_run:
+                return await _execute_copilot_run(ctx, run)
+            assert isinstance(screenplay_id, int)
             result = await evaluate_screenplay(ctx, run) if evaluation_run else await analyze_screenplay(ctx, screenplay_id, run.agent_role)
         except Exception as exc:  # pragma: no cover - worker failure boundary
-            async with session_scope() as session:
-                run = await workflow_runs_crud.get(session, run_id)
-                if run is not None:
-                    await workflow_runs_crud.update_status(session, run, "failed", error=str(exc))
-            raise
+            return await _retry_or_fail(ctx, run_id, exc)
         async with session_scope() as session:
             run = await workflow_runs_crud.get(session, run_id)
             if run is not None and run.status != "cancelled":
                 await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
                 return result
         return {"status": "cancelled"}
+
+
+async def _retry_or_fail(ctx: dict, run_id: int, error: Exception) -> dict[str, object]:
+    """Persist a bounded retry or terminal failure for a workflow run."""
+    async with session_scope() as session:
+        run = await workflow_runs_crud.get(session, run_id)
+        if run is None:
+            return {"error": "not_found"}
+        if run.status == "cancelled":
+            return {"status": "cancelled"}
+        message = str(error)[:900]
+        if run.attempt_count < run.max_attempts:
+            await workflow_runs_crud.update_status(
+                session,
+                run,
+                "queued",
+                error=f"Attempt {run.attempt_count}/{run.max_attempts} failed: {message}",
+            )
+            should_retry = True
+        else:
+            await workflow_runs_crud.update_status(session, run, "failed", error=message)
+            should_retry = False
+    if should_retry:
+        pool = await get_arq_pool()
+        await pool.enqueue_job("execute_workflow", run_id)
+        return {"status": "retrying", "attempt": run.attempt_count}
+    return {"error": message, "status": "failed"}
 
 
 async def _execute_context_generation(ctx: dict, run: WorkflowRun) -> dict[str, object]:
@@ -192,8 +224,8 @@ async def _execute_context_generation(ctx: dict, run: WorkflowRun) -> dict[str, 
             None,
             retrieved_context,
         )
-    except Exception as exc:  # pragma: no cover - provider/network dependent
-        return await _fail_context_run(run.id or 0, str(exc))
+    except Exception:  # pragma: no cover - provider/network dependent
+        raise
     result: dict[str, object] = {
         "workflow": workflow.key,
         "output_kind": workflow.output_kind,
@@ -305,11 +337,7 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
             llm_settings,
             retrieved_context,
         )
-    except Exception as exc:  # pragma: no cover - provider/network dependent
-        async with session_scope() as session:
-            current = await workflow_runs_crud.get(session, run.id or 0)
-            if current is not None:
-                await workflow_runs_crud.update_status(session, current, "failed", error=str(exc))
+    except Exception:  # pragma: no cover - provider/network dependent
         raise
     async with session_scope() as session:
         current = await workflow_runs_crud.get(session, run.id or 0)

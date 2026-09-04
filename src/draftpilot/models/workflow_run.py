@@ -19,6 +19,8 @@ class WorkflowRunBase(SQLModel):
     error: str | None = Field(default=None, max_length=1000)
     agent_role: str = Field(default="story_architect", max_length=60)
     permission_mode: str = Field(default="chat_only", max_length=30)
+    attempt_count: int = Field(default=0, ge=0)
+    max_attempts: int = Field(default=3, ge=1, le=10)
 
 
 class WorkflowRun(WorkflowRunBase, table=True):  # type: ignore[call-arg]
