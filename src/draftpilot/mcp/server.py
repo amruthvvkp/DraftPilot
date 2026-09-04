@@ -552,6 +552,16 @@ async def propose_dialogue_translation(
             or screenplay.project_id != project_id
         ):
             raise ValueError("Dialogue block is not in the requested project")
+        project = await projects_crud.get(session, project_id)
+        allowed_languages = {
+            item.strip().casefold()
+            for item in project.languages
+        } if project is not None else set()
+        normalized_language = language.strip().casefold()
+        if project is None or normalized_language not in allowed_languages:
+            raise ValueError("Translation language is not enabled for this project")
+        if normalized_language == project.primary_language.strip().casefold():
+            raise ValueError("Primary screenplay language cannot be a translation target")
         proposal = await proposals_crud.create(
             session,
             AgentProposal(
