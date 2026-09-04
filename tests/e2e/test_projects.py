@@ -22,6 +22,9 @@ def mock_projects_api(page: Page) -> None:
         """Fulfill a project API request without touching Postgres."""
         request = route.request
         if request.method == "POST":
+            payload = request.post_data_json
+            if payload.get("title") == "Playwright story":
+                assert payload["references"] == [{"kind": "film", "label": "Pather Panchali", "url": "https://example.test/pather-panchali", "note": None}]
             route.fulfill(status=201, content_type="application/json", body=json.dumps(project))
         else:
             route.fulfill(status=200, content_type="application/json", body=json.dumps([]))
@@ -84,7 +87,10 @@ def test_create_project_from_react_wizard(page: Page) -> None:
     wizard.get_by_role("button", name="Continue").click()
     expect(wizard.get_by_label("Description")).to_be_visible()
     wizard.get_by_role("button", name="Continue").click()
-    expect(wizard.get_by_label("Creative references")).to_be_visible()
+    expect(wizard.get_by_role("group", name="Typed creative references")).to_be_visible()
+    wizard.get_by_role("button", name="Add typed reference").click()
+    wizard.get_by_role("textbox", name="Reference", exact=True).fill("Pather Panchali")
+    wizard.get_by_label("URL").fill("https://example.test/pather-panchali")
     wizard.get_by_role("button", name="Continue").click()
     expect(wizard.get_by_text("READY TO BEGIN")).to_be_visible()
     wizard.get_by_role("button", name="Create project", exact=False).click()
