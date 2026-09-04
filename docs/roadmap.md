@@ -65,7 +65,8 @@ FDX export is exposed in the workspace, and the API rejects a primary screenplay
 a dialogue-translation target. Timeline act and character lanes and editable graph relationships are
 now visible in the React workflow surfaces. Pending timeline proposals reload after a browser
 disconnect, and approval invalidates downstream artifacts. New projects atomically receive a feature screenplay and
-Act One so the creation journey opens on a writable document. Phases A, B, D, E, and F remain in progress because the remaining
+Act One so the creation journey opens on a writable document. Project references now have scoped,
+versioned REST mutations and a single Alembic migration head. Phases A, B, D, E, and F remain in progress because the remaining
 work includes broader end-to-end smoke coverage, richer typed story operations, complete external
 MCP client workflows, and production hardening of deployment and recovery paths.
 
