@@ -55,3 +55,13 @@ Screenplay exports are non-mutating: use `/api/v1/projects/{project_id}/screenpl
 basic character/dialogue/action cues are inferred); encrypted, malformed, oversized, and unreadable
 inputs are rejected. PDF export uses ReportLab's installed fonts; deployments that
 need Indian-language or other non-Latin glyphs should add and register a suitable Unicode font.
+
+The benchmark comparison tool is database-free. Build isolated manifests in Python with
+`manifest_from_document`, or validate existing JSON fixtures directly:
+
+```bash
+uv run python scripts/benchmark_compare.py control.json candidate.json
+```
+
+The report includes scene-order, element-count, runtime, and language deltas; source screenplay
+bytes are represented only by SHA-256 digests.

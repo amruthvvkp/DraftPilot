@@ -51,6 +51,11 @@ Evaluation records compare story beats, character arcs, pacing, tone, visual lan
 format fidelity, export fidelity, and writer usefulness. This benchmark becomes a release gate
 for the editor, context-generation workflows, agent permissions, revision/rollback behavior, and
 FDX import/export rather than relying only on synthetic fixtures.
+The fixture-safe `draftpilot.core.benchmark` contract and `scripts/benchmark_compare.py` compare
+machine-readable control/candidate manifests for structure, scene order, element counts, runtime,
+and multilingual metadata. They hash source bytes without embedding screenplay text and accept
+isolated JSON fixtures, so the writer-owned source can be added later without coupling benchmark
+execution to the live Compose database.
 
 ## Implementation checkpoint — 2026-09-04
 
