@@ -81,8 +81,9 @@ includes a single broader end-to-end smoke journey covering project creation, st
 screenplay writing, translation, timeline proposal approval/rollback, agent proposal
 approval/rollback, exports, backup, and non-destructive restore. Live external MCP client validation
 now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-scoped resource and
-typed-tool reads);
-continue with broader production hardening and external-client compatibility checks. The portable
+typed-tool reads). Monty executions now have project-scoped redacted audit records with code hashes
+and bounded telemetry fields; continue with broader production hardening and external-client
+compatibility checks. The portable
 browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
 for those remaining workflows.
 
