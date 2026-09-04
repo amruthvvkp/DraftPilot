@@ -146,3 +146,46 @@ async def reject_timeline_proposal(
     await session.commit()
     await session.refresh(proposal)
     return TimelineProposalRead.model_validate(proposal)
+
+
+@router.post("/{proposal_id}/rollback", response_model=TimelineProposalRead)
+async def rollback_timeline_proposal(
+    project_id: int,
+    screenplay_id: int,
+    proposal_id: int,
+    session: AsyncSession = Depends(async_get_db),
+) -> TimelineProposalRead:
+    """Restore the original scene order from an approved reorder proposal."""
+    proposal = await proposals_crud.get(session, proposal_id)
+    if (
+        proposal is None
+        or proposal.project_id != project_id
+        or proposal.screenplay_id != screenplay_id
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
+    if proposal.status != "approved":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal is not approved")
+    scenes = await scenes_crud.list_for_screenplay(session, screenplay_id)
+    current_ids = [scene.id for scene in scenes if scene.id is not None]
+    if current_ids != proposal.proposed_scene_ids:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Screenplay order has changed")
+    by_id = {scene.id: scene for scene in scenes}
+    for position, scene_id in enumerate(proposal.original_scene_ids):
+        scene = by_id[scene_id]
+        scene.position = position
+        scene.version += 1
+        session.add(scene)
+    timeline_artifacts = await artifacts_crud.list_for_project(session, project_id)
+    timeline_ids = [
+        artifact.id
+        for artifact in timeline_artifacts
+        if artifact.id is not None and artifact.kind == "timeline"
+    ]
+    if timeline_ids:
+        await artifacts_crud.mark_dependents_stale(session, project_id, timeline_ids)
+    proposal.status = "rolled_back"
+    proposal.updated_at = datetime.now(timezone.utc)
+    session.add(proposal)
+    await session.commit()
+    await session.refresh(proposal)
+    return TimelineProposalRead.model_validate(proposal)

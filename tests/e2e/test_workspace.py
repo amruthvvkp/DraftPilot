@@ -309,7 +309,24 @@ def test_timeline_supports_drag_keyboard_reorder_and_proposal(page: Page) -> Non
     proposal = {"id": 91, "project_id": 9001, "screenplay_id": 12, "status": "proposed", "original_scene_ids": [7, 8], "proposed_scene_ids": [8, 7], "timings": [{"scene_id": 8, "position": 0, "start_seconds": 0, "end_seconds": 30}, {"scene_id": 7, "position": 1, "start_seconds": 30, "end_seconds": 60}], "total_runtime_seconds": 60}
 
     page.route("**/api/v1/projects/9001/workspace", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace)))
-    page.route("**/api/v1/projects/9001/screenplays/12/timeline/proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]" if route.request.method == "GET" else json.dumps(proposal)))
+    def timeline_proposals(route: Route) -> None:
+        """Serve the isolated timeline proposal lifecycle fixture."""
+        if route.request.method == "GET":
+            route.fulfill(status=200, content_type="application/json", body="[]")
+            return
+        route.fulfill(status=201, content_type="application/json", body=json.dumps(proposal))
+
+    def timeline_mutation(route: Route) -> None:
+        """Approve and rollback the timeline fixture without a live database."""
+        if route.request.url.endswith("/approve"):
+            proposal["status"] = "approved"
+        elif route.request.url.endswith("/rollback"):
+            proposal["status"] = "rolled_back"
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(proposal))
+
+    page.route("**/api/v1/projects/9001/screenplays/12/timeline/proposals", timeline_proposals)
+    page.route("**/api/v1/projects/9001/screenplays/12/timeline/proposals/91/approve", timeline_mutation)
+    page.route("**/api/v1/projects/9001/screenplays/12/timeline/proposals/91/rollback", timeline_mutation)
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
@@ -326,3 +343,7 @@ def test_timeline_supports_drag_keyboard_reorder_and_proposal(page: Page) -> Non
     expect(cards.nth(0)).to_contain_text("EXT. GARDEN")
     page.get_by_role("button", name="Review reorder").click()
     expect(page.get_by_text("PROPOSED PROPOSAL")).to_be_visible()
+    page.get_by_role("button", name="Approve reorder").click()
+    expect(page.get_by_text("APPROVED PROPOSAL")).to_be_visible()
+    page.get_by_role("button", name="Rollback reorder").click()
+    expect(page.get_by_text("ROLLED_BACK PROPOSAL")).to_be_visible()

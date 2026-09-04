@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { approveTimelineProposal, createTimelineProposal, listTimelineProposals, ProjectWorkspace, rejectTimelineProposal, TimelineProposal } from './api'
+import { approveTimelineProposal, createTimelineProposal, listTimelineProposals, ProjectWorkspace, rejectTimelineProposal, rollbackTimelineProposal, TimelineProposal } from './api'
 import CopilotPanel from './CopilotPanel'
 import './timeline.css'
 
@@ -80,6 +80,17 @@ export default function Timeline({ projectId, screenplayId, workspace }: Timelin
     }
   }
 
+  async function rollback(): Promise<void> {
+    if (!proposal) return
+    setError('')
+    try {
+      setProposal(await rollbackTimelineProposal(projectId, screenplayId, proposal.id))
+      setOrderedIds(proposal.original_scene_ids)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to rollback timeline proposal')
+    }
+  }
+
   const byId = new Map(workspace.scenes.map(scene => [scene.id, scene]))
   const actById = new Map(workspace.acts.map(act => [act.id, act]))
   const timingById = new Map<number, { start: number; end: number }>()
@@ -109,7 +120,7 @@ export default function Timeline({ projectId, screenplayId, workspace }: Timelin
     <div className="time-ruler"><span>00:00</span><span>{clock(Math.round(offset / 4))}</span><span>{clock(Math.round(offset / 2))}</span><span>{clock(Math.round(offset * 3 / 4))}</span><span>{clock(offset)}</span></div>
     <section className="timeline-lanes" aria-label="Act and character lanes"><div className="lane-group"><p className="eyebrow warm">ACT LANES</p>{actLanes.map(lane => <div className="timeline-lane-row" key={lane.label}><strong>{lane.label}</strong><div>{lane.sceneIds.map(sceneId => <span className="lane-scene" key={sceneId}>{String(orderedIds.indexOf(sceneId) + 1).padStart(2, '0')}</span>)}</div></div>)}</div>{characterLaneMap.size > 0 && <div className="lane-group"><p className="eyebrow warm">CHARACTER LANES</p>{[...characterLaneMap.entries()].map(([character, sceneIds]) => <div className="timeline-lane-row" key={character}><strong>{character}</strong><div>{sceneIds.map(sceneId => <span className="lane-scene character" key={sceneId}>{String(orderedIds.indexOf(sceneId) + 1).padStart(2, '0')}</span>)}</div></div>)}</div>}</section>
     <div className="timeline-lane">{orderedIds.map((sceneId, index) => { const scene = byId.get(sceneId); const timing = timingById.get(sceneId); if (!scene || !timing) return null; const characters = charactersByScene(sceneId); return <article className="timeline-card" draggable onDragStart={() => setDraggingId(sceneId)} onDragOver={event => event.preventDefault()} onDrop={() => drop(sceneId)} key={sceneId}><span className="timeline-number">{String(index + 1).padStart(2, '0')}</span><div><strong>{scene.heading}</strong><small>{clock(timing.start)}–{clock(timing.end)} · {duration(scene.body)} sec estimated · {actById.get(scene.act_id)?.title || `Act ${(actById.get(scene.act_id)?.position ?? 0) + 1}`}{characters.length ? ` · ${characters.join(', ')}` : ''}</small><small>{scene.body || 'No scene action yet.'}</small></div><div className="timeline-controls"><button aria-label={`Move ${scene.heading} earlier`} onClick={() => move(sceneId, -1)} disabled={index === 0}>↑</button><button aria-label={`Move ${scene.heading} later`} onClick={() => move(sceneId, 1)} disabled={index === orderedIds.length - 1}>↓</button></div></article> })}</div>
-    {proposal && <div className="proposal-card"><div><p className="eyebrow warm">{proposal.status.toUpperCase()} PROPOSAL</p><strong>{Math.round(proposal.total_runtime_seconds / 60)} min projected runtime</strong><p>Dependent timeline artifacts will be marked stale after approval.</p></div><div>{proposal.status === 'proposed' && <><button className="button quiet" onClick={() => void reject()}>Reject</button><button className="button primary" onClick={() => void approve()}>Approve reorder</button></>}</div></div>}
+    {proposal && <div className="proposal-card"><div><p className="eyebrow warm">{proposal.status.toUpperCase()} PROPOSAL</p><strong>{Math.round(proposal.total_runtime_seconds / 60)} min projected runtime</strong><p>Dependent timeline artifacts will be marked stale after approval.</p></div><div>{proposal.status === 'proposed' && <><button className="button quiet" onClick={() => void reject()}>Reject</button><button className="button primary" onClick={() => void approve()}>Approve reorder</button></>}{proposal.status === 'approved' && <button className="button quiet" onClick={() => void rollback()}>Rollback reorder</button>}</div></div>}
     <aside className="timeline-copilot"><CopilotPanel projectId={projectId} page={`/projects/${projectId}/timeline`} artifact="timeline" selection={proposal ? `${proposal.proposed_scene_ids.length} scenes` : null} /></aside>
   </section>
 }
