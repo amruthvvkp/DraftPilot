@@ -89,7 +89,8 @@ now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-
 typed-tool reads). Monty executions now have project-scoped redacted audit records with code hashes
 and bounded telemetry fields. Translation writes now enforce configured dialogue targets and reject
 the primary screenplay language across REST and MCP; continue with broader production hardening and external-client
-compatibility checks. Copilot proposal creation now enforces the originating run permission mode
+compatibility checks. Local MCP stdio now resolves a configurable `MCP__STDIO_CLIENT_ID` through
+the same project grant and audit boundary as HTTP clients. Copilot proposal creation now enforces the originating run permission mode
 server-side. Durable workflow runs now persist bounded attempt counters: provider or worker
 failures return the same run to `queued`, re-enqueue it until its budget is exhausted, and preserve
 cancellation and worker-restart recovery. Scoped-edit proposals now require a server-defined

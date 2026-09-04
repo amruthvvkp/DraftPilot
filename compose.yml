@@ -154,6 +154,7 @@ services:
       <<: *app-env
       MCP__AUTH_TOKEN: ${MCP__AUTH_TOKEN:-draftpilot-local-token}
       MCP__ADMIN_TOKEN: ${MCP__ADMIN_TOKEN:-draftpilot-local-admin-token}
+      MCP__STDIO_CLIENT_ID: ${MCP__STDIO_CLIENT_ID:-mcp-stdio}
       OTEL__ENABLED: ${OTEL__ENABLED:-true}
       OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
