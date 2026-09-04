@@ -296,3 +296,33 @@ def test_context_page_edits_versioned_project_reference(page: Page) -> None:
     page.on("dialog", lambda dialog: dialog.accept())
     page.get_by_role("button", name="Remove").click()
     expect(page.locator(".reference-card")).not_to_be_visible()
+
+
+def test_timeline_supports_drag_keyboard_reorder_and_proposal(page: Page) -> None:
+    """Reorder scenes visually and with keyboard controls before proposing approval."""
+    project = {"id": 9001, "title": "Timeline story", "logline": "A reordered story.", "description": "", "genres": ["Drama"], "languages": ["English"], "primary_language": "English", "project_instruction": "", "version": 1, "artwork_url": None}
+    scenes = [
+        {"id": 7, "act_id": 4, "heading": "INT. HOUSE - NIGHT", "position": 0, "body": "MIRA waits." , "version": 1, "scene_instruction": ""},
+        {"id": 8, "act_id": 4, "heading": "EXT. GARDEN - DAWN", "position": 1, "body": "MIRA runs.", "version": 1, "scene_instruction": ""},
+    ]
+    workspace = {"project": project, "screenplay": {"id": 12, "project_id": 9001, "title": "Timeline story", "format": "feature", "status": "draft"}, "acts": [{"id": 4, "screenplay_id": 12, "title": "Act One", "position": 0}], "scenes": scenes, "blocks": {"7": [{"id": 20, "scene_id": 7, "position": 0, "element_type": "character", "text": "MIRA", "character_extension": None, "is_dual": False, "dual_group": None, "translation": None, "translation_lang": None}], "8": [{"id": 21, "scene_id": 8, "position": 0, "element_type": "character", "text": "MIRA", "character_extension": None, "is_dual": False, "dual_group": None, "translation": None, "translation_lang": None}]}}
+    proposal = {"id": 91, "project_id": 9001, "screenplay_id": 12, "status": "proposed", "original_scene_ids": [7, 8], "proposed_scene_ids": [8, 7], "timings": [{"scene_id": 8, "position": 0, "start_seconds": 0, "end_seconds": 30}, {"scene_id": 7, "position": 1, "start_seconds": 30, "end_seconds": 60}], "total_runtime_seconds": 60}
+
+    page.route("**/api/v1/projects/9001/workspace", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(workspace)))
+    page.route("**/api/v1/projects/9001/screenplays/12/timeline/proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]" if route.request.method == "GET" else json.dumps(proposal)))
+    page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.goto("/projects/9001")
+    page.get_by_role("button", name="Timeline board →").click()
+    cards = page.locator(".timeline-card")
+    expect(cards.nth(0)).to_contain_text("INT. HOUSE")
+    cards.nth(1).drag_to(cards.nth(0))
+    expect(cards.nth(0)).to_contain_text("EXT. GARDEN")
+    page.get_by_role("button", name="Move EXT. GARDEN - DAWN later").click()
+    expect(cards.nth(0)).to_contain_text("INT. HOUSE")
+    page.get_by_role("button", name="Move EXT. GARDEN - DAWN earlier").click()
+    expect(cards.nth(0)).to_contain_text("EXT. GARDEN")
+    page.get_by_role("button", name="Review reorder").click()
+    expect(page.get_by_text("PROPOSED PROPOSAL")).to_be_visible()
