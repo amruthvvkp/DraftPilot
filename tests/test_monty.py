@@ -3,7 +3,17 @@
 import pytest
 
 from draftpilot.core.config import MontySettings
-from draftpilot.core.monty import MontyDisabledError, MontyExecutionConfig, MontySandboxError, audit_record, execute_glue, execution_config
+from draftpilot.core.monty import (
+    MontyDisabledError,
+    MontyExecutionConfig,
+    MontySandboxError,
+    audit_record,
+    execute_glue,
+    execute_glue_audited,
+    execution_config,
+)
+from draftpilot.models import MontyExecutionCreate
+from _async import run_async
 
 
 def test_monty_is_disabled_by_default() -> None:
@@ -49,3 +59,29 @@ def test_monty_audit_payload_redacts_code_and_inputs() -> None:
     assert result.error == "failed"
     assert "secret" not in result.model_dump_json()
     assert "private" not in result.model_dump_json()
+
+
+def test_audited_monty_execution_persists_redacted_success_and_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Persist bounded audit records for successful and rejected execution."""
+    records: list[MontyExecutionCreate] = []
+
+    async def capture(_session: object, data: MontyExecutionCreate) -> MontyExecutionCreate:
+        """Capture the CRUD payload without requiring a database."""
+        records.append(data)
+        return data
+
+    monkeypatch.setattr("draftpilot.crud.monty_executions.create", capture)
+    config = MontyExecutionConfig(enabled=True, max_duration_seconds=1)
+    result = run_async(execute_glue_audited(object(), 7, "total + 2", {"total": 3}, config, 11))
+
+    assert result.value == 5
+    assert records[0].status == "completed"
+    assert records[0].run_id == 11
+    assert records[0].input_count == 1
+    assert "total + 2" not in records[0].model_dump_json()
+
+    with pytest.raises(MontySandboxError):
+        run_async(execute_glue_audited(object(), 7, "open('private')", config=config, run_id=12))
+    assert records[1].status == "failed"
+    assert records[1].run_id == 12
+    assert "private" not in records[1].model_dump_json()

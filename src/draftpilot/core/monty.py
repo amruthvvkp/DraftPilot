@@ -6,6 +6,7 @@ from time import monotonic
 from typing import Any
 
 import logfire
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.config import MontySettings
 from draftpilot.models import MontyExecutionCreate
@@ -116,3 +117,28 @@ def execute_glue(
         raise
     except Exception as exc:
         raise MontySandboxError("Monty execution failed") from exc
+
+
+async def execute_glue_audited(
+    session: AsyncSession,
+    project_id: int,
+    code: str,
+    inputs: dict[str, Any] | None = None,
+    config: MontyExecutionConfig | None = None,
+    run_id: int | None = None,
+) -> MontyExecutionResult:
+    """Execute bounded glue and persist a redacted success or failure audit."""
+    from draftpilot.crud import monty_executions as executions_crud
+
+    try:
+        result = execute_glue(code, inputs, config)
+    except (MontyDisabledError, MontySandboxError) as exc:
+        await executions_crud.create(
+            session,
+            audit_record(project_id, code, inputs, run_id=run_id, error=str(exc)),
+        )
+        raise
+    await executions_crud.create(
+        session, audit_record(project_id, code, inputs, result=result, run_id=run_id)
+    )
+    return result
