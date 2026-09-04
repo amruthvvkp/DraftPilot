@@ -164,7 +164,7 @@ export type AgentRole = { key: string; label: string; description: string; defau
 
 export type Capability = { name: string; description: string; scope: string; mutates: boolean; approval_required: boolean }
 
-export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null }
+export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null; attempt_count: number; max_attempts: number }
 
 export type ContextWorkflowSpec = { key: string; label: string; description: string; input_artifact_kinds: string[]; output_kind: string; evaluator: string; agent_role: string; permission_mode: string }
 
