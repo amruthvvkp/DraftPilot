@@ -3,9 +3,11 @@
 from cryptography.fernet import Fernet
 from pydantic import SecretStr
 import pytest
+from fastapi import HTTPException
 
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.api.providers import test_provider as probe_provider
+from draftpilot.api.providers import _validate_profile_endpoint
 from draftpilot.core.providers import create_chat_model, provider_base_url, settings_from_profile, validate_provider_url
 from draftpilot.core.security import encrypt_secret
 from draftpilot.models import ProviderProfile
@@ -58,6 +60,14 @@ def test_provider_url_rejects_private_ip_literal() -> None:
     with pytest.raises(ValueError, match="Private"):
         validate_provider_url("http://10.0.0.8:11434/v1")
     assert validate_provider_url("http://127.0.0.1:11434/v1") == "http://127.0.0.1:11434/v1"
+
+
+def test_provider_profile_endpoint_validation_runs_before_persistence() -> None:
+    """Reject an unsafe profile endpoint at the settings boundary."""
+    with pytest.raises(HTTPException) as error:
+        _validate_profile_endpoint("gateway", "http://10.0.0.8:8080/v1")
+    assert error.value.status_code == 422
+    assert "Private" in str(error.value.detail)
 
 
 def test_model_construction_enforces_provider_url_validation() -> None:

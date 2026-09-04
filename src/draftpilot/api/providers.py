@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, SecretStr
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.config import settings
+from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.db import async_get_db
 from draftpilot.core.security import encrypt_secret
 from draftpilot.core.providers import provider_base_url, settings_from_profile, validate_provider_url
@@ -57,6 +57,14 @@ def _read(profile: ProviderProfile) -> ProviderProfileRead:
     )
 
 
+def _validate_profile_endpoint(provider: str, base_url: str | None) -> None:
+    """Validate the endpoint that a persisted provider profile would use."""
+    try:
+        validate_provider_url(provider_base_url(LLMSettings(provider=provider, base_url=base_url)))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+
+
 @router.get("", response_model=list[ProviderProfileRead])
 async def list_providers(session: AsyncSession = Depends(async_get_db)) -> list[ProviderProfileRead]:
     """List provider metadata without exposing credentials."""
@@ -66,6 +74,7 @@ async def list_providers(session: AsyncSession = Depends(async_get_db)) -> list[
 @router.post("", response_model=ProviderProfileRead, status_code=status.HTTP_201_CREATED)
 async def create_provider(data: ProviderWrite, session: AsyncSession = Depends(async_get_db)) -> ProviderProfileRead:
     """Create a provider profile and encrypt its credential before persistence."""
+    _validate_profile_endpoint(data.provider, data.base_url)
     if await profiles_crud.get_by_name(session, data.name) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Provider name already exists")
     profile = ProviderProfile(
@@ -95,6 +104,10 @@ async def update_provider(
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Provider not found")
     changes = data.model_dump(exclude_unset=True, exclude={"api_key"})
+    _validate_profile_endpoint(
+        str(changes.get("provider", profile.provider)),
+        changes.get("base_url", profile.base_url),
+    )
     for key, value in changes.items():
         setattr(profile, key, value)
     if data.api_key is not None:
