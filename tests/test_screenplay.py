@@ -1,5 +1,7 @@
 """Tests for the screenplay domain layer: format adapters and revision snapshots."""
 
+import pytest
+
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx, render_fdx
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain, render_fountain
 from draftpilot.core.screenplay.editor import (
@@ -67,6 +69,15 @@ def test_fdx_preserves_scene_headings() -> None:
     reparsed = parse_fdx(render_fdx(doc))
     headings = [s.heading for act in reparsed.acts for s in act.scenes]
     assert headings == ["INT. HOUSE - DAY", "EXT. STREET - NIGHT"]
+
+
+def test_fdx_parser_rejects_dtd_and_entity_declarations() -> None:
+    """Reject XML constructs that can access external resources or expand entities."""
+    unsafe = """<?xml version="1.0"?>
+<!DOCTYPE FinalDraft [<!ENTITY secret SYSTEM "file:///etc/passwd">]>
+<FinalDraft><Content><Paragraph Type="Action"><Text>&secret;</Text></Paragraph></Content></FinalDraft>"""
+    with pytest.raises(ValueError, match="DTD or entity"):
+        parse_fdx(unsafe)
 
 
 def test_scene_doc_snapshot_roundtrip() -> None:
