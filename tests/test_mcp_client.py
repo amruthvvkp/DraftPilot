@@ -197,3 +197,17 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     assert result["node"]["id"] == 51
     assert pool.jobs[0][0] == "index_rag_document"
     assert update.await_args.args[2] == "applied"
+
+
+def test_mcp_server_resolves_client_id_from_access_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Resolve authorization scope when FastMCP request metadata is absent."""
+    from fastmcp.server.auth import AccessToken
+
+    from draftpilot.mcp import server
+
+    monkeypatch.setattr(
+        server,
+        "get_access_token",
+        lambda: AccessToken(token="redacted", client_id="external-writer", scopes=[]),
+    )
+    assert server._client_id(SimpleNamespace(client_id=None)) == "external-writer"

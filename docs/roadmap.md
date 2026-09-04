@@ -79,10 +79,11 @@ runs; see `docs/context-workflows.md`. Reviewed context suggestions can now be e
 as provenance-linked typed graph nodes with source-version checks. The portable browser suite now
 includes a single broader end-to-end smoke journey covering project creation, story artifacts,
 screenplay writing, translation, timeline proposal approval/rollback, agent proposal
-approval/rollback, exports, backup, and non-destructive restore. Remaining work is complete live
-external MCP client workflow validation and further production hardening of deployment and recovery
-paths. The portable browser gate and authenticated local Langfuse trace verification are release
-checks, not substitutes for those remaining workflows.
+approval/rollback, exports, backup, and non-destructive restore. Live external MCP client validation
+now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-scoped resource read);
+continue with broader production hardening and external-client compatibility checks. The portable
+browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
+for those remaining workflows.
 
 ## Phases
 

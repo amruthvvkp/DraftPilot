@@ -1,5 +1,19 @@
 # MCP integration
 
+## External client smoke check
+
+The repository includes a portable smoke check for the authenticated client path. With the
+Compose stack running and a project-scoped `outline.read` grant for the default local client:
+
+```bash
+UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run python scripts/mcp_smoke.py
+# tools=22 resources=3 artifact_type=dict
+```
+
+Set `DRAFTPILOT_MCP_ENDPOINT`, `DRAFTPILOT_MCP_TOKEN`, and `DRAFTPILOT_MCP_RESOURCE` to target
+another compatible Streamable HTTP server. The client validates endpoints, applies timeouts, and
+bounds response sizes before returning data.
+
 DraftPilot exposes a typed MCP boundary from the `mcp` Compose service. The discoverable
 `draftpilot://capabilities` resource lists the current capability names, scopes, and whether a
 mutation requires writer approval. The `workflow_turn` prompt carries page, artifact, and selection

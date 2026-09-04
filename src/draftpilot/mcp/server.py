@@ -8,6 +8,7 @@ import httpx
 import logfire
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
+from fastmcp.server.dependencies import get_access_token
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -49,6 +50,15 @@ from draftpilot.crud.mcp_access import authorize_invocation
 from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
 
 telemetry.setup(mcp=True)
+
+
+def _client_id(ctx: Context) -> str:
+    """Resolve the authenticated client from MCP context or access-token metadata."""
+    context_client_id = ctx.client_id
+    if context_client_id:
+        return context_client_id
+    access_token = get_access_token()
+    return access_token.client_id if access_token is not None else "unknown"
 
 
 class StaticTokenVerifier(TokenVerifier):
@@ -120,7 +130,7 @@ def context_schema_resource() -> str:
 @mcp.resource("draftpilot://projects/{project_id}/knowledge-graph")
 async def knowledge_graph_resource(project_id: int, ctx: Context) -> str:
     """Publish authorized canonical graph nodes and relationships for a project."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -142,7 +152,7 @@ async def knowledge_graph_resource(project_id: int, ctx: Context) -> str:
 @mcp.resource("draftpilot://projects/{project_id}/artifacts")
 async def project_artifacts_resource(project_id: int, ctx: Context) -> str:
     """Publish authorized canonical story artifacts for a project."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(session, client_id, project_id, "outline.read", "read", {})
@@ -160,7 +170,7 @@ async def project_artifacts_resource(project_id: int, ctx: Context) -> str:
 @mcp.resource("draftpilot://projects/{project_id}/context")
 async def project_context_resource(project_id: int, ctx: Context) -> str:
     """Publish the authorized project context envelope for external clients."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(session, client_id, project_id, "context.read", "read", {})
@@ -219,7 +229,7 @@ async def start_context_workflow(
     selected = get_context_workflow(workflow)
     if selected is None:
         raise ValueError("Unknown context workflow")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -276,7 +286,7 @@ async def apply_context_workflow(
         raise ValueError("MCP context is required")
     if not approved:
         raise ValueError("Explicit approval is required")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -298,7 +308,7 @@ async def retrieve_project_context(
     """Retrieve citation-bearing project context through the RAG service."""
     if ctx is None:
         raise ValueError("MCP context is required")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -333,7 +343,7 @@ async def retrieve_project_context(
 @mcp.tool
 async def read_project_artifacts(project_id: int, ctx: Context) -> dict[str, object]:
     """Read editable project artifacts through the authorized MCP boundary."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -364,7 +374,7 @@ async def apply_story_operation(
     """Apply one approved typed story operation through the canonical artifact service."""
     if ctx is None:
         raise ValueError("MCP context is required")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -398,7 +408,7 @@ async def apply_story_operation(
 @mcp.tool
 async def read_project_evaluations(project_id: int, ctx: Context) -> dict[str, object]:
     """Read persisted evaluation results through the authorized project boundary."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(session, client_id, project_id, "evaluations.read", "read", {})
@@ -424,7 +434,7 @@ async def read_screenplay_scenes(
     project_id: int, screenplay_id: int, ctx: Context
 ) -> dict[str, object]:
     """Read ordered scenes and semantic blocks for one authorized screenplay."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -460,7 +470,7 @@ async def read_dialogue_translations(
     project_id: int, scene_id: int, block_id: int, ctx: Context
 ) -> dict[str, object]:
     """Read linked dialogue translations without exposing unrelated project data."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -512,7 +522,7 @@ async def propose_dialogue_translation(
     """Persist a reviewable translation proposal while preserving source dialogue."""
     if not language.strip() or len(language) > 50:
         raise ValueError("Translation language is invalid")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -568,7 +578,7 @@ async def read_scene_revisions(
     project_id: int, scene_id: int, ctx: Context
 ) -> dict[str, object]:
     """Read immutable scene snapshots for review and rollback planning."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -609,7 +619,7 @@ async def render_screenplay_export(
     """Render a bounded, project-authorized Fountain, FDX, or PDF export."""
     if file_format not in {"fountain", "fdx", "pdf"}:
         raise ValueError("Only Fountain, FDX, and PDF exports are available through MCP")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -661,7 +671,7 @@ async def create_screenplay_export(
         raise ValueError("MCP context is required")
     if file_format not in {"fountain", "fdx", "pdf"}:
         raise ValueError("Only Fountain, FDX, and PDF exports are available through MCP")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -704,7 +714,7 @@ async def create_screenplay_export(
 @mcp.tool
 async def list_project_backups(project_id: int, ctx: Context) -> dict[str, object]:
     """List validated backup manifests for one authorized project."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -741,7 +751,7 @@ async def create_project_backup(
     """Create an approved, project-scoped backup through the canonical backup service."""
     if ctx is None:
         raise ValueError("MCP context is required")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -786,7 +796,7 @@ async def restore_project_backup(
     """Restore an approved backup into a new project through the canonical restore service."""
     if ctx is None:
         raise ValueError("MCP context is required")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     try:
         envelope = read_backup(settings.backup.root, filename)
     except BackupError as exc:
@@ -820,7 +830,7 @@ async def read_workflow_run(
     project_id: int, run_id: int, ctx: Context
 ) -> dict[str, object]:
     """Read one durable workflow run within its project scope."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -847,7 +857,7 @@ async def control_workflow_run(
         raise ValueError("Run action must be resume or cancel")
     if ctx is None:
         raise ValueError("MCP context is required")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -903,7 +913,7 @@ async def propose_screenplay_change(
             raise ValueError("Invalid dual-dialogue marker")
         if "dual_group" in operation and operation["dual_group"] is not None and not isinstance(operation["dual_group"], int):
             raise ValueError("Invalid dual-dialogue group")
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -967,7 +977,7 @@ async def propose_timeline_reorder(
     ctx: Context,
 ) -> dict[str, object]:
     """Persist a reversible timeline proposal after validating current order."""
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -1017,7 +1027,7 @@ async def review_screenplay_proposal(
     if action not in {"approve", "rollback"} or ctx is None:
         raise ValueError("Action and MCP context are required")
     capability = "screenplay.approve" if action == "approve" else "screenplay.rollback"
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(session, client_id, project_id, capability, action, {"proposal_id": proposal_id}, approved=approved)
@@ -1044,7 +1054,7 @@ async def review_timeline_proposal(
     if action not in {"approve", "rollback"} or ctx is None:
         raise ValueError("Action and MCP context are required")
     capability = "timeline.approve" if action == "approve" else "timeline.rollback"
-    client_id = ctx.client_id or "unknown"
+    client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(session, client_id, project_id, capability, action, {"screenplay_id": screenplay_id, "proposal_id": proposal_id}, approved=approved)
