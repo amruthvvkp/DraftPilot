@@ -22,6 +22,10 @@ project.
 proposal using the scene's current server-derived version. It never applies the operation;
 approval and optimistic-concurrency checks remain on the DraftPilot approval boundary.
 
+Timeline reorders follow the same reversible lifecycle: `propose_timeline_reorder` creates a
+pending order with cumulative timings, approval applies it, and the REST timeline rollback
+endpoint can restore the original order when the approved order is still current.
+
 `read_dialogue_translations` exposes linked variants for a dialogue block while retaining the
 source version. `propose_dialogue_translation` is approval-gated and stores a typed proposal rather
 than changing source dialogue. `read_scene_revisions` exposes immutable scene snapshots for external
