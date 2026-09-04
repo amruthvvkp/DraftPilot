@@ -31,6 +31,7 @@ def test_provider_settings_redacts_and_saves_credentials(page: Page) -> None:
     )
     page.goto("/settings")
     expect(page.get_by_role("heading", name="Provider settings")).to_be_visible()
+    expect(page.get_by_role("region", name="Copilot and agent proposals")).to_be_visible()
     expect(page.get_by_text("Credential stored securely")).to_be_visible()
     page.get_by_label("Profile name").fill("New local provider")
     page.get_by_label("API key").fill("never-render-this-secret")
