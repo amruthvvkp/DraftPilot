@@ -40,6 +40,7 @@ from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
 from draftpilot.crud import evaluations as evaluations_crud
 from draftpilot.crud import knowledge_graph as graph_crud
+from draftpilot.crud import monty_executions as monty_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scene_revisions as revisions_crud
 from draftpilot.crud import scenes as scenes_crud
@@ -845,6 +846,27 @@ async def read_workflow_run(
         if run is None or run.project_id != project_id:
             raise ValueError("Run is not in the requested project")
     return WorkflowRunRead.model_validate(run).model_dump(mode="json")
+
+
+@mcp.tool
+async def read_monty_executions(project_id: int, ctx: Context) -> dict[str, object]:
+    """Read bounded, redacted Monty audit records for one authorized project."""
+    client_id = _client_id(ctx)
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session, client_id, project_id, "monty.audit.read", "read", {}
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        records = await monty_crud.list_for_project(session, project_id)
+    result = {
+        "project_id": project_id,
+        "executions": [record.model_dump(mode="json") for record in records],
+    }
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Monty audit response exceeds MCP output limit")
+    return result
 
 
 @mcp.tool

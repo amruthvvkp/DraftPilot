@@ -72,6 +72,8 @@ diff and rollback planning. `render_screenplay_export` renders bounded Fountain,
 content (PDF is returned as base64),
 and `create_screenplay_export` persists an approved, checksummed export beneath the configured
 backup volume without changing canonical screenplay data.
+`read_monty_executions` exposes only project-authorized, redacted Monty audit fields; generated
+source code and input values are never returned.
 `list_project_backups` lists validated backup manifests, `create_project_backup` creates an approved
 archive, `restore_project_backup` restores it into a new project, and `read_workflow_run` reads
 durable run state. Backup creation and restore require both the project grant and

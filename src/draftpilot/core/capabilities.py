@@ -41,6 +41,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="backups.restore", description="Restore a project backup into a new project.", scope="project", mutates=True, approval_required=True),
     Capability(name="runs.read", description="Inspect a project workflow run.", scope="run"),
     Capability(name="runs.control", description="Inspect, pause, resume, or cancel a workflow run.", scope="run", mutates=True, approval_required=True),
+    Capability(name="monty.audit.read", description="Read redacted Monty execution audit records.", scope="project"),
 )
 
 _PAGE_CAPABILITIES: dict[str, tuple[str, ...]] = {
