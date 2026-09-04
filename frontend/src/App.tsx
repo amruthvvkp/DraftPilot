@@ -62,6 +62,7 @@ function App() {
       const created = await createProject({ ...payload, references: typedReferences })
       setProjects(current => [...current, created].sort((a, b) => a.title.localeCompare(b.title)))
       setWizardOpen(false)
+      window.location.assign(`/projects/${created.id}`)
     } catch (e) { setError(e instanceof Error ? e.message : 'Unable to create project') }
     finally { setSaving(false) }
   }

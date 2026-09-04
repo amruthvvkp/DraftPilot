@@ -1,6 +1,7 @@
 """Python Playwright journeys for the React project studio."""
 
 import json
+import re
 
 from playwright.sync_api import Page, Route, expect
 
@@ -42,6 +43,39 @@ def test_project_vault_requires_title_before_creation(page: Page) -> None:
 def test_create_project_from_react_wizard(page: Page) -> None:
     """Create a project through the visible React workflow."""
     mock_projects_api(page)
+    workspace = {
+        "project": {
+            "id": 9001,
+            "title": "Playwright story",
+            "logline": "A mocked project.",
+            "description": "",
+            "genres": ["Drama"],
+            "languages": ["English"],
+            "primary_language": "English",
+            "project_instruction": "",
+            "version": 1,
+            "artwork_url": None,
+        },
+        "screenplay": {"id": 12, "project_id": 9001, "title": "Playwright story", "format": "feature", "status": "draft"},
+        "acts": [{"id": 4, "screenplay_id": 12, "title": "Act One", "position": 0}],
+        "scenes": [],
+        "blocks": {},
+    }
+    page.route("**/api/v1/projects/9001/workspace", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps(workspace)
+    ))
+    page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
+    page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(
+        status=200, content_type="application/json", body="[]"
+    ))
     page.goto("/projects")
     page.get_by_role("button", name="New project").first.click()
     wizard = page.locator(".wizard")
@@ -54,6 +88,7 @@ def test_create_project_from_react_wizard(page: Page) -> None:
     wizard.get_by_role("button", name="Continue").click()
     expect(wizard.get_by_text("READY TO BEGIN")).to_be_visible()
     wizard.get_by_role("button", name="Create project", exact=False).click()
+    expect(page).to_have_url(re.compile(r"/projects/9001$"))
     expect(page.get_by_role("heading", name="Playwright story")).to_be_visible()
 
 
