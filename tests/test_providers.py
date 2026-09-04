@@ -53,6 +53,13 @@ def test_provider_url_rejects_metadata_endpoint() -> None:
         validate_provider_url("http://169.254.169.254/latest/meta-data")
 
 
+def test_provider_url_rejects_private_ip_literal() -> None:
+    """Reject private provider endpoints before an outbound model request."""
+    with pytest.raises(ValueError, match="Private"):
+        validate_provider_url("http://10.0.0.8:11434/v1")
+    assert validate_provider_url("http://127.0.0.1:11434/v1") == "http://127.0.0.1:11434/v1"
+
+
 def test_provider_probe_returns_safe_success(monkeypatch: pytest.MonkeyPatch) -> None:
     """Probe an OpenAI-compatible endpoint without returning provider content."""
     import httpx

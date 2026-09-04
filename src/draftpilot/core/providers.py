@@ -1,5 +1,6 @@
 """Build PydanticAI models from server-side provider configuration."""
 
+import ipaddress
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -33,8 +34,20 @@ def validate_provider_url(url: str | None) -> str:
     blocked_hosts = {"169.254.169.254", "metadata.google.internal", "metadata.google.com"}
     if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Provider URL must be an HTTP(S) URL without embedded credentials")
-    if parsed.hostname.casefold() in blocked_hosts:
+    hostname = parsed.hostname
+    if hostname.casefold() in blocked_hosts:
         raise ValueError("Provider metadata endpoints are not allowed")
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        address = None
+    if address is not None and (
+        address.is_private
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_multicast
+    ) and not address.is_loopback:
+        raise ValueError("Private provider endpoints are not allowed")
     return url.rstrip("/")
 
 
@@ -48,7 +61,7 @@ def create_chat_model(config: LLMSettings) -> Any:
     if provider_name not in supported:
         raise ValueError(f"Unsupported LLM provider: {config.provider}")
     provider = OpenAIProvider(
-        base_url=provider_base_url(config),
+        base_url=validate_provider_url(provider_base_url(config)),
         api_key=config.api_key.get_secret_value() or "not-needed",
     )
     return OpenAIChatModel(config.model, provider=provider)
