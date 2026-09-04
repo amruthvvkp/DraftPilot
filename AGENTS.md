@@ -1,7 +1,5 @@
 # DraftPilot
 
-> This file mirrors `CLAUDE.md` for Codex / other agent runtimes. Keep the two in sync.
-
 Open-source, agentic screenplay & story-development studio. A local-first React/Vite web app where
 writers build, research, co-write, and evaluate screenplays alongside AI agents.
 
@@ -76,3 +74,4 @@ docker compose -f compose.yml -f compose.dev.yml up --build
   `docs/references.md`; never vendor incompatibly-licensed code (e.g. GPL) into this MIT project.
 
 Detailed local guidance lives in nested `CLAUDE.md` files under `src/draftpilot/{ui,worker,core}/`.
+`AGENTS.md` mirrors this file for Codex compatibility.
