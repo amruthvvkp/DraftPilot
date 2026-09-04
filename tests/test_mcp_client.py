@@ -220,3 +220,85 @@ def test_mcp_server_uses_configured_stdio_client_identity(monkeypatch: pytest.Mo
     monkeypatch.setattr(server.settings.mcp, "stdio_client_id", "local-writer")
     monkeypatch.setattr(server, "get_access_token", lambda: None)
     assert server._client_id(SimpleNamespace(client_id=None)) == "local-writer"
+
+
+def test_mcp_client_methods_with_mocked_http_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exercise list_tools, list_prompts, list_resources, read_resource, get_prompt, and call_tool."""
+    from contextlib import asynccontextmanager
+
+    mock_session = AsyncMock()
+    mock_session.list_tools.return_value = {"tools": [{"name": "read_project_artifacts"}]}
+    mock_session.list_prompts.return_value = {"prompts": [{"name": "workflow_turn"}]}
+    mock_session.list_resources.return_value = {"resources": [{"uri": "draftpilot://context-workflows"}]}
+    mock_session.read_resource.return_value = {"contents": [{"text": "artifact-content"}]}
+    mock_session.get_prompt.return_value = {"messages": [{"role": "user", "content": "turn"}]}
+    mock_session.call_tool.return_value = {"content": [{"type": "text", "text": "result"}]}
+
+    @asynccontextmanager
+    async def fake_http_session() -> AsyncMock:
+        """Yield the mock session."""
+        yield mock_session
+
+    client = DraftPilotMCPClient("http://localhost:9001/mcp", token="secret-token")
+    monkeypatch.setattr(client, "_http_session", fake_http_session)
+
+    tools = run_async(client.list_tools())
+    assert tools == {"tools": [{"name": "read_project_artifacts"}]}
+
+    prompts = run_async(client.list_prompts())
+    assert prompts == {"prompts": [{"name": "workflow_turn"}]}
+
+    resources = run_async(client.list_resources())
+    assert resources == {"resources": [{"uri": "draftpilot://context-workflows"}]}
+
+    res_content = run_async(client.read_resource("draftpilot://projects/1/artifacts"))
+    assert res_content == {"contents": [{"text": "artifact-content"}]}
+
+    prompt_content = run_async(client.get_prompt("workflow_turn", {"scope": "scene"}))
+    assert prompt_content == {"messages": [{"role": "user", "content": "turn"}]}
+
+    tool_call = run_async(client.call_tool("read_project_artifacts", {"project_id": 1}))
+    assert tool_call == {"content": [{"type": "text", "text": "result"}]}
+
+
+def test_mcp_client_call_stdio_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Exercise call_stdio_tool with mocked stdio session."""
+    from contextlib import asynccontextmanager
+
+    mock_session = AsyncMock()
+    mock_session.call_tool.return_value = {"content": [{"type": "text", "text": "stdio-result"}]}
+
+    @asynccontextmanager
+    async def fake_stdio_session(command: str, args: list[str]) -> AsyncMock:
+        """Yield the mock session."""
+        yield mock_session
+
+    client = DraftPilotMCPClient("http://localhost:9001/mcp")
+    monkeypatch.setattr(client, "_stdio_session", fake_stdio_session)
+
+    result = run_async(
+        client.call_stdio_tool("python", ["-m", "draftpilot.mcp"], "read_project_artifacts", {"project_id": 1})
+    )
+    assert result == {"content": [{"type": "text", "text": "stdio-result"}]}
+
+
+def test_mcp_client_validates_constructor_and_stdio_parameters() -> None:
+    """Reject invalid timeout, character bounds, and stdio commands with NUL bytes."""
+    with pytest.raises(MCPClientError, match="positive"):
+        DraftPilotMCPClient("http://localhost:9001/mcp", timeout_seconds=0)
+
+    with pytest.raises(MCPClientError, match="positive"):
+        DraftPilotMCPClient("http://localhost:9001/mcp", max_output_chars=-1)
+
+    client = DraftPilotMCPClient("http://localhost:9001/mcp")
+    with pytest.raises(MCPClientError, match="stdio MCP command"):
+        async def call_empty() -> None:
+            async with client._stdio_session("", []):
+                pass
+        run_async(call_empty())
+
+    with pytest.raises(MCPClientError, match="stdio MCP command"):
+        async def call_nul() -> None:
+            async with client._stdio_session("cmd\x00", []):
+                pass
+        run_async(call_nul())

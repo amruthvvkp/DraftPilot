@@ -546,3 +546,25 @@ def test_get_project_workspace_includes_timings_and_runtime_targets(
     assert data["timings"][1]["end_seconds"] == 60
     assert data["total_runtime_seconds"] == 60
 
+
+def test_assist_project_wizard_generates_structured_fields(client: TestClient) -> None:
+    """Generate structured project fields from a creative premise."""
+    response = client.post(
+        "/api/v1/projects/wizard/assist",
+        json={
+            "prompt": "A haunted lighthouse keeper discovers radio signals from the future",
+            "target_format": "feature",
+            "primary_language": "English",
+            "genre_preference": "Sci-Fi",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "title" in data and len(data["title"]) > 0
+    assert "logline" in data and len(data["logline"]) > 0
+    assert "story_outline" in data and "Act I" in data["story_outline"]
+    assert "Sci-Fi" in data["genres"]
+    assert len(data["characters"]) >= 1
+    assert data["format"] == "feature"
+    assert data["primary_language"] == "English"
+

@@ -36,6 +36,27 @@ export default function ProviderSettings() {
     finally { setTesting(null) }
   }
 
+  const [writerProfile, setWriterProfile] = useState<{ name: string; pen_name: string; default_format: string; default_language: string; bio: string }>(() => {
+    try {
+      const saved = localStorage.getItem('draftpilot_writer_profile')
+      return saved ? JSON.parse(saved) : { name: 'Screenwriter', pen_name: '', default_format: 'feature', default_language: 'English', bio: '' }
+    } catch {
+      return { name: 'Screenwriter', pen_name: '', default_format: 'feature', default_language: 'English', bio: '' }
+    }
+  })
+  const [profileSaved, setProfileSaved] = useState(false)
+
+  function saveProfile(event: FormEvent): void {
+    event.preventDefault()
+    try {
+      localStorage.setItem('draftpilot_writer_profile', JSON.stringify(writerProfile))
+      setProfileSaved(true)
+      setTimeout(() => setProfileSaved(false), 3000)
+    } catch {
+      setError('Unable to save writer profile to local storage')
+    }
+  }
+
   return <div className="settings-shell">
     <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span className="wordmark"><em>Draft</em><b>Pilot</b></span></div><p className="eyebrow">Studio</p><nav><a href="/projects">Projects</a><a className="active" href="/settings">Settings</a></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace</div></aside>
     <main className="main settings-main">
@@ -46,6 +67,62 @@ export default function ProviderSettings() {
         <section className="settings-card"><p className="eyebrow warm">{editing === null ? 'ADD PROVIDER' : 'EDIT PROVIDER'}</p><form onSubmit={event => void submit(event)}><label>Profile name<input required value={form.name} disabled={editing !== null} onChange={event => update('name', event.target.value)} placeholder="Studio Ollama" /></label><label>Provider<select value={form.provider} onChange={event => update('provider', event.target.value)}><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="gateway">OpenAI-compatible gateway</option><option value="ollama">Ollama</option><option value="lm_studio">LM Studio</option></select></label><label>Model<input required value={form.model} onChange={event => update('model', event.target.value)} placeholder="Model identifier" /></label><label>Base URL <span className="helper">Optional for provider defaults</span><input value={form.base_url} onChange={event => update('base_url', event.target.value)} placeholder="http://host.docker.internal:11434/v1" /></label><label>API key <span className="helper">Leave blank to keep the existing key</span><input type="password" autoComplete="new-password" value={form.api_key} onChange={event => update('api_key', event.target.value)} placeholder={editing !== null ? '••••••••' : 'Write-only credential'} /></label><label className="checkbox-label"><input type="checkbox" checked={form.enabled} onChange={event => update('enabled', event.target.checked)} /> Enabled</label><div><button className="button primary" type="submit">{editing === null ? 'Save provider' : 'Save changes'}</button>{editing !== null && <button className="button quiet" type="button" onClick={() => { setEditing(null); setForm(initial) }}>Cancel</button>}</div></form></section>
         <section><p className="eyebrow">SAVED PROFILES / {profiles.length}</p>{profiles.length === 0 && <div className="settings-empty">No provider profiles yet.</div>}{profiles.map(profile => <article className="provider-card" key={profile.id}><div><strong>{profile.name}</strong><p>{profile.provider} · {profile.model}</p><small>{profile.has_api_key ? 'Credential stored securely' : 'No API key configured'} · {profile.enabled ? 'Enabled' : 'Disabled'}</small></div><div className="provider-actions"><button className="mini-button" onClick={() => void test(profile)} disabled={testing === profile.id}>{testing === profile.id ? 'Testing…' : 'Test'}</button><button className="mini-button" onClick={() => edit(profile)}>Edit</button></div></article>)}</section>
       </div>
+      <section className="settings-card writer-profile-card" aria-label="Writer Profile">
+        <p className="eyebrow warm">WRITER PROFILE & PREFERENCES</p>
+        <form onSubmit={saveProfile}>
+          <div className="two-up">
+            <label>Full name
+              <input
+                aria-label="Writer full name"
+                value={writerProfile.name}
+                onChange={event => setWriterProfile(p => ({ ...p, name: event.target.value }))}
+                placeholder="Your name"
+              />
+            </label>
+            <label>Pen name / Alias
+              <input
+                aria-label="Writer pen name"
+                value={writerProfile.pen_name}
+                onChange={event => setWriterProfile(p => ({ ...p, pen_name: event.target.value }))}
+                placeholder="Screenplay pseudonym"
+              />
+            </label>
+            <label>Default screenplay format
+              <select
+                aria-label="Default screenplay format"
+                value={writerProfile.default_format}
+                onChange={event => setWriterProfile(p => ({ ...p, default_format: event.target.value }))}
+              >
+                <option value="feature">Feature film</option>
+                <option value="pilot_hour">60-minute drama pilot</option>
+                <option value="pilot_half_hour">30-minute comedy pilot</option>
+                <option value="short">Short film</option>
+              </select>
+            </label>
+            <label>Default writing language
+              <input
+                aria-label="Default writing language"
+                value={writerProfile.default_language}
+                onChange={event => setWriterProfile(p => ({ ...p, default_language: event.target.value }))}
+                placeholder="English"
+              />
+            </label>
+          </div>
+          <label>Writer intent & bio
+            <textarea
+              aria-label="Writer intent & bio"
+              value={writerProfile.bio}
+              onChange={event => setWriterProfile(p => ({ ...p, bio: event.target.value }))}
+              placeholder="Guiding themes, creative vision, or recurring genre interests…"
+              rows={3}
+            />
+          </label>
+          <div>
+            <button className="button primary" type="submit">Save writer profile</button>
+            {profileSaved && <span className="profile-saved-notice">Profile saved locally.</span>}
+          </div>
+        </form>
+      </section>
     </main><aside className="settings-copilot"><CopilotPanel page="/settings" artifact="provider_settings" /></aside>
   </div>
 }

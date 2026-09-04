@@ -38,3 +38,18 @@ def test_provider_settings_redacts_and_saves_credentials(page: Page) -> None:
     page.get_by_role("button", name="Save provider").click()
     expect(page.get_by_text("Credentials remain server-side.")).to_be_visible()
     expect(page.get_by_text("never-render-this-secret")).not_to_be_visible()
+
+
+def test_writer_profile_persists_and_reflects_in_app_shell(page: Page) -> None:
+    """Persist writer profile locally and verify presence across navigation."""
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.goto("/settings")
+    expect(page.get_by_role("region", name="Writer Profile")).to_be_visible()
+    page.get_by_label("Writer full name").fill("Maya Screenwriter")
+    page.get_by_label("Writer pen name").fill("M. S. Writer")
+    page.get_by_role("button", name="Save writer profile").click()
+    expect(page.get_by_text("Profile saved locally.")).to_be_visible()
+    page.goto("/projects")
+    expect(page.locator(".user-profile-link")).to_contain_text("M. S. Writer")
+

@@ -17,6 +17,11 @@ from draftpilot.core.screenplay.timeline import (
     calculate_scene_timings,
     target_runtime_seconds_for_format,
 )
+from draftpilot.core.wizard import (
+    WizardAssistRequest,
+    WizardAssistResponse,
+    generate_wizard_assist,
+)
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
@@ -132,6 +137,12 @@ class ProjectReadWithReferences(ProjectRead):
     """Return project metadata and its persisted creative references."""
 
     references: list[ProjectReferenceRead] = Field(default_factory=list)
+
+
+@router.post("/wizard/assist", response_model=WizardAssistResponse)
+async def assist_project_wizard(data: WizardAssistRequest) -> WizardAssistResponse:
+    """Generate structured project wizard fields using configured LLM or fallback."""
+    return await generate_wizard_assist(data)
 
 
 @router.get("", response_model=list[ProjectRead])

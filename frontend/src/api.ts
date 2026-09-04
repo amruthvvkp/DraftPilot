@@ -197,6 +197,41 @@ export function listProjects(): Promise<Project[]> {
   return request<Project[]>('/api/v1/projects')
 }
 
+export type WizardAssistRequest = {
+  prompt: string
+  target_format?: string
+  primary_language?: string
+  genre_preference?: string | null
+}
+
+export type WizardAssistCharacter = {
+  name: string
+  role: string
+  description: string
+}
+
+export type WizardAssistResponse = {
+  title: string
+  logline: string
+  description: string
+  story_outline: string
+  genres: string[]
+  target_audience: string
+  characters: WizardAssistCharacter[]
+  visual_style: string
+  camera_type: string
+  screening_type: string
+  primary_language: string
+  format: string
+}
+
+export function assistProjectWizard(payload: WizardAssistRequest): Promise<WizardAssistResponse> {
+  return request<WizardAssistResponse>('/api/v1/projects/wizard/assist', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function createProject(payload: ProjectCreatePayload): Promise<Project> {
   return request<Project>('/api/v1/projects', {
     method: 'POST',

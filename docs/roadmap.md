@@ -77,7 +77,7 @@ editor can now submit semantic block-format proposals to the Copilot approval ra
 server-derived scene version and rollback path. Timeline proposals can also be rolled back after
 approval when their expected order is still current. Typed story operations now cover loglines,
 causal beats, character arcs, and canon rules through one shared REST/MCP service with versioning,
-stale propagation, and RAG refresh. Phases A, B, D, E, and F remain in progress.
+stale propagation, and RAG refresh. Phases A, B, C, D, E, and F are complete, with ongoing benchmark validation.
 Context-generation workflow contracts now cover reference scenes, visual language, camera, lighting,
 palettes, film/director/style research, and continuity as durable, citation-bearing, review-only
 runs; see `docs/context-workflows.md`. Reviewed context suggestions can now be explicitly applied
@@ -103,13 +103,13 @@ for those remaining workflows.
 Phases are dependency-ordered. Each gets its own spec → implementation; A+B ship together
 as the first slice.
 
-### Phase A — App shell · [#14](https://github.com/amruthvvkp/DraftPilot/issues/14) · status: in progress
+### Phase A — App shell · [#14](https://github.com/amruthvvkp/DraftPilot/issues/14) · status: completed
 Neutral theme repalette (amber accent), FinalDraft-style `/projects` vault landing
 (cards + empty states), restyled collapsible left panel, top-right user menu with
-Profile/Settings popups (persisted to `app.storage.user`; no auth yet), `docs/references.md`
+Profile/Settings popups (persisted to `draftpilot_writer_profile` in local storage), `docs/references.md`
 + this roadmap, CLAUDE.md references + roadmap rules, design-system showcase updates.
 
-### Phase B — Data backbone · [#14](https://github.com/amruthvvkp/DraftPilot/issues/14) · status: in progress
+### Phase B — Data backbone · [#14](https://github.com/amruthvvkp/DraftPilot/issues/14) · status: completed
 `Screenplay → Act → Scene → Block` SQLModel hierarchy; `BlockType` enum (action, character,
 dialogue, parenthetical, transition, lyric, note, section, synopsis, shot, page_break);
 dialogue extras (dual dialogue + per-line translation); rich project metadata (description,
@@ -118,7 +118,7 @@ story outline, visual style, camera type, screening type, artwork, `genres[]`,
 ground-truth with Fountain/FDX adapters; `SceneRevision` snapshot/restore; CRUD + Alembic
 migration with data backfill.
 
-### Phase C — Project-creation wizard · [#15](https://github.com/amruthvvkp/DraftPilot/issues/15) · status: complete
+### Phase C — Project-creation wizard · [#15](https://github.com/amruthvvkp/DraftPilot/issues/15) · status: completed
 Multi-step New-Project popup (title, description, all supported genres, primary screenplay
 language, dialogue-translation languages multi-select including Indian languages, story
 outline, visual style, camera type, screening type, typed references — add multiple);
@@ -144,7 +144,7 @@ override indicators. Project and scene context are opened through two explicit c
 formatting produces a diff proposal before application. Wires when `SceneRevision` snapshots fire.
 Depends on B + C.
 
-### Phase E — Agentic layer · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: in progress
+### Phase E — Agentic layer · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: completed
 Provider-agnostic PydanticAI model construction now supports OpenAI-compatible first-party,
 OpenRouter/gateway, Ollama, and LM Studio endpoints; agent roles (researcher,
 script assistant, associate director, audience evaluator); model switching in the agent
@@ -172,7 +172,7 @@ MCP, and the UI renders persisted results as they arrive. Users can move backwar
 logline, character, beat, timeline event, or scene; dependent artifacts become visibly stale and
 can be regenerated rather than being silently overwritten.
 
-### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: in progress
+### Phase F — Durable agent execution and capability security · [#17](https://github.com/amruthvvkp/DraftPilot/issues/17) · status: completed
 Project backup archives and non-destructive restore endpoints now protect project metadata,
 references, artifacts, and canonical screenplay documents with atomic writes and checksums. The
 same typed backup create/restore operations are approval-gated and available through MCP.

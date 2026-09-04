@@ -115,3 +115,39 @@ def test_primary_language_is_not_a_translation_target(page: Page) -> None:
     expect(hindi).to_be_disabled()
     wizard.get_by_role("button", name="Bengali", exact=True).click()
     expect(wizard.get_by_role("button", name="Bengali", exact=True)).to_have_class("choice on")
+
+
+def test_wizard_ai_assist_populates_story_structure(page: Page) -> None:
+    """Populate project creation wizard fields using the AI assist trigger."""
+    mock_projects_api(page)
+    page.route(
+        "**/api/v1/projects/wizard/assist",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps({
+                "title": "The Quantum Lighthouse",
+                "logline": "A solitary keeper intercepts future broadcasts.",
+                "description": "An exploration of time and guilt.",
+                "story_outline": "Act I: Signals arrive.\nAct II: The timeline bends.\nAct III: The light fails.",
+                "genres": ["Sci-Fi", "Mystery"],
+                "target_audience": "Cinematic sci-fi audience",
+                "characters": [{"name": "Elias", "role": "lead", "description": "Lighthouse keeper"}],
+                "visual_style": "High-contrast coastal chiaroscuro",
+                "camera_type": "Digital",
+                "screening_type": "flat_1_85",
+                "primary_language": "English",
+                "format": "feature",
+            }),
+        ),
+    )
+    page.goto("/projects")
+    page.get_by_role("button", name="New project").first.click()
+    expect(page.get_by_label("AI Story Assistant")).to_be_visible()
+    spark_input = page.get_by_label("Story premise spark")
+    spark_input.fill("A lighthouse keeper discovers radio signals from the future")
+    page.get_by_role("button", name="Spark story ✦").click()
+    expect(page.get_by_label("Project title")).to_have_value("The Quantum Lighthouse")
+    expect(page.get_by_label("Logline")).to_have_value("A solitary keeper intercepts future broadcasts.")
+    expect(page.get_by_role("button", name="Sci-Fi", exact=True)).to_have_class("choice on")
+

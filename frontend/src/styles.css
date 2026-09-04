@@ -96,3 +96,15 @@ nav { display: grid; gap: 7px; } nav a { color: #8f8b81; padding: 11px 12px; bor
 .color-swatch{display:inline-block;width:12px;height:12px;border-radius:50%;background:#dda05d;border:1px solid #b37e3d}
 .semantic-row.dual-block{background:#faf6ef;border-left:3px solid #d69a55;padding-left:6px;border-radius:0 4px 4px 0}
 .dual-badge{display:inline-block;font:9px 'DM Mono',monospace;text-transform:uppercase;color:#b47a44;background:#faecd9;padding:1px 4px;border-radius:3px}
+.wizard-assist-box{background:#f4efe6;border:1px solid #d9cdbd;border-radius:6px;padding:14px;margin-bottom:12px}
+.wizard-assist-head{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.wizard-assist-mark{color:#d69a55;font-size:18px;line-height:1}
+.wizard-assist-head strong{font-size:12px;color:#3e3933;display:block}
+.wizard-assist-head p{margin:2px 0 0;font-size:11px;color:#7e776e;line-height:1.4}
+.wizard-assist-row{display:flex;gap:8px}
+.wizard-assist-row input{flex:1;min-width:0;padding:9px 12px;border:1px solid #dcd7ce;border-radius:4px;background:#fff;font-size:12px}
+.wizard-assist-btn{padding:9px 14px;font-size:11px;white-space:nowrap;flex-shrink:0}
+.user-profile-badge{display:flex;align-items:center;gap:8px}
+.user-profile-link{display:flex;align-items:center;gap:6px;text-decoration:none;color:#5a544c;font-size:12px;font-weight:500;padding:6px 10px;border-radius:99px;background:#ded8ce;transition:background .15s}
+.user-profile-link:hover{background:#d4ccc0;color:#2c2824}
+.user-avatar{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#d69a55;color:#fff;font-size:10px}
