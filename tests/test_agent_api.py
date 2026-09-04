@@ -15,6 +15,15 @@ from draftpilot.models import AgentProposal, BlockType
 class _Session:
     """Stand in for the isolated proposal session."""
 
+    def add(self, _value: object) -> None:
+        """Accept a pending model mutation."""
+
+    async def commit(self) -> None:
+        """Commit the isolated model mutation."""
+
+    async def refresh(self, _value: object) -> None:
+        """Refresh the isolated model mutation."""
+
 
 def _client() -> TestClient:
     """Build a proposal API client with an isolated database dependency."""
@@ -67,3 +76,48 @@ def test_block_proposal_captures_scene_version_and_before_snapshot(monkeypatch) 
     )
     assert response.status_code == 201
     assert response.json()["target_kind"] == "block"
+
+
+def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) -> None:
+    """Refresh RAG after applying and reversing a semantic block proposal."""
+    scene = SimpleNamespace(id=7, version=3, heading="INT. ROOM - DAY", body="")
+    block = SimpleNamespace(
+        id=11,
+        scene_id=7,
+        element_type=BlockType.ACTION,
+        text="A door opens.",
+    )
+    proposal = AgentProposal(
+        id=20,
+        project_id=9,
+        target_kind="block",
+        target_id=11,
+        operation={"element_type": "dialogue", "text": "HELLO"},
+        diff={},
+        before={"scene_id": 7, "element_type": "action", "text": "A door opens."},
+        base_version=3,
+    )
+    monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
+    enqueue = AsyncMock()
+    monkeypatch.setattr("draftpilot.api.agent._enqueue_rag_index", enqueue)
+    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.get", AsyncMock(return_value=proposal))
+
+    client = _client()
+    approved = client.post("/api/v1/projects/9/agent-proposals/20/approve")
+
+    assert approved.status_code == 200
+    assert proposal.status == "approved"
+    assert scene.version == 4
+    assert block.element_type == BlockType.DIALOGUE
+    assert block.text == "HELLO"
+    enqueue.assert_awaited_once_with(9, "scene:7", "scene", "INT. ROOM - DAY\nHELLO", 4)
+
+    rolled_back = client.post("/api/v1/projects/9/agent-proposals/20/rollback")
+
+    assert rolled_back.status_code == 200
+    assert proposal.status == "rolled_back"
+    assert scene.version == 5
+    assert block.element_type == BlockType.ACTION
+    assert block.text == "A door opens."
+    assert enqueue.await_count == 2
+    assert enqueue.await_args_list[1].args == (9, "scene:7", "scene", "INT. ROOM - DAY\nA door opens.", 5)

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.api.projects import _enqueue_rag_index
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -244,6 +245,13 @@ async def approve_agent_proposal(
         session.add(proposal)
         await session.commit()
         await session.refresh(proposal)
+        await _enqueue_rag_index(
+            project_id,
+            f"translation:{proposal.target_id}",
+            "dialogue_translation",
+            text,
+            target.version,
+        )
         return AgentProposalRead.model_validate(proposal)
     if proposal.target_kind == "block":
         if block_target is None:
@@ -260,6 +268,13 @@ async def approve_agent_proposal(
         session.add(proposal)
         await session.commit()
         await session.refresh(proposal)
+        await _enqueue_rag_index(
+            project_id,
+            f"scene:{target.id}",
+            "scene",
+            f"{getattr(target, 'heading', '')}\n{block.text}",
+            target.version,
+        )
         return AgentProposalRead.model_validate(proposal)
     operation = proposal.operation
     allowed = (
@@ -280,6 +295,14 @@ async def approve_agent_proposal(
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
+    if proposal.target_kind == "scene":
+        await _enqueue_rag_index(
+            project_id,
+            f"scene:{target.id}",
+            "scene",
+            f"{getattr(target, 'heading', '')}\n{getattr(target, 'body', '')}",
+            target.version,
+        )
     return AgentProposalRead.model_validate(proposal)
 
 
@@ -350,4 +373,22 @@ async def rollback_agent_proposal(
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
+    if proposal.target_kind == "block":
+        assert block_target is not None
+        block = block_target[1]
+        await _enqueue_rag_index(
+            project_id,
+            f"scene:{target.id}",
+            "scene",
+            f"{getattr(target, 'heading', '')}\n{block.text}",
+            target.version,
+        )
+    elif proposal.target_kind == "scene":
+        await _enqueue_rag_index(
+            project_id,
+            f"scene:{target.id}",
+            "scene",
+            f"{getattr(target, 'heading', '')}\n{getattr(target, 'body', '')}",
+            target.version,
+        )
     return AgentProposalRead.model_validate(proposal)
