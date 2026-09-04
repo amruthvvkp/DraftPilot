@@ -7,6 +7,10 @@ scope without exposing credentials. `propose_timeline_reorder` persists a projec
 reversible proposal after checking the server-authoritative current order. `review_timeline_proposal`
 applies or rolls it back only with the matching grant and explicit writer approval.
 
+Discoverable project resources include `draftpilot://projects/{project_id}/artifacts` for canonical
+story artifacts and `draftpilot://projects/{project_id}/context` for the project, artifacts, and
+knowledge-graph context envelope. Both are project-authorized, audited, and output-bounded.
+
 The `retrieve_project_context` tool uses the server-side RAG service and returns project-scoped
 results with source identifiers and content versions. Clients can inspect the response contract at
 `draftpilot://schemas/context`; clients never receive vector-store credentials or direct database

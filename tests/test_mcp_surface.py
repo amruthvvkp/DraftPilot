@@ -21,6 +21,8 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     prompts, resources, static_resources, tools = run_async(inspect_surface())
     assert "workflow_turn" in prompts
     assert "draftpilot://projects/{project_id}/knowledge-graph" in resources
+    assert "draftpilot://projects/{project_id}/artifacts" in resources
+    assert "draftpilot://projects/{project_id}/context" in resources
     assert "draftpilot://context-workflows" in static_resources
     assert "retrieve_project_context" in tools
     assert "propose_timeline_reorder" in tools

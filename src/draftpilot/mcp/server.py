@@ -139,6 +139,52 @@ async def knowledge_graph_resource(project_id: int, ctx: Context) -> str:
     )
 
 
+@mcp.resource("draftpilot://projects/{project_id}/artifacts")
+async def project_artifacts_resource(project_id: int, ctx: Context) -> str:
+    """Publish authorized canonical story artifacts for a project."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "outline.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        if await projects_crud.get(session, project_id) is None:
+            raise ValueError("Project not found")
+        artifacts = await artifacts_crud.list_for_project(session, project_id)
+    result = {"project_id": project_id, "artifacts": [artifact.model_dump(mode="json") for artifact in artifacts]}
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Artifact response exceeds MCP output limit")
+    return json.dumps(result)
+
+
+@mcp.resource("draftpilot://projects/{project_id}/context")
+async def project_context_resource(project_id: int, ctx: Context) -> str:
+    """Publish the authorized project context envelope for external clients."""
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "context.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        project = await projects_crud.get(session, project_id)
+        if project is None:
+            raise ValueError("Project not found")
+        artifacts = await artifacts_crud.list_for_project(session, project_id)
+        nodes = await graph_crud.list_nodes(session, project_id)
+        edges = await graph_crud.list_edges(session, project_id)
+    result = {
+        "project": project.model_dump(mode="json"),
+        "artifacts": [artifact.model_dump(mode="json") for artifact in artifacts],
+        "knowledge_graph": {
+            "nodes": [node.model_dump(mode="json") for node in nodes],
+            "edges": [edge.model_dump(mode="json") for edge in edges],
+        },
+    }
+    if len(json.dumps(result)) > settings.mcp.max_output_chars:
+        raise ValueError("Project context response exceeds MCP output limit")
+    return json.dumps(result)
+
+
 @mcp.prompt
 def workflow_turn(page: str, artifact: str = "", selection: str = "") -> str:
     """Build a page-aware workflow prompt without exposing credentials."""
