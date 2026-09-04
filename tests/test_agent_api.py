@@ -177,3 +177,30 @@ def test_suggest_run_can_create_reviewable_agent_proposal(monkeypatch) -> None:
     )
     assert response.status_code == 201
     assert response.json()["run_id"] == 31
+
+
+def test_scoped_edit_run_cannot_target_another_block(monkeypatch) -> None:
+    """Reject a proposal whose target is outside the persisted run scope."""
+    monkeypatch.setattr(
+        "draftpilot.api.agent.runs_crud.get",
+        AsyncMock(
+            return_value=WorkflowRun(
+                id=31,
+                project_id=9,
+                permission_mode="scoped_edit",
+                input={"scope": {"target_kind": "block", "target_id": 12, "scene_id": 7}},
+            )
+        ),
+    )
+    response = _client().post(
+        "/api/v1/projects/9/agent-proposals",
+        json={
+            "target_kind": "block",
+            "target_id": 11,
+            "scene_id": 7,
+            "operation": {"text": "Outside scope"},
+            "base_version": 1,
+            "run_id": 31,
+        },
+    )
+    assert response.status_code == 403

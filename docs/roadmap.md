@@ -87,7 +87,8 @@ the primary screenplay language across REST and MCP; continue with broader produ
 compatibility checks. Copilot proposal creation now enforces the originating run permission mode
 server-side. Durable workflow runs now persist bounded attempt counters: provider or worker
 failures return the same run to `queued`, re-enqueue it until its budget is exhausted, and preserve
-cancellation and worker-restart recovery. The portable
+cancellation and worker-restart recovery. Scoped-edit proposals now require a server-defined
+target envelope on both creation and approval; project-edit remains project-wide. The portable
 browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
 for those remaining workflows.
 

@@ -97,8 +97,10 @@ unregistered tool permissions cannot be persisted.
 
 Copilot runs carry one of `chat_only`, `suggest`, `scoped_edit`, or `project_edit`. The server
 rejects proposals originating from `chat_only` runs; other modes still create typed proposals for
-the writer approval/diff/rollback lifecycle. Approval endpoints re-check the originating run so a
-client cannot bypass the stored permission mode.
+the writer approval/diff/rollback lifecycle. A `scoped_edit` run must carry a server-defined target
+kind, target id, and optional scene id in its persisted run envelope; proposal creation and approval
+reject targets outside that scope. `project_edit` is project-wide. Approval endpoints re-check the
+originating run so a client cannot bypass the stored permission mode.
 Administrators can revoke a project grant with `DELETE /api/v1/mcp/projects/{project_id}/grants/{grant_id}`;
 the endpoint is project-scoped and does not expose client bearer tokens.
 
