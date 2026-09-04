@@ -13,12 +13,13 @@ export type Project = {
 }
 
 export type ProjectReference = {
-  id?: number
-  project_id?: number
+  id: number
+  project_id: number
   kind: string
   label: string
   url?: string | null
   note?: string | null
+  version: number
 }
 
 export type ProjectCreatePayload = {
@@ -36,7 +37,7 @@ export type ProjectCreatePayload = {
   references?: ProjectReferenceInput[]
 }
 
-export type ProjectReferenceInput = Omit<ProjectReference, 'id' | 'project_id'>
+export type ProjectReferenceInput = Omit<ProjectReference, 'id' | 'project_id' | 'version'>
 
 export type Scene = {
   id: number
@@ -173,6 +174,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   })
   if (!response.ok) throw new Error(`Request failed (${response.status})`)
+  if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
 
@@ -353,6 +355,20 @@ export function getWorkflowRun(projectId: number, runId: number): Promise<Workfl
 
 export function getKnowledgeGraph(projectId: number): Promise<KnowledgeGraph> {
   return request<KnowledgeGraph>(`/api/v1/projects/${projectId}/knowledge-graph`)
+}
+
+export function listProjectReferences(projectId: number): Promise<ProjectReference[]> {
+  return request<ProjectReference[]>(`/api/v1/projects/${projectId}/references`)
+}
+
+export function updateProjectReference(projectId: number, referenceId: number, version: number, changes: Partial<Pick<ProjectReference, 'kind' | 'label' | 'url' | 'note'>>): Promise<ProjectReference> {
+  return request<ProjectReference>(`/api/v1/projects/${projectId}/references/${referenceId}`, {
+    method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes),
+  })
+}
+
+export function deleteProjectReference(projectId: number, referenceId: number): Promise<void> {
+  return request<void>(`/api/v1/projects/${projectId}/references/${referenceId}`, { method: 'DELETE' })
 }
 
 export function createKnowledgeNode(projectId: number, kind: string, label: string, description: string): Promise<KnowledgeGraph['nodes'][number]> {
