@@ -229,7 +229,7 @@ export function rollbackAgentProposal(projectId: number, proposalId: number): Pr
   return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals/${proposalId}/rollback`, { method: 'POST' })
 }
 
-export function updateProjectBlock(projectId: number, sceneId: number, blockId: number, version: number, changes: { text?: string; element_type?: string; is_dual?: boolean; dual_group?: number }): Promise<ScreenplayBlock> {
+export function updateProjectBlock(projectId: number, sceneId: number, blockId: number, version: number, changes: { text?: string; element_type?: string; is_dual?: boolean; dual_group?: number | null }): Promise<ScreenplayBlock> {
   return request<ScreenplayBlock>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}`, {
     method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes),
   })
