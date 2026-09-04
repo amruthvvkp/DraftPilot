@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { createProject, Project, ProjectCreatePayload, ProjectReferenceInput } from './api'
 
-const genres = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'Historical', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi', 'Sport', 'Thriller', 'War', 'Western', 'Experimental']
+const genres = ['Action', 'Adventure', 'Animation', 'Art House', 'Biography', 'Coming-of-Age', 'Comedy', 'Crime', 'Dark Comedy', 'Documentary', 'Docudrama', 'Drama', 'Epic', 'Experimental', 'Family', 'Fantasy', 'Fairy Tale', 'Film Noir', 'Historical', 'Horror', 'LGBTQ+', 'Martial Arts', 'Melodrama', 'Musical', 'Mystery', 'Neo-Noir', 'Political', 'Psychological', 'Romance', 'Satire', 'Sci-Fi', 'Slasher', 'Sport', 'Superhero', 'Survival', 'Teen', 'Thriller', 'Tragedy', 'War', 'Western']
 const languages = ['English', 'Hindi', 'Bengali', 'Telugu', 'Marathi', 'Tamil', 'Gujarati', 'Kannada', 'Malayalam', 'Punjabi', 'Odia', 'Assamese', 'Urdu', 'Kashmiri', 'Konkani', 'Nepali', 'Sindhi', 'Maithili', 'Sanskrit', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Korean', 'Mandarin', 'Arabic']
 const referenceKinds = [['film', 'Film'], ['director', 'Director'], ['style', 'Style'], ['reference_scene', 'Reference scene'], ['camera', 'Camera'], ['lighting', 'Lighting'], ['color_palette', 'Color palette'], ['location', 'Location'], ['other', 'Other']] as const
 

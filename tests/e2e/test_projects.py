@@ -106,6 +106,8 @@ def test_primary_language_is_not_a_translation_target(page: Page) -> None:
     wizard = page.locator(".wizard")
     wizard.get_by_label("Project title").fill("Hindi story")
     wizard.get_by_role("button", name="Continue").click()
+    expect(wizard.get_by_role("button", name="Film Noir", exact=True)).to_be_visible()
+    expect(wizard.get_by_role("button", name="Psychological", exact=True)).to_be_visible()
     primary = wizard.get_by_label("Primary screenplay language")
     primary.select_option(label="Hindi")
     hindi = wizard.get_by_role("button", name="Hindi · source", exact=True)
