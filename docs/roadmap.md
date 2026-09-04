@@ -61,7 +61,8 @@ project-scoped RAG retrieval, MCP prompts/resources/tools, provider settings, ex
 The browser suite runs in the pinned `e2e` Playwright Compose service with mocked API responses and
 no test writes to the developer database. PDF imports preserve binary bytes at the React boundary,
 FDX export is exposed in the workspace, and the API rejects a primary screenplay language reused as
-a dialogue-translation target. Phases A, B, D, E, and F remain in progress because the remaining
+a dialogue-translation target. Timeline act and character lanes and editable graph relationships are
+now visible in the React workflow surfaces. Phases A, B, D, E, and F remain in progress because the remaining
 work includes broader end-to-end smoke coverage, richer typed story operations, complete external
 MCP client workflows, and production hardening of deployment and recovery paths.
 
