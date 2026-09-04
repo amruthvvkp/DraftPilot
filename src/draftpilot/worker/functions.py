@@ -102,6 +102,20 @@ async def index_rag_document(ctx: dict, document: dict[str, object]) -> dict[str
     return {"status": "indexed"}
 
 
+async def delete_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:
+    """Delete one approved document through the isolated RAG HTTP boundary."""
+    project_id = document.get("project_id")
+    source_id = document.get("source_id")
+    if not isinstance(project_id, int) or not isinstance(source_id, str) or not source_id:
+        return {"error": "project_id and source_id are required"}
+    headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
+    url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}/documents/{source_id}"
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.delete(url, headers=headers)
+        response.raise_for_status()
+    return {"status": "deleted"}
+
+
 async def execute_workflow(ctx: dict, run_id: int) -> dict:
     """Resume a persisted workflow run and record its terminal state."""
     with logfire.span("execute_workflow", run_id=run_id):

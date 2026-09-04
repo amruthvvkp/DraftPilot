@@ -33,6 +33,16 @@ async def _enqueue_index(
         logfire.warning("RAG graph indexing enqueue skipped: {exc}", exc=str(exc))
 
 
+async def _enqueue_delete(project_id: int, source_id: str) -> None:
+    """Queue one removed graph record for RAG deletion."""
+    try:
+        await (await get_arq_pool()).enqueue_job(
+            "delete_rag_document", {"project_id": project_id, "source_id": source_id}
+        )
+    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+        logfire.warning("RAG graph deletion enqueue skipped: {exc}", exc=str(exc))
+
+
 class GraphRead(BaseModel):
     """Return the complete project-scoped graph payload."""
 
@@ -161,3 +171,17 @@ async def create_edge(
             1,
         )
     return KnowledgeEdgeRead.model_validate(edge)
+
+
+@router.delete("/edges/{edge_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_edge(
+    project_id: int,
+    edge_id: int,
+    session: AsyncSession = Depends(async_get_db),
+) -> None:
+    """Delete an edge only when it belongs to the requested project."""
+    edge = await graph_crud.get_edge(session, edge_id)
+    if edge is None or edge.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Graph edge not found")
+    await graph_crud.delete_edge(session, edge)
+    await _enqueue_delete(project_id, f"knowledge_edge:{edge_id}")

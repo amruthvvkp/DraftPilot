@@ -363,6 +363,10 @@ export function createKnowledgeEdge(projectId: number, sourceNodeId: number, tar
   return request<KnowledgeGraph['edges'][number]>(`/api/v1/projects/${projectId}/knowledge-graph/edges`, { method: 'POST', body: JSON.stringify({ source_node_id: sourceNodeId, target_node_id: targetNodeId, relation }) })
 }
 
+export function deleteKnowledgeEdge(projectId: number, edgeId: number): Promise<void> {
+  return request<void>(`/api/v1/projects/${projectId}/knowledge-graph/edges/${edgeId}`, { method: 'DELETE' })
+}
+
 export function getAgentRoles(): Promise<AgentRole[]> {
   return request<AgentRole[]>('/api/v1/agents/roles')
 }

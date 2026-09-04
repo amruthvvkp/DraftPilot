@@ -42,3 +42,14 @@ async def create_edge(session: AsyncSession, edge: KnowledgeEdge) -> KnowledgeEd
     await session.commit()
     await session.refresh(edge)
     return edge
+
+
+async def get_edge(session: AsyncSession, edge_id: int) -> KnowledgeEdge | None:
+    """Return one graph edge by identifier."""
+    return await session.get(KnowledgeEdge, edge_id)
+
+
+async def delete_edge(session: AsyncSession, edge: KnowledgeEdge) -> None:
+    """Delete one graph edge after its project scope is validated."""
+    await session.delete(edge)
+    await session.commit()

@@ -136,3 +136,40 @@ def test_graph_mutations_enqueue_project_scoped_rag_refresh(
         json={"source_node_id": 1, "target_node_id": 1, "relation": "echoes"},
     ).status_code == 201
     assert indexed == [("knowledge_node:1", "5", 2), ("knowledge_edge:8", "5", 1)]
+
+
+def test_graph_edge_delete_is_project_scoped_and_refreshes_rag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Delete an owned graph edge and remove its indexed representation."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated session marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+    edge = KnowledgeEdge(id=8, project_id=5, source_node_id=1, target_node_id=2, relation="inspires")
+    deleted: list[int] = []
+    indexed: list[tuple[int, str]] = []
+
+    async def get_edge(_session: _Session, _edge_id: int) -> KnowledgeEdge:
+        """Return the owned edge fixture."""
+        return edge
+
+    async def delete_edge(_session: _Session, value: KnowledgeEdge) -> None:
+        """Capture deletion of the owned edge."""
+        deleted.append(value.id or 0)
+
+    async def enqueue(project_id: int, source_id: str) -> None:
+        """Capture the RAG deletion request."""
+        indexed.append((project_id, source_id))
+
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.graph_crud.get_edge", get_edge)
+    monkeypatch.setattr("draftpilot.api.knowledge_graph.graph_crud.delete_edge", delete_edge)
+    monkeypatch.setattr("draftpilot.api.knowledge_graph._enqueue_delete", enqueue)
+    response = TestClient(app).delete("/api/v1/projects/5/knowledge-graph/edges/8")
+    assert response.status_code == 204
+    assert deleted == [8]
+    assert indexed == [(5, "knowledge_edge:8")]

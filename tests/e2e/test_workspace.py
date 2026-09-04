@@ -214,8 +214,14 @@ def test_context_page_links_project_nodes(page: Page) -> None:
         graph["edges"].append(edge)
         route.fulfill(status=201, content_type="application/json", body=json.dumps(edge))
 
+    def delete_edge(route: Route) -> None:
+        """Delete the mocked relationship."""
+        graph["edges"].clear()
+        route.fulfill(status=204)
+
     page.route("**/api/v1/projects/9001/knowledge-graph", graph_request)
     page.route("**/api/v1/projects/9001/knowledge-graph/edges", create_edge)
+    page.route("**/api/v1/projects/9001/knowledge-graph/edges/70", delete_edge)
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
     page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
@@ -228,3 +234,5 @@ def test_context_page_links_project_nodes(page: Page) -> None:
     expect(relationship).to_contain_text("Pather Panchali")
     expect(relationship).to_contain_text("inspires")
     expect(relationship).to_contain_text("Apu")
+    page.get_by_role("button", name="Delete relationship inspires").click()
+    expect(relationship).not_to_be_visible()
