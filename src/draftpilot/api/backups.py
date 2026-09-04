@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+import logfire
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.core.backup import BackupError, BackupManifest, read_backup, write_backup
 from draftpilot.core.config import settings
 from draftpilot.core.db import async_get_db
+from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
 from draftpilot.core.screenplay.schema import ScreenplayDoc
 from draftpilot.crud import project_references as references_crud
@@ -27,6 +29,27 @@ class BackupRead(BaseModel):
 
     filename: str
     manifest: BackupManifest
+
+
+async def _enqueue_restored_artifacts(session: AsyncSession, project_id: int) -> None:
+    """Queue restored artifacts for incremental project-scoped indexing."""
+    try:
+        pool = await get_arq_pool()
+        for artifact in await artifacts_crud.list_for_project(session, project_id):
+            if artifact.id is None:
+                continue
+            await pool.enqueue_job(
+                "index_rag_document",
+                {
+                    "project_id": project_id,
+                    "source_id": f"artifact:{artifact.id}",
+                    "source_kind": artifact.kind,
+                    "text": artifact.content,
+                    "content_version": artifact.version,
+                },
+            )
+    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+        logfire.warning("Restored artifact indexing enqueue skipped: {exc}", exc=str(exc))
 
 
 async def _project_payload(session: AsyncSession, project_id: int) -> dict[str, Any]:
@@ -180,4 +203,5 @@ async def restore_backup(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid backup payload") from exc
     if project.id is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Restored project has no identifier")
+    await _enqueue_restored_artifacts(session, project.id)
     return {"project_id": project.id}

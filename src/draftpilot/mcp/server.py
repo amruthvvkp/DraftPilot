@@ -12,7 +12,8 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from draftpilot.api.agent import approve_agent_proposal, rollback_agent_proposal
-from draftpilot.api.backups import _project_payload, restore_backup_payload
+from draftpilot.api.artifacts import _enqueue_index
+from draftpilot.api.backups import _enqueue_restored_artifacts, _project_payload, restore_backup_payload
 from draftpilot.api.timeline import approve_timeline_proposal, rollback_timeline_proposal
 from draftpilot.core import telemetry
 from draftpilot.core.backup import BackupError, read_backup, write_backup
@@ -248,6 +249,7 @@ async def apply_story_operation(
         await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
         await session.commit()
         await session.refresh(artifact)
+    await _enqueue_index(project_id, artifact)
     return StoryArtifactRead.model_validate(artifact).model_dump(mode="json")
 
 
@@ -663,6 +665,9 @@ async def restore_project_backup(
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
         restored = await restore_backup_payload(session, envelope.payload)
+        if restored.id is None:
+            raise ValueError("Restored project has no identifier")
+        await _enqueue_restored_artifacts(session, restored.id)
     if restored.id is None:
         raise ValueError("Restored project has no identifier")
     return {"source_project_id": project_id, "project_id": restored.id}
