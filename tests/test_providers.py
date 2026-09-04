@@ -62,6 +62,16 @@ def test_provider_url_rejects_private_ip_literal() -> None:
     assert validate_provider_url("http://127.0.0.1:11434/v1") == "http://127.0.0.1:11434/v1"
 
 
+def test_provider_url_rejects_private_dns_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject provider hostnames resolving into private network space."""
+    monkeypatch.setattr(
+        "draftpilot.core.providers.socket.getaddrinfo",
+        lambda *_args, **_kwargs: [(0, 0, 0, "", ("10.0.0.8", 443))],
+    )
+    with pytest.raises(ValueError, match="Private"):
+        validate_provider_url("https://provider.example/v1")
+
+
 def test_provider_profile_endpoint_validation_runs_before_persistence() -> None:
     """Reject an unsafe profile endpoint at the settings boundary."""
     with pytest.raises(HTTPException) as error:
@@ -103,6 +113,10 @@ def test_provider_probe_returns_safe_success(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr("draftpilot.api.providers.profiles_crud.get", get)
     monkeypatch.setattr("draftpilot.api.providers.httpx.AsyncClient", Client)
+    monkeypatch.setattr(
+        "draftpilot.core.providers.socket.getaddrinfo",
+        lambda *_args, **_kwargs: [(0, 0, 0, "", ("93.184.216.34", 443))],
+    )
     response = run_async(probe_provider(3, object()))
     assert response.ok is True
     assert "provider.test" not in response.model_dump_json()

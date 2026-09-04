@@ -1,6 +1,7 @@
 """Build PydanticAI models from server-side provider configuration."""
 
 import ipaddress
+import socket
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -48,6 +49,24 @@ def validate_provider_url(url: str | None) -> str:
         or address.is_multicast
     ) and not address.is_loopback:
         raise ValueError("Private provider endpoints are not allowed")
+    if hostname.casefold() != "localhost" and address is None:
+        try:
+            resolved = socket.getaddrinfo(
+                hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        except socket.gaierror as exc:
+            raise ValueError("Provider endpoint hostname could not be resolved") from exc
+        for result in resolved:
+            resolved_address = ipaddress.ip_address(result[4][0])
+            if (
+                resolved_address.is_private
+                or resolved_address.is_link_local
+                or resolved_address.is_reserved
+                or resolved_address.is_multicast
+            ) and not resolved_address.is_loopback:
+                raise ValueError("Private provider endpoints are not allowed")
     return url.rstrip("/")
 
 
