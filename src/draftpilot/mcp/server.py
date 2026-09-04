@@ -45,7 +45,7 @@ from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import timeline_proposals as timeline_proposals_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
+from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, KnowledgeNodeCreate, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -214,6 +214,55 @@ async def start_context_workflow(
         )
         await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
     return WorkflowRunRead.model_validate(run).model_dump(mode="json")
+
+
+@mcp.tool
+async def apply_context_workflow(
+    project_id: int,
+    run_id: int,
+    expected_source_version: int,
+    approved: bool = False,
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Apply one approved context suggestion as a canonical graph node."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    if not approved:
+        raise ValueError("Explicit approval is required")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session, client_id, project_id, "context.apply", "apply", {"run_id": run_id}, approved=True
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        run = await runs_crud.get(session, run_id)
+        if run is None or run.project_id != project_id or run.kind != "context_generation":
+            raise ValueError("Context run not found")
+        if run.status != "succeeded" or run.result is None:
+            raise ValueError("Context run is not ready to apply")
+        if run.result.get("applied_node_id") is not None:
+            raise ValueError("Context suggestion was already applied")
+        if run.result.get("source_version") != expected_source_version:
+            raise ValueError("Source artifact version has changed")
+        suggestion = run.result.get("suggestion")
+        output_kind = run.result.get("output_kind")
+        if not isinstance(suggestion, str) or not suggestion.strip() or not isinstance(output_kind, str):
+            raise ValueError("Context run has no applicable suggestion")
+        node = await graph_crud.create_node(
+            session,
+            KnowledgeNodeCreate(
+                project_id=project_id,
+                kind=output_kind,
+                label=f"{output_kind.replace('_', ' ').title()} from run {run_id}",
+                description=suggestion,
+                node_metadata={"source_run_id": run_id, "source_version": expected_source_version, "citations": run.result.get("citations", [])},
+            ),
+        )
+        run.result = {**run.result, "applied_node_id": node.id}
+        await runs_crud.update_status(session, run, "applied", result=run.result)
+    return {"project_id": project_id, "node": node.model_dump(mode="json"), "run_id": run_id}
 
 
 @mcp.tool

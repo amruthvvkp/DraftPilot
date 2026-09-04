@@ -297,6 +297,10 @@ export function startContextWorkflow(projectId: number, workflow: string, artifa
   return request<WorkflowRun>(`/api/v1/projects/${projectId}/context/workflows/runs`, { method: 'POST', body: JSON.stringify({ workflow, artifact_id: artifactId, instruction, permission_mode: permissionMode }) })
 }
 
+export function applyContextSuggestion(projectId: number, runId: number, expectedSourceVersion: number): Promise<KnowledgeGraph['nodes'][number]> {
+  return request<KnowledgeGraph['nodes'][number]>(`/api/v1/projects/${projectId}/context/workflows/runs/${runId}/apply`, { method: 'POST', body: JSON.stringify({ expected_source_version: expectedSourceVersion }) })
+}
+
 export function listEvaluations(projectId: number): Promise<EvaluationResult[]> {
   return request<EvaluationResult[]>(`/api/v1/projects/${projectId}/evaluations`)
 }

@@ -25,5 +25,6 @@ def test_capabilities_for_review_and_settings_cover_page_actions() -> None:
     review = capabilities_for_page("/projects/7/review")
     settings = capabilities_for_page("/settings")
     assert "screenplay.approve" in review
+    assert "context.apply" in capabilities_for_page("context")
     assert "providers.write" in settings
     assert "backups.restore" in settings

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   ContextWorkflowSpec,
+  applyContextSuggestion,
   getWorkflowRun,
   listArtifacts,
   listContextWorkflows,
@@ -20,6 +21,7 @@ export default function ContextWorkflowPanel({ projectId }: ContextWorkflowPanel
   const [run, setRun] = useState<WorkflowRun | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [applied, setApplied] = useState(false)
 
   useEffect(() => {
     void Promise.all([listContextWorkflows(projectId), listArtifacts(projectId)]).then(([nextWorkflows, nextArtifacts]) => {
@@ -47,6 +49,7 @@ export default function ContextWorkflowPanel({ projectId }: ContextWorkflowPanel
     setBusy(true)
     setError('')
     setRun(null)
+    setApplied(false)
     try {
       const pending = await startContextWorkflow(projectId, selected.key, Number(artifactId), instruction.trim())
       setRun(pending)
@@ -76,7 +79,7 @@ export default function ContextWorkflowPanel({ projectId }: ContextWorkflowPanel
       <label>Instruction<textarea value={instruction} onChange={event => setInstruction(event.target.value)} aria-label="Context workflow instruction" placeholder="What should the agent develop or check?" /></label>
       <button className="button primary" type="button" onClick={() => void start()} disabled={busy || !selected || compatibleArtifacts.length === 0 || !instruction.trim()}>{busy ? 'Generating…' : 'Generate review suggestion'}</button>
       {selected && compatibleArtifacts.length === 0 && <p className="helper">Create a compatible source artifact before running this workflow.</p>}
-      {run && <div className="context-run" aria-live="polite"><small>RUN {run.id} · {run.status}</small>{suggestion && <p>{suggestion}</p>}{hasCitations && <small>Retrieved citations attached · output kind: {String(run.result?.output_kind ?? selected?.output_kind)}</small>}</div>}
+      {run && <div className="context-run" aria-live="polite"><small>RUN {run.id} · {run.status}</small>{suggestion && <p>{suggestion}</p>}{hasCitations && <small>Retrieved citations attached · output kind: {String(run.result?.output_kind ?? selected?.output_kind)}</small>}{run.status === 'succeeded' && !applied && typeof run.result?.source_version === 'number' && <button className="button quiet" type="button" onClick={() => { setBusy(true); void applyContextSuggestion(projectId, run.id, run.result?.source_version as number).then(() => setApplied(true)).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to apply suggestion')).finally(() => setBusy(false)) }}>Apply to knowledge graph</button>}{applied && <small>Applied as a new versioned graph node.</small>}</div>}
     </>}
   </section>
 }

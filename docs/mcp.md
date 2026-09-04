@@ -19,6 +19,10 @@ requires `context.generate`, validates the source artifact kind against the sele
 returns a queued `context_generation` run; the worker produces a cited review-only suggestion and
 never changes canonical context without a later typed, approved operation.
 
+`apply_context_workflow` is the explicit approval path for that operation. It creates a
+provenance-linked knowledge-graph node, requires `context.apply` plus `approved: true`, rejects
+duplicate application and stale source versions, and uses the same run state as the REST path.
+
 `read_project_artifacts` and `read_screenplay_scenes` expose canonical editable artifacts and
 ordered screenplay blocks through the same project authorization boundary. Both tools enforce the
 configured response-size limit, and screenplay reads reject a screenplay belonging to another

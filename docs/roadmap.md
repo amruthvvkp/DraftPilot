@@ -75,8 +75,9 @@ causal beats, character arcs, and canon rules through one shared REST/MCP servic
 stale propagation, and RAG refresh. Phases A, B, D, E, and F remain in progress.
 Context-generation workflow contracts now cover reference scenes, visual language, camera, lighting,
 palettes, film/director/style research, and continuity as durable, citation-bearing, review-only
-runs; see `docs/context-workflows.md`. Remaining work includes a single broader end-to-end smoke
-journey, applying reviewed context suggestions into typed graph/artifact operations, complete live
+runs; see `docs/context-workflows.md`. Reviewed context suggestions can now be explicitly applied
+as provenance-linked typed graph nodes with source-version checks. Remaining work includes a single broader end-to-end smoke
+journey, complete live
 external MCP client workflows, and production hardening of deployment and recovery paths. The
 portable browser gate and authenticated local Langfuse trace verification are release checks, not
 substitutes for those remaining workflows.

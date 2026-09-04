@@ -9,7 +9,7 @@ import pytest
 
 from draftpilot.api.context_workflows import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import Project, StoryArtifact, WorkflowRun
+from draftpilot.models import KnowledgeNode, Project, StoryArtifact, WorkflowRun
 
 
 class _Session:
@@ -105,3 +105,38 @@ def test_context_workflow_persists_source_version_and_enqueues_run(
     assert captured[0].input["source_version"] == 4
     assert captured[0].permission_mode == "suggest"
     assert pool.jobs == [("execute_workflow", 44)]
+
+
+def test_context_suggestion_apply_is_explicit_provenance_linked_and_version_checked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Apply a completed suggestion only against the source version it reviewed."""
+    run = WorkflowRun(
+        id=44,
+        project_id=7,
+        kind="context_generation",
+        status="succeeded",
+        input={"artifact_id": 3},
+        result={"suggestion": "Use a long lens.", "output_kind": "camera", "source_version": 4, "citations": []},
+    )
+    node = KnowledgeNode(id=51, project_id=7, kind="camera", label="Camera from run 44", description="Use a long lens.")
+    updated: list[tuple[WorkflowRun, str]] = []
+
+    monkeypatch.setattr("draftpilot.api.context_workflows.runs_crud.get", AsyncMock(return_value=run))
+    monkeypatch.setattr("draftpilot.api.context_workflows.graph_crud.create_node", AsyncMock(return_value=node))
+
+    async def update_status(_session: object, item: WorkflowRun, state: str, result: object = None, error: str = None) -> WorkflowRun:
+        """Capture the explicit applied transition."""
+        updated.append((item, state))
+        return item
+
+    monkeypatch.setattr("draftpilot.api.context_workflows.runs_crud.update_status", update_status)
+    response = _client().post(
+        "/api/v1/projects/7/context/workflows/runs/44/apply",
+        json={"expected_source_version": 4},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 51
+    assert updated == [(run, "applied")]
+    assert run.result is not None and run.result["applied_node_id"] == 51

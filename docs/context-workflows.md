@@ -14,6 +14,12 @@ kind, and evaluator contract. It is explicitly review-only: it never mutates can
 or graph nodes. Poll `GET /api/v1/projects/{project_id}/runs/{run_id}` after a disconnect and review
 the suggestion before creating or approving a typed change.
 
+After review, apply a completed run with `POST .../runs/{run_id}/apply` and
+`{"expected_source_version": 4}`. The server creates a provenance-linked, versioned graph node,
+records the applied node on the run, and refreshes RAG. Reapplying a run or applying against a
+changed source version is rejected. The equivalent MCP `apply_context_workflow` tool requires the
+`context.apply` grant and `approved: true`.
+
 The React project-context page provides the same contract through the Context workflows panel. It
 filters source artifacts using the server catalog and shows run status and citations. No API key or
 provider credential is sent to the browser.
