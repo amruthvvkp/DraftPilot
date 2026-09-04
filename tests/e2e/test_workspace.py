@@ -85,7 +85,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/projects/9001/evaluations/runs", start_review)
     page.route("**/api/v1/projects/9001/runs/55", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 55, "project_id": 9001, "kind": "evaluation", "status": "succeeded", "result": {"evaluation_id": 3}, "error": None})))
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(
-        status=200, content_type="application/json", body="[]"
+        status=200, content_type="application/json", body=json.dumps([{"id": 32, "project_id": 9001, "role": "assistant", "content": "The reveal needs a setup.", "page": "workspace", "artifact": "screenplay", "selection": "INT. LANTERN HOUSE - NIGHT", "instruction_layers": {}, "citations": [{"source_id": "artifact:3", "content_version": 2}], "active_tools": ["screenplay.read"], "created_at": "2026-01-01T00:00:00Z"}])
     ))
     page.route("**/api/v1/agents/roles", lambda route: route.fulfill(
         status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'
@@ -104,6 +104,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
+    expect(page.get_by_text("artifact:3 · v2")).to_be_visible()
     page.get_by_label("Format action").select_option("dialogue")
     page.get_by_role("button", name="Review format").first.click()
     expect(page.get_by_text("#80 block")).to_be_visible()
