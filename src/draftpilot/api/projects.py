@@ -30,6 +30,7 @@ from draftpilot.models import (
     ProjectUpdate,
     ProjectReferenceBase,
     ProjectReferenceRead,
+    ProjectReferenceUpdate,
     SceneRead,
     SceneCreate,
     SceneRevisionRead,
@@ -138,6 +139,55 @@ async def create_project(
         **ProjectRead.model_validate(project).model_dump(),
         references=[ProjectReferenceRead.model_validate(reference) for reference in references],
     )
+
+
+@router.get("/{project_id}/references", response_model=list[ProjectReferenceRead])
+async def list_project_references(
+    project_id: int, session: AsyncSession = Depends(async_get_db)
+) -> list[ProjectReferenceRead]:
+    """List typed creative references within project scope."""
+    if await projects_crud.get(session, project_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+    references = await references_crud.list_for_project(session, project_id)
+    return [ProjectReferenceRead.model_validate(reference) for reference in references]
+
+
+@router.patch("/{project_id}/references/{reference_id}", response_model=ProjectReferenceRead)
+async def update_project_reference(
+    project_id: int,
+    reference_id: int,
+    data: ProjectReferenceUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> ProjectReferenceRead:
+    """Update one typed reference with optimistic concurrency."""
+    reference = await references_crud.get(session, reference_id)
+    if reference is None or reference.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference not found")
+    if if_match is None:
+        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
+    if if_match != reference.version:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Reference has changed")
+    updated = await references_crud.update(session, reference, data)
+    await _enqueue_rag_index(project_id, f"reference:{updated.id}", "reference", f"{updated.label}\n{updated.note or ''}", updated.version)
+    return ProjectReferenceRead.model_validate(updated)
+
+
+@router.delete("/{project_id}/references/{reference_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_reference(
+    project_id: int, reference_id: int, session: AsyncSession = Depends(async_get_db)
+) -> None:
+    """Delete one project reference without crossing project boundaries."""
+    reference = await references_crud.get(session, reference_id)
+    if reference is None or reference.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference not found")
+    await references_crud.delete(session, reference)
+    try:
+        await (await get_arq_pool()).enqueue_job(
+            "delete_rag_document", {"project_id": project_id, "source_id": f"reference:{reference_id}"}
+        )
+    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+        logfire.warning("RAG reference deletion enqueue skipped: {exc}", exc=str(exc))
 
 
 @router.patch("/{project_id}", response_model=ProjectRead)
