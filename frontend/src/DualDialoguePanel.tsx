@@ -48,6 +48,6 @@ export default function DualDialoguePanel({ projectId, sceneId }: DualDialoguePa
 
   const block = dialogues[0]
   if (!block) return null
-  const isPaired = block.is_dual && dialogues.filter(item => item.dual_group === block.dual_group).length > 1
+  const isPaired = block.is_dual
   return <section className="dual-dialogue-panel" aria-label="Dual dialogue"><div><p className="eyebrow warm">DIALOGUE LAYOUT</p><strong>{isPaired ? 'Paired dual dialogue' : 'Single dialogue'}</strong><small>{isPaired ? `Group ${block.dual_group ?? block.id} · ${dialogues.filter(item => item.dual_group === block.dual_group).length} linked blocks · source preserved` : dialogues.length > 1 ? 'Pair the first two dialogue blocks in this scene.' : 'Add a second dialogue block to enable pairing.'}</small></div><button className="mini-button" onClick={() => void toggle()} disabled={!isPaired && dialogues.length < 2}>{isPaired ? 'Unpair' : 'Pair dialogue'}</button>{error && <p className="copilot-error">{error}</p>}</section>
 }
