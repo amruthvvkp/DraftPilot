@@ -53,6 +53,7 @@ async def _project_payload(session: AsyncSession, project_id: int) -> dict[str, 
         "references": [ProjectReference.model_validate(reference).model_dump(mode="json") for reference in references],
         "artifacts": [
             {
+                "backup_id": artifact.id,
                 "kind": artifact.kind,
                 "title": artifact.title,
                 "content": artifact.content,
@@ -75,12 +76,26 @@ async def restore_backup_payload(session: AsyncSession, payload: dict[str, Any])
     assert project.id is not None
     for reference in payload.get("references", []):
         session.add(ProjectReference(project_id=project.id, **reference))
+    artifact_ids: dict[int, int] = {}
+    pending_dependencies: list[tuple[StoryArtifact, list[int]]] = []
     for artifact in payload.get("artifacts", []):
         values = dict(artifact)
-        values.pop("version", None)
-        values.pop("stale", None)
-        values.pop("depends_on", None)
-        session.add(StoryArtifact(project_id=project.id, **values))
+        backup_id = values.pop("backup_id", None)
+        dependencies = values.pop("depends_on", [])
+        restored = StoryArtifact(
+            project_id=project.id,
+            depends_on=[],
+            **values,
+        )
+        session.add(restored)
+        await session.flush()
+        if isinstance(backup_id, int) and restored.id is not None:
+            artifact_ids[backup_id] = restored.id
+        if isinstance(dependencies, list):
+            pending_dependencies.append((restored, [item for item in dependencies if isinstance(item, int)]))
+    for restored, dependencies in pending_dependencies:
+        restored.depends_on = [artifact_ids[item] for item in dependencies if item in artifact_ids]
+        session.add(restored)
     await session.commit()
     for screenplay_data in payload.get("screenplays", []):
         screenplay = Screenplay(
