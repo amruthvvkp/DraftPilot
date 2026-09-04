@@ -54,7 +54,8 @@ FDX import/export rather than relying only on synthetic fixtures.
 
 ## Implementation checkpoint — 2026-09-04
 
-The React/Vite studio now covers the project vault and multilingual creation flow, screenplay
+The React/Vite studio now covers the project vault, multilingual creation flow, and typed repeatable
+creative references, screenplay
 workspace, semantic editor blocks, dialogue translations, revisions, timeline proposals, durable
 Copilot turns, evaluations, typed agent proposals, creative-context nodes and relationships,
 project-scoped RAG retrieval, MCP prompts/resources/tools, provider settings, exports, and backups.
@@ -62,7 +63,8 @@ The browser suite runs in the pinned `e2e` Playwright Compose service with mocke
 no test writes to the developer database. PDF imports preserve binary bytes at the React boundary,
 FDX export is exposed in the workspace, and the API rejects a primary screenplay language reused as
 a dialogue-translation target. Timeline act and character lanes and editable graph relationships are
-now visible in the React workflow surfaces. New projects atomically receive a feature screenplay and
+now visible in the React workflow surfaces. Pending timeline proposals reload after a browser
+disconnect, and approval invalidates downstream artifacts. New projects atomically receive a feature screenplay and
 Act One so the creation journey opens on a writable document. Phases A, B, D, E, and F remain in progress because the remaining
 work includes broader end-to-end smoke coverage, richer typed story operations, complete external
 MCP client workflows, and production hardening of deployment and recovery paths.
