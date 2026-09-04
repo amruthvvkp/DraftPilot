@@ -17,6 +17,7 @@ from draftpilot.core.providers import create_chat_model
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.providers import settings_from_profile
+from draftpilot.core.context_workflows import get_context_workflow
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import evaluations as evaluations_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -24,6 +25,7 @@ from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as workflow_runs_crud
 from draftpilot.crud import provider_profiles as profiles_crud
+from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.models import CopilotMessageCreate, EvaluationResult, WorkflowRun
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
@@ -126,7 +128,10 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
             await workflow_runs_crud.update_status(session, run, "running")
             copilot_run = run.kind == "copilot_response"
             evaluation_run = run.kind == "evaluation"
+            context_run = run.kind == "context_generation"
             screenplay_id = run.input.get("screenplay_id")
+            if context_run:
+                return await _execute_context_generation(ctx, run)
             if not copilot_run and not isinstance(screenplay_id, int):
                 await workflow_runs_crud.update_status(
                     session, run, "failed", error="screenplay_id is required"
@@ -149,6 +154,75 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
                 await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
                 return result
         return {"status": "cancelled"}
+
+
+async def _execute_context_generation(ctx: dict, run: WorkflowRun) -> dict[str, object]:
+    """Generate a durable, review-only creative-context suggestion."""
+    workflow_key = run.input.get("workflow")
+    instruction = run.input.get("instruction")
+    artifact_id = run.input.get("artifact_id")
+    if not isinstance(workflow_key, str) or not isinstance(instruction, str):
+        return await _fail_context_run(run.id or 0, "Invalid context workflow input")
+    workflow = get_context_workflow(workflow_key)
+    if workflow is None:
+        return await _fail_context_run(run.id or 0, "Unknown context workflow")
+    source_text = ""
+    source_title = "project"
+    if isinstance(artifact_id, int):
+        async with session_scope() as session:
+            artifact = await artifacts_crud.get(session, artifact_id)
+            if artifact is None or artifact.project_id != run.project_id:
+                return await _fail_context_run(run.id or 0, "Context artifact is unavailable")
+            source_text = artifact.content[:12_000]
+            source_title = artifact.title
+    retrieved_context = await retrieve_context(run.project_id, instruction)
+    prompt = (
+        f"Workflow: {workflow.label}. Output kind: {workflow.output_kind}. "
+        f"Source: {source_title}. Source material:\n{source_text}\n\n"
+        f"Writer instruction: {instruction}"
+    )
+    try:
+        suggestion = await generate_reply(
+            prompt,
+            f"context/{workflow.key}",
+            workflow.output_kind,
+            source_title,
+            normalize_agent_role(run.agent_role),
+            [],
+            None,
+            retrieved_context,
+        )
+    except Exception as exc:  # pragma: no cover - provider/network dependent
+        return await _fail_context_run(run.id or 0, str(exc))
+    result: dict[str, object] = {
+        "workflow": workflow.key,
+        "output_kind": workflow.output_kind,
+        "evaluator": workflow.evaluator,
+        "suggestion": suggestion,
+        "citations": [
+            item["citation"]
+            for item in retrieved_context
+            if isinstance(item.get("citation"), dict)
+        ],
+        "source_artifact_id": artifact_id,
+        "source_version": run.input.get("source_version"),
+        "requires_review": True,
+    }
+    async with session_scope() as session:
+        current = await workflow_runs_crud.get(session, run.id or 0)
+        if current is None or current.status == "cancelled":
+            return {"status": "cancelled"}
+        await workflow_runs_crud.update_status(session, current, "succeeded", result=result)
+    return result
+
+
+async def _fail_context_run(run_id: int, error: str) -> dict[str, object]:
+    """Record a context workflow failure without fabricating a result."""
+    async with session_scope() as session:
+        current = await workflow_runs_crud.get(session, run_id)
+        if current is not None:
+            await workflow_runs_crud.update_status(session, current, "failed", error=error)
+    return {"error": error}
 
 
 async def evaluate_screenplay(ctx: dict, run: WorkflowRun) -> dict[str, object]:

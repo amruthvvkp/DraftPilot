@@ -166,6 +166,8 @@ export type Capability = { name: string; description: string; scope: string; mut
 
 export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null }
 
+export type ContextWorkflowSpec = { key: string; label: string; description: string; input_artifact_kinds: string[]; output_kind: string; evaluator: string; agent_role: string; permission_mode: string }
+
 export type EvaluationResult = { id: number; project_id: number; target_kind: string; target_id: number | null; evaluator: string; score: number | null; summary: string; findings: Record<string, unknown>; created_at: string }
 
 export type CopilotRunResponse = { message: CopilotMessage; run: WorkflowRun }
@@ -285,6 +287,14 @@ export function restoreSceneRevision(projectId: number, sceneId: number, revisio
 
 export function listArtifacts(projectId: number): Promise<StoryArtifact[]> {
   return request<StoryArtifact[]>(`/api/v1/projects/${projectId}/artifacts`)
+}
+
+export function listContextWorkflows(projectId: number): Promise<ContextWorkflowSpec[]> {
+  return request<ContextWorkflowSpec[]>(`/api/v1/projects/${projectId}/context/workflows`)
+}
+
+export function startContextWorkflow(projectId: number, workflow: string, artifactId: number, instruction: string, permissionMode = 'suggest'): Promise<WorkflowRun> {
+  return request<WorkflowRun>(`/api/v1/projects/${projectId}/context/workflows/runs`, { method: 'POST', body: JSON.stringify({ workflow, artifact_id: artifactId, instruction, permission_mode: permissionMode }) })
 }
 
 export function listEvaluations(projectId: number): Promise<EvaluationResult[]> {

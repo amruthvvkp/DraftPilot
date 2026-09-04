@@ -216,6 +216,8 @@ def test_context_page_creates_typed_knowledge_node(page: Page) -> None:
         route.fulfill(status=200, content_type="application/json", body=json.dumps({**created, "label": "Pather Panchali revised", "version": 2}))
 
     page.route("**/api/v1/projects/9001/knowledge-graph", graph_request)
+    page.route("**/api/v1/projects/9001/context/workflows", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9001/artifacts", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/projects/9001/knowledge-graph/nodes", create_node)
     page.route("**/api/v1/projects/9001/knowledge-graph/nodes/40", update_node)
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
@@ -257,6 +259,8 @@ def test_context_page_links_project_nodes(page: Page) -> None:
         route.fulfill(status=204)
 
     page.route("**/api/v1/projects/9001/knowledge-graph", graph_request)
+    page.route("**/api/v1/projects/9001/context/workflows", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9001/artifacts", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/projects/9001/knowledge-graph/edges", create_edge)
     page.route("**/api/v1/projects/9001/knowledge-graph/edges/70", delete_edge)
     page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
@@ -362,3 +366,35 @@ def test_timeline_supports_drag_keyboard_reorder_and_proposal(page: Page) -> Non
     expect(page.get_by_text("APPROVED PROPOSAL")).to_be_visible()
     page.get_by_role("button", name="Rollback reorder").click()
     expect(page.get_by_text("ROLLED_BACK PROPOSAL")).to_be_visible()
+
+
+def test_context_workflow_is_review_only_and_reconnectable(page: Page) -> None:
+    """Start a mocked context-generation run and render its review result."""
+    artifact = {"id": 31, "project_id": 9001, "kind": "outline", "title": "Outline", "content": "The reveal happens.", "version": 4, "stale": False, "depends_on": [], "artifact_metadata": {}}
+    workflow = {"key": "camera", "label": "Camera plan", "description": "Plan coverage.", "input_artifact_kinds": ["outline"], "output_kind": "camera", "evaluator": "production_feasibility_review", "agent_role": "associate_director", "permission_mode": "suggest"}
+
+    page.route("**/api/v1/projects/9001/knowledge-graph", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"nodes": [], "edges": []})))
+    page.route("**/api/v1/projects/9001/references", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9001/context/workflows", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([workflow])))
+    page.route("**/api/v1/projects/9001/artifacts", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([artifact])))
+    page.route("**/api/v1/projects/9001/copilot/messages", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+
+    def start_run(route: Route) -> None:
+        """Validate the typed context workflow request."""
+        assert route.request.post_data_json == {"workflow": "camera", "artifact_id": 31, "instruction": "Plan coverage for the reveal.", "permission_mode": "suggest"}
+        route.fulfill(status=202, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "context_generation", "status": "queued", "result": None, "error": None}))
+
+    def read_run(route: Route) -> None:
+        """Return a completed review-only result after the worker poll."""
+        result = {"workflow": "camera", "output_kind": "camera", "suggestion": "Use a slow push into the reveal.", "citations": [{"source_id": "artifact:31", "content_version": 4}], "requires_review": True}
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "context_generation", "status": "succeeded", "result": result, "error": None}))
+
+    page.route("**/api/v1/projects/9001/context/workflows/runs", start_run)
+    page.route("**/api/v1/projects/9001/runs/44", read_run)
+    page.goto("/projects/9001/context")
+    page.get_by_label("Context workflow instruction").fill("Plan coverage for the reveal.")
+    page.get_by_role("button", name="Generate review suggestion").click()
+    expect(page.get_by_text("Use a slow push into the reveal.")).to_be_visible()
+    expect(page.get_by_text("Retrieved citations attached · output kind: camera")).to_be_visible()
