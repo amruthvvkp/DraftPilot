@@ -135,6 +135,33 @@ async def create_project(
         [ProjectReferenceBase.model_validate(reference) for reference in data.references],
     )
     references = await references_crud.list_for_project(session, project.id or 0)
+    if project.id is not None:
+        await _enqueue_rag_index(
+            project.id,
+            f"project:{project.id}",
+            "project",
+            "\n".join(
+                item
+                for item in (
+                    project.title,
+                    project.logline or "",
+                    project.description or "",
+                    project.story_outline or "",
+                    project.visual_style or "",
+                )
+                if item
+            ),
+            project.version,
+        )
+        for reference in references:
+            if reference.id is not None:
+                await _enqueue_rag_index(
+                    project.id,
+                    f"reference:{reference.id}",
+                    "reference",
+                    f"{reference.label}\n{reference.note or ''}",
+                    reference.version,
+                )
     return ProjectReadWithReferences(
         **ProjectRead.model_validate(project).model_dump(),
         references=[ProjectReferenceRead.model_validate(reference) for reference in references],

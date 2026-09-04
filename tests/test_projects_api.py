@@ -1,6 +1,7 @@
 """Test the versioned project REST boundary without a live database."""
 
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -15,6 +16,7 @@ from draftpilot.models import (
     BlockType,
     DialogueTranslation,
     Project,
+    ProjectReference,
     Scene,
     Screenplay,
     WorkflowRun,
@@ -57,6 +59,7 @@ def test_create_project_persists_typed_references(
 ) -> None:
     """Pass typed references through the request and return them in the response."""
     project = Project(id=9, title="A multilingual story", primary_language="Hindi")
+    refresh = AsyncMock()
 
     async def create_with_references(_session: _Session, data: object, references: list[object]) -> Project:
         """Return the fixture project after receiving the normalized request."""
@@ -67,7 +70,16 @@ def test_create_project_persists_typed_references(
 
     async def list_for_project(_session: _Session, _project_id: int) -> list[object]:
         """Return the reference created by the mocked persistence layer."""
-        return []
+        return [
+            ProjectReference(
+                id=11,
+                project_id=9,
+                kind="film",
+                label="Pather Panchali",
+                note="Texture",
+                version=1,
+            )
+        ]
 
     monkeypatch.setattr(
         "draftpilot.api.projects.projects_crud.create_with_references", create_with_references
@@ -75,6 +87,7 @@ def test_create_project_persists_typed_references(
     monkeypatch.setattr(
         "draftpilot.api.projects.references_crud.list_for_project", list_for_project
     )
+    monkeypatch.setattr("draftpilot.api.projects._enqueue_rag_index", refresh)
     response = client.post(
         "/api/v1/projects",
         json={
@@ -87,6 +100,9 @@ def test_create_project_persists_typed_references(
     )
     assert response.status_code == 201
     assert response.json()["primary_language"] == "Hindi"
+    assert refresh.await_count == 2
+    assert refresh.await_args_list[0].args[:3] == (9, "project:9", "project")
+    assert refresh.await_args_list[1].args[:3] == (9, "reference:11", "reference")
 
 
 def test_create_project_rejects_missing_title(client: TestClient) -> None:
