@@ -66,7 +66,8 @@ a dialogue-translation target. Timeline act and character lanes and editable gra
 now visible in the React workflow surfaces. Pending timeline proposals reload after a browser
 disconnect, and approval invalidates downstream artifacts. New projects atomically receive a feature screenplay and
 Act One so the creation journey opens on a writable document. Project references now have scoped,
-versioned REST mutations and a single Alembic migration head. Phases A, B, D, E, and F remain in progress because the remaining
+versioned REST mutations and a single Alembic migration head. The React story studio can now create
+dependency-linked artifacts, and the portable browser suite covers reference editing. Phases A, B, D, E, and F remain in progress because the remaining
 work includes broader end-to-end smoke coverage, richer typed story operations, complete external
 MCP client workflows, and production hardening of deployment and recovery paths.
 
