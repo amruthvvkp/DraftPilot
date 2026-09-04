@@ -7,6 +7,8 @@ import httpx
 import logfire
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from draftpilot.api.backups import _project_payload, restore_backup_payload
 from draftpilot.core import telemetry
@@ -59,6 +61,12 @@ mcp = FastMCP(
     f"{settings.metadata.name.title()} MCP Server",
     auth=StaticTokenVerifier(required_scopes=["draftpilot"]),
 )
+
+
+@mcp.custom_route("/health", methods=["GET"])
+async def health(_request: Request) -> JSONResponse:
+    """Return MCP liveness without requiring project authentication."""
+    return JSONResponse({"status": "ok", "service": "mcp"})
 
 logfire.info("Telemetry setup complete")
 

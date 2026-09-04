@@ -36,3 +36,12 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "restore_project_backup" in tools
     assert "read_workflow_run" in tools
     assert "control_workflow_run" in tools
+
+
+def test_mcp_surface_exposes_liveness_route() -> None:
+    """Expose a public liveness route for container orchestration."""
+    pytest.importorskip("fastmcp")
+    from draftpilot.mcp.server import mcp
+
+    routes = {route.path for route in mcp.http_app().routes}
+    assert "/health" in routes
