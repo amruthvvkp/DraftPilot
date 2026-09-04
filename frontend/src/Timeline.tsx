@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { approveTimelineProposal, createTimelineProposal, ProjectWorkspace, rejectTimelineProposal, TimelineProposal } from './api'
+import { useEffect, useState } from 'react'
+import { approveTimelineProposal, createTimelineProposal, listTimelineProposals, ProjectWorkspace, rejectTimelineProposal, TimelineProposal } from './api'
 import CopilotPanel from './CopilotPanel'
 import './timeline.css'
 
@@ -20,6 +20,16 @@ export default function Timeline({ projectId, screenplayId, workspace }: Timelin
   const [draggingId, setDraggingId] = useState<number | null>(null)
   const [proposal, setProposal] = useState<TimelineProposal | null>(null)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    void listTimelineProposals(projectId, screenplayId).then(proposals => {
+      const pending = proposals.find(item => item.status === 'proposed')
+      if (pending) {
+        setProposal(pending)
+        setOrderedIds(pending.proposed_scene_ids)
+      }
+    }).catch(reason => setError(reason instanceof Error ? reason.message : 'Unable to load timeline proposals'))
+  }, [projectId, screenplayId])
 
   function move(sceneId: number, direction: -1 | 1): void {
     const index = orderedIds.indexOf(sceneId)

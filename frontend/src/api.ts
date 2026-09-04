@@ -203,6 +203,10 @@ export function createTimelineProposal(projectId: number, screenplayId: number, 
   return request<TimelineProposal>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals`, { method: 'POST', body: JSON.stringify({ scene_ids: sceneIds, durations }) })
 }
 
+export function listTimelineProposals(projectId: number, screenplayId: number): Promise<TimelineProposal[]> {
+  return request<TimelineProposal[]>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals`)
+}
+
 export function approveTimelineProposal(projectId: number, screenplayId: number, proposalId: number): Promise<TimelineProposal> {
   return request<TimelineProposal>(`/api/v1/projects/${projectId}/screenplays/${screenplayId}/timeline/proposals/${proposalId}/approve`, { method: 'POST' })
 }

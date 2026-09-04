@@ -60,6 +60,9 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/projects/9001/evaluations", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
+    page.route("**/api/v1/projects/9001/screenplays/12/timeline/proposals", lambda route: route.fulfill(
+        status=200, content_type="application/json", body=json.dumps([{"id": 60, "project_id": 9001, "screenplay_id": 12, "status": "proposed", "original_scene_ids": [7], "proposed_scene_ids": [7], "timings": [{"scene_id": 7, "position": 0, "start_seconds": 0, "end_seconds": 30}], "total_runtime_seconds": 30}])
+    ))
 
     def start_review(route: Route) -> None:
         """Validate the screenplay-scoped evaluation run request."""
@@ -92,6 +95,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     lanes = page.get_by_role("region", name="Act and character lanes")
     expect(lanes).to_contain_text("Act One")
     expect(lanes).to_contain_text("MIRA")
+    expect(page.get_by_text("PROPOSED PROPOSAL")).to_be_visible()
     page.get_by_role("button", name="← Editor").click()
     page.get_by_role("button", name="Backups").click()
     expect(page.get_by_role("heading", name="Project backups")).to_be_visible()
