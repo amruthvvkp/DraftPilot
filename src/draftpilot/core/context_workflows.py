@@ -99,6 +99,12 @@ def get_context_workflow(key: str) -> ContextWorkflowSpec | None:
     return next((workflow for workflow in CONTEXT_WORKFLOWS if workflow.key == key), None)
 
 
+def validate_context_source(workflow: ContextWorkflowSpec, artifact_kind: str) -> None:
+    """Reject a source artifact kind outside a workflow's declared input scope."""
+    if artifact_kind not in workflow.input_artifact_kinds:
+        raise ValueError("Artifact kind is not valid for this workflow")
+
+
 class ContextWorkflowRequest(BaseModel):
     """Describe a provider-backed context workflow run."""
 

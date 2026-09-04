@@ -30,6 +30,7 @@ from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
 from draftpilot.core.story_operations import validate_story_operation
+from draftpilot.core.context_workflows import context_workflow_catalog, get_context_workflow, validate_context_source
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -44,7 +45,7 @@ from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import timeline_proposals as timeline_proposals_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunRead
+from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
 
 telemetry.setup(mcp=True)
 
@@ -144,6 +145,75 @@ def workflow_turn(page: str, artifact: str = "", selection: str = "") -> str:
         f"DraftPilot workflow page: {page}. Artifact: {artifact or 'none'}. "
         f"Selection: {selection or 'none'}. Propose typed changes for writer approval."
     )
+
+
+@mcp.resource("draftpilot://context-workflows")
+def context_workflows_resource() -> str:
+    """Publish the reusable context-generation workflow contracts."""
+    return json.dumps([workflow.model_dump(mode="json") for workflow in context_workflow_catalog()])
+
+
+@mcp.tool
+async def start_context_workflow(
+    project_id: int,
+    workflow: str,
+    artifact_id: int,
+    instruction: str,
+    permission_mode: str = "suggest",
+    ctx: Context | None = None,
+) -> dict[str, object]:
+    """Start one authorized, durable, review-only context workflow run."""
+    if ctx is None:
+        raise ValueError("MCP context is required")
+    if permission_mode not in {"suggest", "scoped_edit", "project_edit"}:
+        raise ValueError("Invalid context workflow permission mode")
+    if not instruction.strip() or len(instruction) > 12_000:
+        raise ValueError("Context workflow instruction is invalid")
+    selected = get_context_workflow(workflow)
+    if selected is None:
+        raise ValueError("Unknown context workflow")
+    client_id = ctx.client_id or "unknown"
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(
+                session,
+                client_id,
+                project_id,
+                "context.generate",
+                "start",
+                {"workflow": workflow, "artifact_id": artifact_id},
+            )
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        if await projects_crud.get(session, project_id) is None:
+            raise ValueError("Project not found")
+        artifact = await artifacts_crud.get(session, artifact_id)
+        if artifact is None or artifact.project_id != project_id:
+            raise ValueError("Context artifact not found")
+        try:
+            validate_context_source(selected, artifact.kind)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+        run = await runs_crud.create(
+            session,
+            WorkflowRunCreate(
+                project_id=project_id,
+                kind="context_generation",
+                input={
+                    "workflow": selected.key,
+                    "instruction": instruction,
+                    "artifact_id": artifact_id,
+                    "source_kind": artifact.kind,
+                    "source_version": artifact.version,
+                    "output_kind": selected.output_kind,
+                    "evaluator": selected.evaluator,
+                },
+                agent_role=selected.agent_role,
+                permission_mode=permission_mode,
+            ),
+        )
+        await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    return WorkflowRunRead.model_validate(run).model_dump(mode="json")
 
 
 @mcp.tool

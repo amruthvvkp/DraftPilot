@@ -10,16 +10,18 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     pytest.importorskip("fastmcp")
     from draftpilot.mcp.server import mcp
 
-    async def inspect_surface() -> tuple[list[str], list[str], list[str]]:
+    async def inspect_surface() -> tuple[list[str], list[str], list[str], list[str]]:
         """Read registered MCP prompts, resources, and tools."""
         prompts = [item.name for item in await mcp.list_prompts()]
         resources = [item.uri_template for item in await mcp.list_resource_templates()]
+        static_resources = [str(item.uri) for item in await mcp.list_resources()]
         tools = [item.name for item in await mcp.list_tools()]
-        return prompts, resources, tools
+        return prompts, resources, static_resources, tools
 
-    prompts, resources, tools = run_async(inspect_surface())
+    prompts, resources, static_resources, tools = run_async(inspect_surface())
     assert "workflow_turn" in prompts
     assert "draftpilot://projects/{project_id}/knowledge-graph" in resources
+    assert "draftpilot://context-workflows" in static_resources
     assert "retrieve_project_context" in tools
     assert "propose_timeline_reorder" in tools
     assert "review_timeline_proposal" in tools
@@ -27,6 +29,7 @@ def test_mcp_surface_exposes_context_and_graph_contracts() -> None:
     assert "create_screenplay_export" in tools
     assert "read_project_artifacts" in tools
     assert "apply_story_operation" in tools
+    assert "start_context_workflow" in tools
     assert "read_project_evaluations" in tools
     assert "read_screenplay_scenes" in tools
     assert "propose_screenplay_change" in tools

@@ -13,6 +13,12 @@ results with source identifiers and content versions. Clients can inspect the re
 access. Retrieval requires the `context.read` grant for the requested project and is bounded by the
 MCP request timeout and output limit.
 
+The static `draftpilot://context-workflows` resource and `start_context_workflow` tool expose the
+same context-generation catalog and durable run contract used by the React context page. The tool
+requires `context.generate`, validates the source artifact kind against the selected workflow, and
+returns a queued `context_generation` run; the worker produces a cited review-only suggestion and
+never changes canonical context without a later typed, approved operation.
+
 `read_project_artifacts` and `read_screenplay_scenes` expose canonical editable artifacts and
 ordered screenplay blocks through the same project authorization boundary. Both tools enforce the
 configured response-size limit, and screenplay reads reject a screenplay belonging to another

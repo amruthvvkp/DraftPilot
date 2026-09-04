@@ -8,6 +8,7 @@ from draftpilot.core.context_workflows import (
     ContextWorkflowSpec,
     context_workflow_catalog,
     get_context_workflow,
+    validate_context_source,
 )
 from draftpilot.core.db import async_get_db
 from draftpilot.core.queue import get_arq_pool
@@ -43,8 +44,10 @@ async def start_context_workflow(
         artifact = await artifacts_crud.get(session, data.artifact_id)
         if artifact is None or artifact.project_id != project_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Context artifact not found")
-        if artifact.kind not in workflow.input_artifact_kinds:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Artifact kind is not valid for this workflow")
+        try:
+            validate_context_source(workflow, artifact.kind)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
         source_version = artifact.version
         source_kind = artifact.kind
     elif workflow.input_artifact_kinds:

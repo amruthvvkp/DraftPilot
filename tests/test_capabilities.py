@@ -10,6 +10,7 @@ def test_catalog_contains_scoped_read_and_approved_mutation_capabilities() -> No
     assert catalog["timeline.propose"].mutates is False
     assert catalog["revisions.restore"].mutates is True
     assert catalog["revisions.restore"].approval_required is True
+    assert catalog["context.generate"].mutates is False
 
 
 def test_page_capabilities_are_server_authoritative() -> None:

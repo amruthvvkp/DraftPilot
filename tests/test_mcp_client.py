@@ -96,3 +96,44 @@ def test_mcp_timeline_proposal_persists_with_server_order(monkeypatch: pytest.Mo
     record = create.await_args.args[1]
     assert record.original_scene_ids == [7, 8]
     assert record.total_runtime_seconds == 75
+
+
+def test_mcp_context_workflow_uses_shared_scope_and_queues_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Schedule a typed context workflow through the external MCP boundary."""
+    from draftpilot.mcp import server
+    from draftpilot.models import Project, StoryArtifact, WorkflowRun
+
+    class SessionScope:
+        """Provide a bounded fake database context for context generation."""
+
+        async def __aenter__(self) -> object:
+            """Return the isolated session marker."""
+            return object()
+
+        async def __aexit__(self, *_args: object) -> None:
+            """Close the isolated database context."""
+
+    class Pool:
+        """Capture the queued context job."""
+
+        def __init__(self) -> None:
+            """Initialize the captured job list."""
+            self.jobs: list[tuple[str, int | None]] = []
+
+        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+            """Capture a worker job."""
+            self.jobs.append((name, run_id))
+
+    pool = Pool()
+    run = WorkflowRun(id=44, project_id=9, kind="context_generation")
+    monkeypatch.setattr(server, "session_scope", lambda: SessionScope())
+    monkeypatch.setattr(server, "authorize_invocation", AsyncMock())
+    monkeypatch.setattr(server.projects_crud, "get", AsyncMock(return_value=Project(id=9, title="Draft")))
+    monkeypatch.setattr(server.artifacts_crud, "get", AsyncMock(return_value=StoryArtifact(id=3, project_id=9, kind="outline", title="Outline", version=4)))
+    monkeypatch.setattr(server.runs_crud, "create", AsyncMock(return_value=run))
+    monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
+
+    result = run_async(server.start_context_workflow(9, "camera", 3, "Plan the reveal.", ctx=SimpleNamespace(client_id="writer")))
+
+    assert result["id"] == 44
+    assert pool.jobs == [("execute_workflow", 44)]
