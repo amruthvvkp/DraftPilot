@@ -84,7 +84,8 @@ now passes through `scripts/mcp_smoke.py` (authenticated discovery plus project-
 typed-tool reads). Monty executions now have project-scoped redacted audit records with code hashes
 and bounded telemetry fields. Translation writes now enforce configured dialogue targets and reject
 the primary screenplay language across REST and MCP; continue with broader production hardening and external-client
-compatibility checks. The portable
+compatibility checks. Copilot proposal creation now enforces the originating run permission mode
+server-side. The portable
 browser gate and authenticated local Langfuse trace verification are release checks, not substitutes
 for those remaining workflows.
 

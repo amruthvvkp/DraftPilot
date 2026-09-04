@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from draftpilot.api.agent import router
 from draftpilot.core.db import async_get_db
 from draftpilot.models import AgentProposal, BlockType
+from draftpilot.models import WorkflowRun
 
 
 class _Session:
@@ -121,3 +122,58 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
     assert block.text == "A door opens."
     assert enqueue.await_count == 2
     assert enqueue.await_args_list[1].args == (9, "scene:7", "scene", "INT. ROOM - DAY\nA door opens.", 5)
+
+
+def test_chat_only_run_cannot_create_agent_proposal(monkeypatch) -> None:
+    """Enforce the originating run permission before persisting a proposal."""
+    monkeypatch.setattr(
+        "draftpilot.api.agent.runs_crud.get",
+        AsyncMock(return_value=WorkflowRun(id=31, project_id=9, permission_mode="chat_only")),
+    )
+    response = _client().post(
+        "/api/v1/projects/9/agent-proposals",
+        json={
+            "target_kind": "block",
+            "target_id": 11,
+            "scene_id": 7,
+            "operation": {"text": "No mutation"},
+            "base_version": 1,
+            "run_id": 31,
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_suggest_run_can_create_reviewable_agent_proposal(monkeypatch) -> None:
+    """Allow a suggest-mode run to create a proposal for writer review."""
+    monkeypatch.setattr(
+        "draftpilot.api.agent.runs_crud.get",
+        AsyncMock(return_value=WorkflowRun(id=31, project_id=9, permission_mode="suggest")),
+    )
+    scene = SimpleNamespace(id=7, version=1)
+    block = SimpleNamespace(id=11, scene_id=7, element_type=BlockType.ACTION, text="A door opens.")
+    monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
+    proposal = AgentProposal(
+        id=32,
+        project_id=9,
+        run_id=31,
+        target_kind="block",
+        target_id=11,
+        operation={"text": "A door closes."},
+        before={"scene_id": 7, "text": "A door opens."},
+        base_version=1,
+    )
+    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.create", AsyncMock(return_value=proposal))
+    response = _client().post(
+        "/api/v1/projects/9/agent-proposals",
+        json={
+            "target_kind": "block",
+            "target_id": 11,
+            "scene_id": 7,
+            "operation": {"text": "A door closes."},
+            "base_version": 1,
+            "run_id": 31,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["run_id"] == 31

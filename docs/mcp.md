@@ -94,6 +94,11 @@ Client registration and grant administration are protected separately from MCP i
 `MCP__AUTH_TOKEN`; the local default is only for development.
 Grant creation also validates the capability against the server catalog, so arbitrary database or
 unregistered tool permissions cannot be persisted.
+
+Copilot runs carry one of `chat_only`, `suggest`, `scoped_edit`, or `project_edit`. The server
+rejects proposals originating from `chat_only` runs; other modes still create typed proposals for
+the writer approval/diff/rollback lifecycle. Approval endpoints re-check the originating run so a
+client cannot bypass the stored permission mode.
 Administrators can revoke a project grant with `DELETE /api/v1/mcp/projects/{project_id}/grants/{grant_id}`;
 the endpoint is project-scoped and does not expose client bearer tokens.
 

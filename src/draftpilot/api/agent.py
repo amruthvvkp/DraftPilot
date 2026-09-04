@@ -17,7 +17,9 @@ from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, DialogueTranslation
+from draftpilot.core.agent_roles import normalize_permission_mode
 
 router = APIRouter(prefix="/projects/{project_id}/agent-proposals", tags=["agent"])
 
@@ -32,6 +34,22 @@ class ProposalCreateRequest(BaseModel):
     diff: dict[str, Any] = Field(default_factory=dict)
     base_version: int = Field(ge=1)
     run_id: int | None = None
+
+
+async def _authorize_proposal_mode(
+    session: AsyncSession, project_id: int, run_id: int | None
+) -> None:
+    """Reject proposal creation when its originating run is chat-only."""
+    if run_id is None:
+        return
+    run = await runs_crud.get(session, run_id)
+    if run is None or run.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal run not found")
+    if normalize_permission_mode(run.permission_mode) == "chat_only":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chat-only agent runs cannot create change proposals",
+        )
 
 
 def _validate_operation(target_kind: str, operation: dict[str, Any]) -> None:
@@ -118,6 +136,7 @@ async def create_agent_proposal(
     session: AsyncSession = Depends(async_get_db),
 ) -> AgentProposalRead:
     """Persist a proposal after deriving its target version server-side."""
+    await _authorize_proposal_mode(session, project_id, data.run_id)
     _validate_operation(data.target_kind, data.operation)
     target: Any | None
     if data.target_kind == "scene":
@@ -200,6 +219,7 @@ async def approve_agent_proposal(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
     if proposal.status != "proposed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal is not pending")
+    await _authorize_proposal_mode(session, project_id, proposal.run_id)
     target: Any | None
     block_target: tuple[Any, Any] | None = None
     if proposal.target_kind == "scene":
