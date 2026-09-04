@@ -5,6 +5,7 @@ from fastapi.responses import PlainTextResponse, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
+from draftpilot.core.benchmark import BenchmarkManifest, manifest_from_document
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
@@ -19,6 +20,27 @@ from draftpilot.models import ScreenplayCreate, ScreenplayRead
 
 router = APIRouter(prefix="/projects/{project_id}/screenplays/{screenplay_id}", tags=["exports"])
 MAX_IMPORT_BYTES = 10 * 1024 * 1024
+
+
+@router.get("/benchmark-manifest", response_model=BenchmarkManifest)
+async def benchmark_manifest(
+    project_id: int,
+    screenplay_id: int,
+    session: AsyncSession = Depends(async_get_db),
+) -> BenchmarkManifest:
+    """Build an isolated benchmark manifest from a project screenplay."""
+    project = await projects_crud.get(session, project_id)
+    screenplay = await screenplays_crud.get(session, screenplay_id)
+    if project is None or screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay not found")
+    document = await load_screenplay_doc(session, screenplay_id)
+    return manifest_from_document(
+        document,
+        track="redevelopment",
+        label=f"project-{project_id}-screenplay-{screenplay_id}",
+        primary_language=project.primary_language,
+        translation_languages=project.languages,
+    )
 
 
 @router.get("/exports/{file_format}", response_class=PlainTextResponse)

@@ -65,3 +65,5 @@ uv run python scripts/benchmark_compare.py control.json candidate.json
 
 The report includes scene-order, element-count, runtime, and language deltas; source screenplay
 bytes are represented only by SHA-256 digests.
+For a persisted isolated project, `GET /api/v1/projects/{project_id}/screenplays/{screenplay_id}/benchmark-manifest`
+builds the same contract from canonical screenplay data and project language metadata.

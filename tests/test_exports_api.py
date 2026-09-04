@@ -17,6 +17,40 @@ class _Session:
     """Stand in for the database session in import tests."""
 
 
+def test_benchmark_manifest_is_project_scoped_and_metadata_bearing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Build a benchmark manifest without exposing or mutating database state."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session, None]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+    project = Project(id=9, title="Story", primary_language="Hindi", languages=["English"])
+    screenplay = Screenplay(id=2, project_id=9, title="Draft", format="feature")
+
+    async def get(_session: _Session, item_id: int) -> Project | Screenplay | None:
+        """Return only the scoped project and screenplay fixtures."""
+        return project if item_id == 9 else screenplay if item_id == 2 else None
+
+    async def load(_session: _Session, _screenplay_id: int) -> ScreenplayDoc:
+        """Return one canonical fixture document."""
+        return ScreenplayDoc.model_validate({"acts": [{"scenes": [{"heading": "INT. HOUSE - DAY"}]}]})
+
+    monkeypatch.setattr("draftpilot.api.exports.projects_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.screenplays_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.load_screenplay_doc", load)
+    response = TestClient(app).get("/api/v1/projects/9/screenplays/2/benchmark-manifest")
+
+    assert response.status_code == 200
+    assert response.json()["track"] == "redevelopment"
+    assert response.json()["primary_language"] == "Hindi"
+    assert response.json()["translation_languages"] == ["English"]
+
+
 def test_fountain_import_creates_a_new_screenplay(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
