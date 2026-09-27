@@ -1,9 +1,9 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { createProviderProfile, listProviderProfiles, ProviderProfile, testProviderProfile, updateProviderProfile } from './api'
+import { createProviderProfile, listDefaultModels, listProfileModels, listProviderProfiles, ModelOption, ProviderProfile, testProviderProfile, updateProviderProfile } from './api'
 import CopilotPanel from './CopilotPanel'
 import './provider-settings.css'
 
-const initial = { name: '', provider: 'ollama', model: 'llama3.2', base_url: '', api_key: '', enabled: true }
+const initial = { name: '', provider: 'lm_studio', model: 'auto', base_url: '', api_key: '', enabled: true }
 
 export default function ProviderSettings() {
   const [profiles, setProfiles] = useState<ProviderProfile[]>([])
@@ -12,11 +12,24 @@ export default function ProviderSettings() {
   const [testing, setTesting] = useState<number | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [defaultModels, setDefaultModels] = useState<ModelOption[] | null>(null)
+  const [defaultModelsError, setDefaultModelsError] = useState('')
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
 
   async function refresh(): Promise<void> {
     try { setProfiles(await listProviderProfiles()) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to load providers') }
   }
-  useEffect(() => { void refresh() }, [])
+  useEffect(() => {
+    void refresh()
+    listDefaultModels()
+      .then(models => { setDefaultModels(models); setModelOptions(models) })
+      .catch(reason => setDefaultModelsError(reason instanceof Error ? reason.message : 'Default model server unreachable'))
+  }, [])
+  async function loadModels(profile: ProviderProfile): Promise<void> {
+    setError('')
+    try { const models = await listProfileModels(profile.id); setModelOptions(models); setMessage(`${profile.name}: ${models.length} models (${models.filter(item => item.loaded).length} loaded)`) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to list models') }
+  }
   function update(field: keyof typeof initial, value: string | boolean): void { setForm(current => ({ ...current, [field]: value })) }
   function edit(profile: ProviderProfile): void {
     setEditing(profile.id); setForm({ name: profile.name, provider: profile.provider, model: profile.model, base_url: profile.base_url ?? '', api_key: '', enabled: profile.enabled }); setMessage('')
@@ -64,8 +77,9 @@ export default function ProviderSettings() {
       <p className="settings-intro">Connect a model for your story team. API keys are encrypted by the server and never returned to this browser.</p>
       {error && <div className="notice">{error}<button onClick={() => setError('')}>×</button></div>}{message && <div className="success-notice">{message}</div>}
       <div className="settings-grid">
-        <section className="settings-card"><p className="eyebrow warm">{editing === null ? 'ADD PROVIDER' : 'EDIT PROVIDER'}</p><form onSubmit={event => void submit(event)}><label>Profile name<input required value={form.name} disabled={editing !== null} onChange={event => update('name', event.target.value)} placeholder="Studio Ollama" /></label><label>Provider<select value={form.provider} onChange={event => update('provider', event.target.value)}><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="gateway">OpenAI-compatible gateway</option><option value="ollama">Ollama</option><option value="lm_studio">LM Studio</option></select></label><label>Model<input required value={form.model} onChange={event => update('model', event.target.value)} placeholder="Model identifier" /></label><label>Base URL <span className="helper">Optional for provider defaults</span><input value={form.base_url} onChange={event => update('base_url', event.target.value)} placeholder="http://host.docker.internal:11434/v1" /></label><label>API key <span className="helper">Leave blank to keep the existing key</span><input type="password" autoComplete="new-password" value={form.api_key} onChange={event => update('api_key', event.target.value)} placeholder={editing !== null ? '••••••••' : 'Write-only credential'} /></label><label className="checkbox-label"><input type="checkbox" checked={form.enabled} onChange={event => update('enabled', event.target.checked)} /> Enabled</label><div><button className="button primary" type="submit">{editing === null ? 'Save provider' : 'Save changes'}</button>{editing !== null && <button className="button quiet" type="button" onClick={() => { setEditing(null); setForm(initial) }}>Cancel</button>}</div></form></section>
-        <section><p className="eyebrow">SAVED PROFILES / {profiles.length}</p>{profiles.length === 0 && <div className="settings-empty">No provider profiles yet.</div>}{profiles.map(profile => <article className="provider-card" key={profile.id}><div><strong>{profile.name}</strong><p>{profile.provider} · {profile.model}</p><small>{profile.has_api_key ? 'Credential stored securely' : 'No API key configured'} · {profile.enabled ? 'Enabled' : 'Disabled'}</small></div><div className="provider-actions"><button className="mini-button" onClick={() => void test(profile)} disabled={testing === profile.id}>{testing === profile.id ? 'Testing…' : 'Test'}</button><button className="mini-button" onClick={() => edit(profile)}>Edit</button></div></article>)}</section>
+        <section className="settings-card" aria-label="Default model server"><p className="eyebrow warm">DEFAULT MODEL SERVER</p><p className="helper">LM Studio (LLM__ settings). Tests and evals always run against local LM Studio.</p>{defaultModelsError && <p className="settings-error">{defaultModelsError}</p>}{defaultModels === null && !defaultModelsError && <p>Checking…</p>}{defaultModels && <ul className="model-list">{defaultModels.map(item => <li key={item.id} className={item.loaded ? 'loaded' : ''}><span>{item.id}</span><small>{item.kind}{item.loaded ? ' · loaded' : ''}</small></li>)}</ul>}</section>
+        <section className="settings-card"><p className="eyebrow warm">{editing === null ? 'ADD PROVIDER' : 'EDIT PROVIDER'}</p><form onSubmit={event => void submit(event)}><label>Profile name<input required value={form.name} disabled={editing !== null} onChange={event => update('name', event.target.value)} placeholder="Studio Ollama" /></label><label>Provider<select value={form.provider} onChange={event => update('provider', event.target.value)}><option value="openai">OpenAI</option><option value="openrouter">OpenRouter</option><option value="gateway">OpenAI-compatible gateway</option><option value="ollama">Ollama</option><option value="lm_studio">LM Studio</option><option value="anthropic">Anthropic</option><option value="google">Google Gemini</option></select></label><label>Model <span className="helper">"auto" uses the first loaded LM Studio model</span><input required list="provider-models" value={form.model} onChange={event => update('model', event.target.value)} placeholder="Model identifier" /><datalist id="provider-models"><option value="auto" />{modelOptions.filter(item => item.kind !== 'embeddings').map(item => <option key={item.id} value={item.id}>{item.loaded ? 'loaded' : 'not loaded'}</option>)}</datalist></label><label>Base URL <span className="helper">Optional for provider defaults</span><input value={form.base_url} onChange={event => update('base_url', event.target.value)} placeholder="http://host.docker.internal:11434/v1" /></label><label>API key <span className="helper">Leave blank to keep the existing key</span><input type="password" autoComplete="new-password" value={form.api_key} onChange={event => update('api_key', event.target.value)} placeholder={editing !== null ? '••••••••' : 'Write-only credential'} /></label><label className="checkbox-label"><input type="checkbox" checked={form.enabled} onChange={event => update('enabled', event.target.checked)} /> Enabled</label><div><button className="button primary" type="submit">{editing === null ? 'Save provider' : 'Save changes'}</button>{editing !== null && <button className="button quiet" type="button" onClick={() => { setEditing(null); setForm(initial) }}>Cancel</button>}</div></form></section>
+        <section><p className="eyebrow">SAVED PROFILES / {profiles.length}</p>{profiles.length === 0 && <div className="settings-empty">No provider profiles yet.</div>}{profiles.map(profile => <article className="provider-card" key={profile.id}><div><strong>{profile.name}</strong><p>{profile.provider} · {profile.model}</p><small>{profile.has_api_key ? 'Credential stored securely' : 'No API key configured'} · {profile.enabled ? 'Enabled' : 'Disabled'}</small></div><div className="provider-actions"><button className="mini-button" onClick={() => void test(profile)} disabled={testing === profile.id}>{testing === profile.id ? 'Testing…' : 'Test'}</button><button className="mini-button" onClick={() => void loadModels(profile)}>Models</button><button className="mini-button" onClick={() => edit(profile)}>Edit</button></div></article>)}</section>
       </div>
       <section className="settings-card writer-profile-card" aria-label="Writer Profile">
         <p className="eyebrow warm">WRITER PROFILE & PREFERENCES</p>

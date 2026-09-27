@@ -118,20 +118,24 @@ class QueueSettings(BaseSettings):
 
 
 class LLMSettings(BaseSettings):
-    """Provider-agnostic LLM configuration.
+    """Provider-agnostic default LLM configuration (writers can add more profiles in Settings).
 
-    Supports self-hosted (Ollama, LM Studio, vLLM) or cloud providers. Safe
-    defaults so the app boots without a live model; the analysis task degrades
-    gracefully when no provider is reachable.
+    The default is a local LM Studio server with ``model="auto"``, which uses the first
+    model LM Studio reports as loaded. Agent features degrade with a clear error when no
+    provider is reachable.
     """
 
     model_config = SettingsConfigDict(env_prefix="LLM__")
 
-    provider: str = "openai"
+    provider: str = "lm_studio"
     base_url: str | None = None
     api_key: SecretStr = SecretStr("")
-    model: str = "gpt-4o-mini"
-    enabled: bool = False
+    model: str = "auto"
+    enabled: bool = True
+    # Private hosts trusted for model servers (local LM Studio/Ollama reached from containers).
+    # Other private or link-local provider targets stay blocked to prevent SSRF.
+    trusted_model_hosts: list[str] = Field(default_factory=lambda: ["host.docker.internal"])
+    request_timeout_seconds: float = Field(default=120.0, gt=0)
 
 
 class SecretsSettings(BaseSettings):
@@ -154,6 +158,8 @@ class MCPSettings(BaseSettings):
     request_timeout_seconds: float = 10.0
     max_output_chars: int = 100_000
     approval_ttl_seconds: int = Field(default=900, gt=0)
+    # Identity of DraftPilot's own in-app agents when they call this MCP server in-process.
+    internal_client_id: str = Field(default="draftpilot-room", min_length=1, max_length=200)
 
 
 class RAGSettings(BaseSettings):

@@ -128,6 +128,8 @@ async def respond_to_message(
         reply = await generate_reply(
             data.content, data.page, data.artifact, data.selection, role, history, profile_config,
             retrieved_context,
+            project_id=project_id,
+            permission_mode=normalize_permission_mode(data.instruction_layers.get("permission_mode")),
         )
     except Exception as exc:
         logfire.warning("Copilot response unavailable: {exc}", exc=str(exc))

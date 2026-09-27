@@ -32,6 +32,7 @@ def test_context_worker_persists_cited_review_only_result(monkeypatch) -> None:
         project_id=7,
         kind="context_generation",
         agent_role="associate_director",
+        permission_mode="suggest",
         status="running",
         input={
             "workflow": "camera",
@@ -58,7 +59,9 @@ def test_context_worker_persists_cited_review_only_result(monkeypatch) -> None:
         return [{"citation": {"source_id": "artifact:3", "content_version": 4}}]
 
     async def reply(*args: object, **kwargs: object) -> str:
-        """Return a deterministic provider suggestion fixture."""
+        """Return a deterministic provider suggestion fixture, checking the run's scope."""
+        assert kwargs["project_id"] == 7 and kwargs["permission_mode"] == "suggest"
+        assert kwargs["workflow_run_id"] == 10 and kwargs["kind"] == "context_workflow"
         return "Use a slow push into the reveal, then hold on the reaction."
 
     monkeypatch.setattr(functions.workflow_runs_crud, "update_status", update)

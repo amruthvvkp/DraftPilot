@@ -16,7 +16,7 @@ from draftpilot.core.config import settings
 from draftpilot.core.context_workflows import get_context_workflow
 from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.db import session_scope
-from draftpilot.core.providers import create_chat_model, settings_from_profile
+from draftpilot.core.providers import build_chat_model, settings_from_profile
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import copilot_messages as messages_crud
@@ -37,7 +37,8 @@ async def _llm_note(title: str, scene_count: int, word_count: int, agent_role: s
         return None
     try:
         from pydantic_ai import Agent
-        model = create_chat_model(settings.llm)
+
+        model, _name = await build_chat_model(settings.llm)
         agent = Agent(
             model,
             system_prompt=(
@@ -221,6 +222,10 @@ async def _execute_context_generation(ctx: dict, run: WorkflowRun) -> dict[str, 
         [],
         None,
         retrieved_context,
+        project_id=run.project_id,
+        permission_mode=run.permission_mode,
+        kind="context_workflow",
+        workflow_run_id=run.id,
     )
     result: dict[str, object] = {
         "workflow": workflow.key,
@@ -331,6 +336,10 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
         history,
         llm_settings,
         retrieved_context,
+        project_id=run.project_id,
+        permission_mode=run.permission_mode,
+        kind="copilot",
+        workflow_run_id=run.id,
     )
     async with session_scope() as session:
         current = await workflow_runs_crud.get(session, run.id or 0)

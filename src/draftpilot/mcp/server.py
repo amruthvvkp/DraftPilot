@@ -3,6 +3,7 @@
 import base64
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 import logfire
@@ -24,6 +25,7 @@ from draftpilot.api.timeline import (
     rollback_timeline_proposal,
 )
 from draftpilot.core import events, telemetry
+from draftpilot.core.agent_identity import current_internal_agent
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
@@ -77,6 +79,8 @@ telemetry.setup(mcp=True)
 
 def _client_id(ctx: Context) -> str:
     """Resolve the authenticated client from MCP context or access-token metadata."""
+    if (internal := current_internal_agent()) is not None:
+        return internal.client_id
     context_client_id = ctx.client_id
     if context_client_id:
         return context_client_id
@@ -461,10 +465,16 @@ async def read_project_evaluations(project_id: int, ctx: Context) -> dict[str, o
 
 @mcp.tool
 async def read_screenplay_scenes(
-    project_id: int, screenplay_id: int, ctx: Context
+    project_id: int,
+    screenplay_id: int,
+    ctx: Context,
+    scene_ids: list[int] | None = None,
+    offset: int = 0,
+    limit: int = 20,
 ) -> dict[str, object]:
-    """Read ordered scenes and semantic blocks for one authorized screenplay."""
+    """Read scenes and their semantic blocks: pick ``scene_ids`` or page with ``offset``/``limit``."""
     client_id = _client_id(ctx)
+    limit = max(1, min(limit, 50))
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -475,23 +485,78 @@ async def read_screenplay_scenes(
         screenplay = await screenplays_crud.get(session, screenplay_id)
         if screenplay is None or screenplay.project_id != project_id:
             raise ValueError("Screenplay is not in the requested project")
-        scenes = await scenes_crud.list_for_screenplay(session, screenplay_id)
-        payload = []
-        for scene in scenes:
-            blocks = await blocks_crud.list_for_scene(session, scene.id or 0)
-            payload.append(
-                {
-                    "scene": scene.model_dump(mode="json"),
-                    "blocks": [block.model_dump(mode="json") for block in blocks],
-                }
-            )
+        all_scenes = await scenes_crud.list_for_screenplay(session, screenplay_id)
+        if scene_ids:
+            wanted = set(scene_ids)
+            scenes = [scene for scene in all_scenes if scene.id in wanted][:limit]
+        else:
+            scenes = all_scenes[max(offset, 0) : max(offset, 0) + limit]
+        blocks = await blocks_crud.list_for_scenes(session, [scene.id for scene in scenes if scene.id is not None])
+    by_scene: dict[int, list[dict[str, object]]] = {}
+    for block in blocks:
+        by_scene.setdefault(block.scene_id, []).append(block.model_dump(mode="json"))
     result = {
         "project_id": project_id,
         "screenplay_id": screenplay_id,
-        "scenes": payload,
+        "total_scenes": len(all_scenes),
+        "offset": 0 if scene_ids else max(offset, 0),
+        "scenes": [
+            {"scene": scene.model_dump(mode="json"), "blocks": by_scene.get(scene.id or 0, [])}
+            for scene in scenes
+        ],
     }
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
-        raise ValueError("Screenplay response exceeds MCP output limit")
+        raise ValueError("Screenplay response exceeds MCP output limit; request fewer scenes")
+    return result
+
+
+@mcp.tool(annotations={"read_only_hint": True})
+async def read_project_overview(project_id: int, ctx: Context) -> dict[str, object]:
+    """Return a compact project map: brief, drafts, a scene index (no block text), and artifacts."""
+    client_id = _client_id(ctx)
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "screenplay.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        project = await projects_crud.get(session, project_id)
+        if project is None:
+            raise ValueError("Project not found")
+        drafts: list[dict[str, Any]] = []
+        for screenplay in await screenplays_crud.list_for_project(session, project_id):
+            scenes = await scenes_crud.list_for_screenplay(session, screenplay.id or 0)
+            drafts.append(
+                {
+                    "screenplay_id": screenplay.id,
+                    "title": screenplay.title,
+                    "format": screenplay.format,
+                    "title_page": screenplay.title_page,
+                    "scene_count": len(scenes),
+                    "scene_index": [
+                        {"scene_id": scene.id, "position": index + 1, "heading": scene.heading}
+                        for index, scene in enumerate(scenes)
+                    ],
+                }
+            )
+        artifacts = await artifacts_crud.list_for_project(session, project_id)
+    result: dict[str, object] = {
+        "project": {
+            "id": project.id,
+            "title": project.title,
+            "logline": project.logline,
+            "genres": project.genres,
+            "languages": project.languages,
+            "project_instruction": project.project_instruction,
+        },
+        "drafts": drafts,
+        "artifacts": [
+            {"artifact_id": item.id, "kind": item.kind, "title": item.title, "version": item.version, "stale": item.stale}
+            for item in artifacts
+        ],
+    }
+    if len(json.dumps(result, default=str)) > settings.mcp.max_output_chars:
+        for draft in drafts:
+            draft["scene_index"] = draft["scene_index"][:400]
     return result
 
 

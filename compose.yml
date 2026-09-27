@@ -22,6 +22,11 @@ x-app-env: &app-env
   RAG__SERVICE_URL: http://rag:8000
   RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
   BACKUP__ROOT: /data/backups
+  # Default model provider: LM Studio on the host (host.docker.internal is a trusted model host).
+  LLM__PROVIDER: ${LLM__PROVIDER:-lm_studio}
+  LLM__BASE_URL: ${LLM__BASE_URL:-http://host.docker.internal:1234/v1}
+  LLM__MODEL: ${LLM__MODEL:-auto}
+  LLM__ENABLED: ${LLM__ENABLED:-true}
   OTEL__ENABLED: ${OTEL__ENABLED:-true}
   OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
   # Basic base64("pk-lf-draftpilot-dev:sk-lf-draftpilot-dev") — matches the

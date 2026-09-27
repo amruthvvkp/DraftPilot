@@ -28,8 +28,19 @@ def _service_name(web: bool, mcp: bool, worker: bool) -> str:
     return settings.metadata.name
 
 
+_configured_role: str | None = None
+
+
 def setup(web: bool = False, mcp: bool = False, worker: bool = False) -> None:
-    """Configure Logfire and instrument the libraries used by this process."""
+    """Configure Logfire once per process; the first role to call wins.
+
+    The web and worker processes load the MCP server in-process for in-app agents, and its
+    module-level ``setup(mcp=True)`` must not relabel their telemetry.
+    """
+    global _configured_role
+    if _configured_role is not None:
+        return
+    _configured_role = _service_name(web, mcp, worker)
     if not settings.otel.enabled:
         logfire.info("OTEL is disabled; skipping telemetry setup")
         return

@@ -6,6 +6,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core import events
+from draftpilot.core.agent_identity import current_internal_agent
 from draftpilot.core.authorization import (
     ApprovalRequiredError,
     CapabilityGrant,
@@ -15,6 +16,7 @@ from draftpilot.core.authorization import (
     redact_audit_payload,
     requires_approval,
 )
+from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
 from draftpilot.models import MCPApprovalRequest, MCPAuditEvent, MCPClient, MCPGrant
 
@@ -100,15 +102,24 @@ async def authorize_invocation(
     call input that an approval is bound to, so an approved request cannot be replayed with
     different content.
     """
-    grants = [
-        CapabilityGrant(
-            client_id=client_id,
-            project_id=project_id,
-            capability=grant.capability,
-            expires_at=grant.expires_at,
+    internal = current_internal_agent()
+    if internal is not None and client_id == internal.client_id:
+        # In-app agents hold implicit grants for the one project their run is bound to.
+        grants = (
+            [CapabilityGrant(client_id=client_id, project_id=project_id, capability=item.name) for item in capability_catalog()]
+            if project_id == internal.project_id
+            else []
         )
-        for grant in await list_grants(session, project_id, client_id)
-    ]
+    else:
+        grants = [
+            CapabilityGrant(
+                client_id=client_id,
+                project_id=project_id,
+                capability=grant.capability,
+                expires_at=grant.expires_at,
+            )
+            for grant in await list_grants(session, project_id, client_id)
+        ]
     call_arguments = arguments if arguments is not None else payload
     error: PermissionError | None = None
     try:

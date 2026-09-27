@@ -90,7 +90,7 @@ def test_provider_profile_endpoint_validation_runs_before_persistence() -> None:
 def test_model_construction_enforces_provider_url_validation() -> None:
     """Reject an unsafe explicit endpoint before constructing a provider model."""
     with pytest.raises(ValueError, match="Private"):
-        create_chat_model(LLMSettings(provider="ollama", base_url="http://10.0.0.8:11434/v1"))
+        create_chat_model(LLMSettings(provider="ollama", base_url="http://10.0.0.8:11434/v1", model="llama3.2"))
 
 
 def test_provider_probe_returns_safe_success(monkeypatch: pytest.MonkeyPatch) -> None:

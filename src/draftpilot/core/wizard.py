@@ -1,9 +1,10 @@
 """Assist the project-creation wizard with structured story generation."""
 
+import logfire
 from pydantic import BaseModel, Field
 
 from draftpilot.core.config import LLMSettings, settings
-from draftpilot.core.providers import create_chat_model
+from draftpilot.core.providers import build_chat_model
 
 
 class WizardAssistCharacter(BaseModel):
@@ -119,12 +120,12 @@ async def generate_wizard_assist(
     if not config.enabled:
         return fallback_wizard_assist(request)
     try:
-        from pydantic_ai import Agent
+        from pydantic_ai import Agent, NativeOutput
 
-        model = create_chat_model(config)
+        model, _name = await build_chat_model(config)
         agent: Agent[None, WizardAssistResponse] = Agent(
             model,
-            output_type=WizardAssistResponse,
+            output_type=NativeOutput(WizardAssistResponse),
             system_prompt=(
                 "You are an expert screenplay development executive for DraftPilot. "
                 "From the writer's premise or creative spark, propose an evocative, structured project brief. "
@@ -144,5 +145,6 @@ async def generate_wizard_assist(
         if isinstance(output, dict):
             return WizardAssistResponse.model_validate(output)
         return fallback_wizard_assist(request)
-    except Exception:  # noqa: BLE001 - any provider failure degrades to the heuristic brief
+    except Exception as exc:  # noqa: BLE001 - any provider failure degrades to the heuristic brief
+        logfire.warning("Wizard assist fell back to the heuristic brief: {exc}", exc=str(exc))
         return fallback_wizard_assist(request)

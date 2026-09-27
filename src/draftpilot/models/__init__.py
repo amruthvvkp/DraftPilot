@@ -16,6 +16,7 @@ from draftpilot.models.agent_proposal import (
     AgentProposalBase,
     AgentProposalRead,
 )
+from draftpilot.models.agent_run import AgentRun, AgentRunRead
 from draftpilot.models.block import (
     Block,
     BlockBase,
@@ -135,6 +136,8 @@ __all__ = [
     "AgentProposal",
     "AgentProposalBase",
     "AgentProposalRead",
+    "AgentRun",
+    "AgentRunRead",
     "Block",
     "BlockBase",
     "BlockCreate",

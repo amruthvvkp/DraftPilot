@@ -49,9 +49,10 @@ def test_copilot_response_persists_user_and_assistant_turns(monkeypatch) -> None
             *[CopilotMessage(id=index + 2, **message.model_dump()) for index, message in enumerate(captured)],
         ]
 
-    async def reply(content, page, artifact, selection, role, history, llm_settings=None, retrieved_context=None) -> str:
-        """Return a deterministic provider fixture response."""
+    async def reply(content, page, artifact, selection, role, history, llm_settings=None, retrieved_context=None, *, project_id, permission_mode="chat_only", **_kw) -> str:
+        """Return a deterministic provider fixture response scoped to the project."""
         assert llm_settings is None
+        assert project_id == 7
         assert (content, page, artifact, selection, role) == ("Find the causal gap.", "timeline", "outline", "Beat 4", "continuity_supervisor")
         assert history[-1]["content"] == "Find the causal gap."
         assert retrieved_context == []

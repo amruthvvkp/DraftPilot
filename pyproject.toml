@@ -47,7 +47,7 @@ docs = [
 ]
 e2e = ["pytest-playwright>=0.9.0"]
 lint = ["interrogate>=1.7.0", "ruff>=0.16.9"]
-mcp = ["fastmcp>=4.0.10", { include-group = "otel" }, { include-group = "web" }]
+mcp = [{ include-group = "web" }]
 otel = ["logfire[asyncpg,httpx,fastapi,redis,system-metrics]>=5.1.1"]
 rag = ["fastapi>=0.141.1", "uvicorn[standard]>=0.54.0"]
 test = [
@@ -60,6 +60,7 @@ test = [
 web = [
   "alembic>=1.20.0",
   "fastapi>=0.141.1",
+  "fastmcp>=4.0.10",  # in-app agents use the MCP server in-process
   "arq>=0.28.0",
   "asyncpg>=0.31.0",
   "httpx2>=2.13.1",  # MCP SDK 2 client transport

@@ -502,6 +502,16 @@ export function updateProviderProfile(profileId: number, payload: { provider?: s
   return request<ProviderProfile>(`/api/v1/settings/providers/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
+export type ModelOption = { id: string; loaded: boolean; kind: string }
+
+export function listDefaultModels(): Promise<ModelOption[]> {
+  return request<ModelOption[]>('/api/v1/settings/providers/default/models')
+}
+
+export function listProfileModels(profileId: number): Promise<ModelOption[]> {
+  return request<ModelOption[]>(`/api/v1/settings/providers/${profileId}/models`)
+}
+
 export function testProviderProfile(profileId: number): Promise<{ ok: boolean; message: string; latency_ms: number | null }> {
   return request<{ ok: boolean; message: string; latency_ms: number | null }>(`/api/v1/settings/providers/${profileId}/test`, { method: 'POST' })
 }
