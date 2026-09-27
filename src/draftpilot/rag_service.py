@@ -4,7 +4,12 @@ from fastapi import FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from draftpilot.core.config import settings
-from draftpilot.core.rag import IndexedDocument, RetrievalResult, SQLiteLexicalIndex, create_embedding_provider
+from draftpilot.core.rag import (
+    IndexedDocument,
+    RetrievalResult,
+    SQLiteLexicalIndex,
+    create_embedding_provider,
+)
 
 app = FastAPI(title="DraftPilot RAG", version=settings.metadata.version)
 index = SQLiteLexicalIndex(
@@ -41,7 +46,9 @@ def _authorize(authorization: str | None) -> None:
     if not expected:
         return
     if authorization != f"Bearer {expected}":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized"
+        )
 
 
 @app.get("/health")
@@ -69,7 +76,10 @@ def upsert_document(
     )
 
 
-@app.delete("/projects/{project_id}/documents/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete(
+    "/projects/{project_id}/documents/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 def delete_document(
     project_id: int,
     source_id: str,
