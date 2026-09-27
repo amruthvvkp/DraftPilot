@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { decideMcpApproval, listMcpApprovals, McpApproval } from './api'
+import { CLIENT_ID, decideMcpApproval, listMcpApprovals, McpApproval, subscribeProjectEvents } from './api'
 
 /** List pending MCP approval requests so the writer, not the client, decides external writes. */
 export default function McpApprovals({ projectId }: { projectId: number }) {
@@ -12,8 +12,10 @@ export default function McpApprovals({ projectId }: { projectId: number }) {
 
   useEffect(() => {
     void refresh()
-    const timer = window.setInterval(() => void refresh(), 5000)
-    return () => window.clearInterval(timer)
+    // Live via SSE; a slow poll covers a dropped stream.
+    const unsubscribe = subscribeProjectEvents(projectId, event => { if (event.kind === 'approval.changed' && event.client !== CLIENT_ID) void refresh() })
+    const timer = window.setInterval(() => void refresh(), 30000)
+    return () => { window.clearInterval(timer); unsubscribe() }
   }, [projectId])
 
   async function decide(approvalId: number, decision: 'approve' | 'reject'): Promise<void> {

@@ -35,6 +35,8 @@ class Block(BlockBase, TimestampMixin, table=True):  # type: ignore[call-arg]
     scene_id: int = Field(foreign_key="scene.id", index=True)
     # Non-standard inline marks (e.g. font colour) the Fountain/FDX formats cannot carry.
     marks: dict[str, Any] | None = Field(default=None, sa_type=JSON)
+    # Who last authored the text: "human", "import", or "proposal:<id>" (an approved agent change).
+    origin: str = Field(default="human", max_length=120)
 
     scene: "Scene" = Relationship(back_populates="blocks")
     translations: list["DialogueTranslation"] = Relationship(
@@ -70,3 +72,4 @@ class BlockRead(BlockBase):
     id: int
     scene_id: int
     marks: dict[str, Any] | None = None
+    origin: str = "human"

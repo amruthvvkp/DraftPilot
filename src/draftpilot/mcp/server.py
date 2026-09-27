@@ -23,7 +23,7 @@ from draftpilot.api.timeline import (
     approve_timeline_proposal,
     rollback_timeline_proposal,
 )
-from draftpilot.core import telemetry
+from draftpilot.core import events, telemetry
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
@@ -431,6 +431,7 @@ async def apply_story_operation(
         await session.commit()
         await session.refresh(artifact)
     await _enqueue_index(project_id, artifact)
+    await events.publish(project_id, "artifact.changed", {"artifact_id": artifact.id, "version": artifact.version})
     return StoryArtifactRead.model_validate(artifact).model_dump(mode="json")
 
 

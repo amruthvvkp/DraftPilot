@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import events
 from draftpilot.core.authorization import (
     ApprovalRequiredError,
     CapabilityGrant,
@@ -150,6 +151,10 @@ async def authorize_invocation(
         )
     )
     await session.commit()
+    if isinstance(error, ApprovalRequiredError):
+        await events.publish(
+            project_id, "approval.changed", {"approval_id": error.approval_id, "status": "pending"}
+        )
     if error is not None:
         raise error
 
@@ -183,4 +188,5 @@ async def decide_approval(
     session.add(request)
     await session.commit()
     await session.refresh(request)
+    await events.publish(project_id, "approval.changed", {"approval_id": request.id, "status": request.status})
     return request

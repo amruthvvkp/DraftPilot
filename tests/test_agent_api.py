@@ -41,7 +41,7 @@ def _client() -> TestClient:
 def test_block_proposal_captures_scene_version_and_before_snapshot(monkeypatch) -> None:
     """Create a semantic block proposal without applying its operation."""
     scene = SimpleNamespace(id=7, version=3)
-    block = SimpleNamespace(id=11, scene_id=7, element_type=BlockType.ACTION, text="A door opens.")
+    block = SimpleNamespace(id=11, scene_id=7, element_type=BlockType.ACTION, text="A door opens.", origin="human")
     proposal = AgentProposal(
         id=20,
         project_id=9,
@@ -59,7 +59,7 @@ def test_block_proposal_captures_scene_version_and_before_snapshot(monkeypatch) 
         """Return the captured proposal fixture."""
         assert created.target_kind == "block"
         assert created.base_version == 3
-        assert created.before == {"scene_id": 7, "element_type": "action"}
+        assert created.before == {"scene_id": 7, "element_type": "action", "origin": "human"}
         return proposal
 
     monkeypatch.setattr("draftpilot.api.agent.proposals_crud.create", create)
@@ -86,6 +86,7 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
         scene_id=7,
         element_type=BlockType.ACTION,
         text="A door opens.",
+        origin="human",
     )
     proposal = AgentProposal(
         id=20,
@@ -94,12 +95,12 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
         target_id=11,
         operation={"element_type": "dialogue", "text": "HELLO"},
         diff={},
-        before={"scene_id": 7, "element_type": "action", "text": "A door opens."},
+        before={"scene_id": 7, "element_type": "action", "text": "A door opens.", "origin": "human"},
         base_version=3,
     )
     monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
-    enqueue = AsyncMock()
-    monkeypatch.setattr("draftpilot.api.agent._enqueue_rag_index", enqueue)
+    changed = AsyncMock()
+    monkeypatch.setattr("draftpilot.api.agent.scene_changed", changed)
     monkeypatch.setattr("draftpilot.api.agent.proposals_crud.get", AsyncMock(return_value=proposal))
 
     client = _client()
@@ -110,7 +111,9 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
     assert scene.version == 4
     assert block.element_type == BlockType.DIALOGUE
     assert block.text == "HELLO"
-    enqueue.assert_awaited_once_with(9, "scene:7", "scene", "INT. ROOM - DAY\nHELLO", 4)
+    assert block.origin == "proposal:20"
+    assert changed.await_args.args[1:] == (9, scene)
+    assert changed.await_args.kwargs == {"reason": "proposal.approved"}
 
     rolled_back = client.post("/api/v1/projects/9/agent-proposals/20/rollback")
 
@@ -119,8 +122,9 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
     assert scene.version == 5
     assert block.element_type == BlockType.ACTION
     assert block.text == "A door opens."
-    assert enqueue.await_count == 2
-    assert enqueue.await_args_list[1].args == (9, "scene:7", "scene", "INT. ROOM - DAY\nA door opens.", 5)
+    assert block.origin == "human"
+    assert changed.await_count == 2
+    assert changed.await_args.kwargs == {"reason": "proposal.rolled_back"}
 
 
 def test_chat_only_run_cannot_create_agent_proposal(monkeypatch) -> None:
@@ -150,7 +154,7 @@ def test_suggest_run_can_create_reviewable_agent_proposal(monkeypatch) -> None:
         AsyncMock(return_value=WorkflowRun(id=31, project_id=9, permission_mode="suggest")),
     )
     scene = SimpleNamespace(id=7, version=1)
-    block = SimpleNamespace(id=11, scene_id=7, element_type=BlockType.ACTION, text="A door opens.")
+    block = SimpleNamespace(id=11, scene_id=7, element_type=BlockType.ACTION, text="A door opens.", origin="human")
     monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
     proposal = AgentProposal(
         id=32,

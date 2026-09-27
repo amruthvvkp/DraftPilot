@@ -3,7 +3,7 @@
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.screenplay.hydrate import replace_scene_blocks, scene_to_doc
+from draftpilot.core.screenplay.hydrate import apply_scene_doc, scene_to_doc
 from draftpilot.core.screenplay.schema import SceneDoc
 from draftpilot.models import Scene, SceneRevision
 
@@ -64,7 +64,7 @@ async def restore(
     if "heading" in selected:
         scene.heading = doc.heading
     if "blocks" in selected:
-        await replace_scene_blocks(session, scene, doc, update_heading="heading" in selected)
+        await apply_scene_doc(session, scene, doc, update_heading="heading" in selected)
     else:
         session.add(scene)
         await session.commit()

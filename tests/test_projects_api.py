@@ -232,6 +232,7 @@ def test_scene_creation_requires_the_requested_screenplay_and_act(
     monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.get", get_screenplay)
     monkeypatch.setattr("draftpilot.api.projects.acts_crud.get", get_act)
     monkeypatch.setattr("draftpilot.api.projects.scenes_crud.create", create_scene)
+    monkeypatch.setattr("draftpilot.api.projects.scene_changed", AsyncMock())
     response = client.post(
         "/api/v1/projects/9/screenplays/2/scenes",
         json={"act_id": 4, "heading": "EXT. GARDEN - DAY", "position": 1},
@@ -520,15 +521,16 @@ def test_get_project_workspace_includes_timings_and_runtime_targets(
         """Return the scene fixtures."""
         return [scene1, scene2]
 
-    async def list_blocks(_session: _Session, scene_id: int) -> list[Block]:
-        """Return block fixtures for scene 10."""
-        return [block1] if scene_id == 10 else []
+    async def list_blocks(_session: _Session, scene_ids: list[int]) -> list[Block]:
+        """Return block fixtures for scene 10 from one batched query."""
+        assert sorted(scene_ids) == sorted(scene.id for scene in [scene1, scene2])
+        return [block1]
 
     monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
     monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.list_for_project", list_screenplays)
     monkeypatch.setattr("draftpilot.api.projects.acts_crud.list_for_screenplay", list_acts)
     monkeypatch.setattr("draftpilot.api.projects.scenes_crud.list_for_screenplay", list_scenes)
-    monkeypatch.setattr("draftpilot.api.projects.blocks_crud.list_for_scene", list_blocks)
+    monkeypatch.setattr("draftpilot.api.projects.blocks_crud.list_for_scenes", list_blocks)
 
     response = client.get("/api/v1/projects/9/workspace")
     assert response.status_code == 200
@@ -537,6 +539,7 @@ def test_get_project_workspace_includes_timings_and_runtime_targets(
     assert data["screenplay"]["id"] == 1
     assert data["target_runtime_seconds"] == 6600
     assert len(data["timings"]) == 2
+    assert [item["id"] for item in data["screenplays"]] == [1]
     assert data["timings"][0]["scene_id"] == 10
     assert data["timings"][0]["estimated_duration_seconds"] == 30
     assert data["timings"][0]["start_seconds"] == 0

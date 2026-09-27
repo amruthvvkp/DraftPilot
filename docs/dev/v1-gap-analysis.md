@@ -20,10 +20,13 @@ Legend: ✅ done · 🟡 partial · ❌ missing · 🔴 broken.
 |---|---|---|---|
 | G0 · Restore green | ✅ done | `8b27c0c` | 148 unit, 15 e2e, 1 LM Studio (Tier 1) test passing; ruff, mypy and interrogate clean |
 | G1 · Security | ✅ done | `f585ea5` | REST token auth and browser session; MCP writes need a writer-decided, argument-bound, single-use approval (verified live); proposal reject; fixed the unreachable `translation.propose` |
-| G2 · Remove NiceGUI | ✅ done | this commit | FastAPI `create_app()` + uvicorn (`python -m draftpilot.api`); `WEB__` settings; `web` group; SPA fallback confined to `dist`; removed startup `create_db_and_tables()`; docs, skills and agents updated |
-| G3 · Data backbone | ⏳ next | | |
+| G2 · Remove NiceGUI | ✅ done | `be5380e` | FastAPI `create_app()` + uvicorn (`python -m draftpilot.api`); `WEB__` settings; `web` group; SPA fallback confined to `dist`; removed startup `create_db_and_tables()`; docs, skills and agents updated |
+| G3 · Data backbone | ✅ done | this commit | Id-stable revision restore (translations no longer lost); block `origin` (human/import/proposal); persisted title page; 3-query document load; whole-scene RAG text (was: last-edited block only); block delete and reorder; draft switcher (imported drafts were unreachable); SSE live sync over Redis pub/sub (verified live on Big Fish) |
+| G4 · Agent platform | ⏳ next | | |
 
-Found along the way and queued: there's **no project delete (or duplicate) endpoint**; this is vault work for G8.
+Found along the way and queued for G8:
+- There's **no project delete (or duplicate) endpoint**; this is vault work.
+- Editor rough edges seen on the live Big Fish draft: full-width "Review format" buttons squeeze the text column, raw `**` markup is visible, the floating Snapshots panel overlaps the context rail, and page breaks render as empty textareas.
 
 ## Suite baseline
 

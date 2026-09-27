@@ -1,15 +1,17 @@
 """Typed agent proposal endpoints with approval and rollback controls."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.api.projects import _enqueue_rag_index
+from draftpilot.core import events
 from draftpilot.core.agent_roles import normalize_permission_mode
 from draftpilot.core.db import async_get_db
+from draftpilot.core.scene_sync import SceneLike, scene_changed
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -221,6 +223,8 @@ async def create_agent_proposal(
                 for key in data.operation
             }
         )
+        # Rollback restores every "before" key, so the block's prior authorship comes back too.
+        snapshot["origin"] = block_target[1].origin
     else:
         before = data.operation.keys() & {"title", "content", "depends_on", "artifact_metadata", "heading", "body"}
         snapshot = {key: getattr(target, key) for key in before}
@@ -310,6 +314,7 @@ async def approve_agent_proposal(
             text,
             target.version,
         )
+        await events.publish(project_id, "translation.changed", {"block_id": proposal.target_id, "language": language})
         return AgentProposalRead.model_validate(proposal)
     if proposal.target_kind == "block":
         if block_target is None:
@@ -318,6 +323,7 @@ async def approve_agent_proposal(
         block = block_target[1]
         for key, value in proposal.operation.items():
             setattr(block, key, BlockType(value) if key == "element_type" else value)
+        block.origin = f"proposal:{proposal.id}"
         target.version += 1
         session.add(block)
         session.add(target)
@@ -326,13 +332,7 @@ async def approve_agent_proposal(
         session.add(proposal)
         await session.commit()
         await session.refresh(proposal)
-        await _enqueue_rag_index(
-            project_id,
-            f"scene:{target.id}",
-            "scene",
-            f"{getattr(target, 'heading', '')}\n{block.text}",
-            target.version,
-        )
+        await scene_changed(session, project_id, cast(SceneLike, target), reason="proposal.approved")
         return AgentProposalRead.model_validate(proposal)
     operation = proposal.operation
     allowed = (
@@ -354,13 +354,9 @@ async def approve_agent_proposal(
     await session.commit()
     await session.refresh(proposal)
     if proposal.target_kind == "scene":
-        await _enqueue_rag_index(
-            project_id,
-            f"scene:{target.id}",
-            "scene",
-            f"{getattr(target, 'heading', '')}\n{getattr(target, 'body', '')}",
-            target.version,
-        )
+        await scene_changed(session, project_id, cast(SceneLike, target), reason="proposal.approved")
+    else:
+        await events.publish(project_id, "artifact.changed", {"artifact_id": target.id, "version": target.version})
     return AgentProposalRead.model_validate(proposal)
 
 
@@ -378,6 +374,7 @@ async def reject_agent_proposal(
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
+    await events.publish(project_id, "proposal.changed", {"proposal_id": proposal.id, "status": "rejected"})
     return AgentProposalRead.model_validate(proposal)
 
 
@@ -448,22 +445,8 @@ async def rollback_agent_proposal(
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
-    if proposal.target_kind == "block":
-        assert block_target is not None
-        block = block_target[1]
-        await _enqueue_rag_index(
-            project_id,
-            f"scene:{target.id}",
-            "scene",
-            f"{getattr(target, 'heading', '')}\n{block.text}",
-            target.version,
-        )
-    elif proposal.target_kind == "scene":
-        await _enqueue_rag_index(
-            project_id,
-            f"scene:{target.id}",
-            "scene",
-            f"{getattr(target, 'heading', '')}\n{getattr(target, 'body', '')}",
-            target.version,
-        )
+    if proposal.target_kind in {"block", "scene"}:
+        await scene_changed(session, project_id, cast(SceneLike, target), reason="proposal.rolled_back")
+    elif proposal.target_kind == "artifact":
+        await events.publish(project_id, "artifact.changed", {"artifact_id": target.id, "version": target.version})
     return AgentProposalRead.model_validate(proposal)

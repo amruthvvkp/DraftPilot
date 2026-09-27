@@ -3,6 +3,7 @@
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import events
 from draftpilot.models import WorkflowRun, WorkflowRunCreate
 from draftpilot.models.base import _utcnow
 
@@ -13,6 +14,7 @@ async def create(session: AsyncSession, data: WorkflowRunCreate) -> WorkflowRun:
     session.add(run)
     await session.commit()
     await session.refresh(run)
+    await events.publish(run.project_id, "run.changed", {"run_id": run.id, "kind": run.kind, "status": run.status})
     return run
 
 
@@ -56,4 +58,5 @@ async def update_status(
     session.add(run)
     await session.commit()
     await session.refresh(run)
+    await events.publish(run.project_id, "run.changed", {"run_id": run.id, "kind": run.kind, "status": run.status})
     return run

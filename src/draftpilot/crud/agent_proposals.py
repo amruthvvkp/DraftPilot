@@ -3,6 +3,7 @@
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import events
 from draftpilot.models import AgentProposal
 
 
@@ -11,6 +12,7 @@ async def create(session: AsyncSession, proposal: AgentProposal) -> AgentProposa
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
+    await events.publish(proposal.project_id, "proposal.changed", {"proposal_id": proposal.id, "status": proposal.status})
     return proposal
 
 

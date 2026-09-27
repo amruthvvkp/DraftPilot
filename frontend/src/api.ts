@@ -53,6 +53,7 @@ export type ScreenplayBlock = {
   id: number
   scene_id: number
   position: number
+  origin?: string
   element_type: string
   text: string
   character_extension: string | null
@@ -74,7 +75,8 @@ export type SceneTiming = {
 
 export type ProjectWorkspace = {
   project: Project
-  screenplay: { id: number; project_id: number; title: string; format: string; status: string } | null
+  screenplay: { id: number; project_id: number; title: string; format: string; status: string; title_page?: Record<string, string> } | null
+  screenplays?: { id: number; project_id: number; title: string; format: string; status: string }[]
   acts: Act[]
   scenes: Scene[]
   blocks: Record<number, ScreenplayBlock[]>
@@ -185,16 +187,18 @@ export type CopilotRunResponse = { message: CopilotMessage; run: WorkflowRun }
 
 export const AUTH_REQUIRED_EVENT = 'draftpilot:auth-required'
 
+/** Identify this browser tab so it can ignore live-sync echoes of its own edits. */
+export const CLIENT_ID: string = typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `tab-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    ...init,
-  })
+  const headers = new Headers(init?.headers)
+  if (!headers.has('Content-Type') && !(init?.body instanceof FormData)) headers.set('Content-Type', 'application/json')
+  headers.set('X-DraftPilot-Client', CLIENT_ID)
+  const response = await fetch(path, { credentials: 'same-origin', ...init, headers })
   if (response.status === 401) window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))
   if (!response.ok) {
     let detail = `Request failed (${response.status})`
@@ -257,8 +261,22 @@ export function uploadProjectArtwork(projectId: number, file: File): Promise<Pro
   return request<Project>(`/api/v1/projects/${projectId}/artwork`, { method: 'POST', body })
 }
 
-export function getProjectWorkspace(projectId: number): Promise<ProjectWorkspace> {
-  return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace`)
+/** Return the draft selected in the URL (`?draft=<screenplay id>`), if any. */
+export function selectedDraftId(): number | null {
+  const value = new URLSearchParams(window.location.search).get('draft')
+  return value && /^\d+$/.test(value) ? Number(value) : null
+}
+
+/** Select a draft in the URL without reloading the page. */
+export function selectDraft(screenplayId: number): void {
+  const url = new URL(window.location.href)
+  url.searchParams.set('draft', String(screenplayId))
+  window.history.replaceState(null, '', url)
+}
+
+export function getProjectWorkspace(projectId: number, screenplayId: number | null = selectedDraftId()): Promise<ProjectWorkspace> {
+  const query = screenplayId === null ? '' : `?screenplay_id=${screenplayId}`
+  return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace${query}`)
 }
 
 export function createProjectScene(projectId: number, screenplayId: number, actId: number, heading: string, position = 0): Promise<Scene> {
@@ -267,6 +285,29 @@ export function createProjectScene(projectId: number, screenplayId: number, actI
 
 export function createProjectBlock(projectId: number, sceneId: number, version: number, elementType: string, text: string): Promise<ScreenplayBlock> {
   return request<ScreenplayBlock>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks`, { method: 'POST', headers: { 'If-Match': String(version) }, body: JSON.stringify({ element_type: elementType, text }) })
+}
+
+export function deleteProjectBlock(projectId: number, sceneId: number, blockId: number, version: number): Promise<void> {
+  return request<void>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/${blockId}`, { method: 'DELETE', headers: { 'If-Match': String(version) } })
+}
+
+export function reorderProjectBlocks(projectId: number, sceneId: number, version: number, blockIds: number[]): Promise<ScreenplayBlock[]> {
+  return request<ScreenplayBlock[]>(`/api/v1/projects/${projectId}/scenes/${sceneId}/blocks/order`, { method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify({ block_ids: blockIds }) })
+}
+
+export type ProjectEvent = { kind: string; project_id: number; client: string | null; at: string; data: Record<string, unknown> }
+
+export const PROJECT_EVENT_KINDS = ['scene.changed', 'proposal.changed', 'timeline.changed', 'translation.changed', 'artifact.changed', 'approval.changed', 'run.changed'] as const
+
+/** Subscribe to a project's live change stream; returns an unsubscribe function. */
+export function subscribeProjectEvents(projectId: number, onEvent: (event: ProjectEvent) => void): () => void {
+  if (typeof EventSource === 'undefined') return () => undefined
+  const source = new EventSource(`/api/v1/projects/${projectId}/events`, { withCredentials: true })
+  const handler = (message: MessageEvent<string>) => {
+    try { onEvent(JSON.parse(message.data) as ProjectEvent) } catch { /* ignore malformed frames */ }
+  }
+  PROJECT_EVENT_KINDS.forEach(kind => source.addEventListener(kind, handler as EventListener))
+  return () => source.close()
 }
 
 export function createTimelineProposal(projectId: number, screenplayId: number, sceneIds: number[], durations: Record<number, number>): Promise<TimelineProposal> {
