@@ -218,16 +218,17 @@ class EvalSettings(BaseSettings):
     embedding_model: str = ""
 
 
-class UISettings(BaseSettings):
-    """NiceGUI web interface settings."""
+class WebSettings(BaseSettings):
+    """Web process settings: the FastAPI API that also serves the React studio build."""
 
-    model_config = SettingsConfigDict(env_prefix="UI__")
+    model_config = SettingsConfigDict(env_prefix="WEB__")
 
     host: str = "0.0.0.0"
     port: int = 8000
-    storage_secret: SecretStr = SecretStr("change-me-in-production")
     title: str = "DraftPilot"
     reload: bool = False
+    # Built React studio served by the web process (``npm --prefix frontend run build``).
+    frontend_dist: Path = _ROOT / "frontend" / "dist"
 
 
 class Settings(BaseSettings):
@@ -248,7 +249,7 @@ class Settings(BaseSettings):
     monty: MontySettings = MontySettings()
     eval: EvalSettings = EvalSettings()
     api: APISettings = APISettings()
-    ui: UISettings = UISettings()
+    web: WebSettings = WebSettings()
 
 
 settings = Settings()

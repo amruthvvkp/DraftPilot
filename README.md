@@ -1,18 +1,20 @@
 # DraftPilot
 
-Open-source, agentic screenplay & story-development studio. DraftPilot is a NiceGUI web application
-where writers build, research, co-write, and evaluate screenplays alongside AI agents — from first
-idea through pre-production planning.
+Open-source, agent-first screenplay & story-development studio. DraftPilot is a local-first
+writers' room: you build, research, co-write, and evaluate screenplays alongside AI agents that
+propose changes you approve — from first idea through pre-production planning.
 
 ## Stack
 
-- **UI** — [NiceGUI](https://nicegui.io) (runs on its own FastAPI app)
+- **Studio** — React 19 + Vite + TypeScript SPA (`frontend/`), served by the web process
+- **API** — [FastAPI](https://fastapi.tiangolo.com) app factory (`draftpilot.api.app:create_app`), routes under `/api/v1`, optional `API__TOKEN`
+- **MCP** — [FastMCP](https://gofastmcp.com) 4 server (HTTP or stdio) with writer-approved tool calls
 - **Agents** — [PydanticAI](https://ai.pydantic.dev) (provider-agnostic: self-hosted or cloud LLMs)
-- **Data** — Postgres + SQLModel (asyncpg), Alembic migrations
-- **Cache / queue** — Redis + [ARQ](https://arq-docs.helpmanual.io) background worker
-- **Telemetry** — [Logfire](https://logfire.pydantic.dev) → OTLP → your external collector (Grafana LGTM / Langfuse)
-- **Docs** — [Zensical](https://zensical.org)
-- **Tooling** — [uv](https://docs.astral.sh/uv), Ruff, mypy (Python 3.13)
+- **Worker** — [ARQ](https://arq-docs.helpmanual.io) background jobs on Redis
+- **RAG** — standalone retrieval service (`draftpilot.rag_service`), project-scoped search
+- **Data** — Postgres + SQLModel (asyncpg), Alembic migrations; Redis cache/queue
+- **Telemetry** — [Logfire](https://logfire.pydantic.dev) → OTLP → self-hosted Langfuse (bundled)
+- **Docs / tooling** — [Zensical](https://zensical.org), [uv](https://docs.astral.sh/uv), Ruff, mypy (Python 3.13)
 
 ## Quick start (Docker)
 
@@ -20,53 +22,62 @@ idea through pre-production planning.
 docker compose up --build
 ```
 
-One command brings up the **whole stack**: Postgres, Redis, migrations, UI, ARQ worker, MCP server,
-and a self-hosted **Langfuse** (web/worker/clickhouse/minio/postgres/redis).
+One command brings up the **whole stack**: Postgres, Redis, migrations, the web process (API +
+studio), ARQ worker, MCP server, RAG service, and a self-hosted **Langfuse**.
 
-- UI: <http://localhost:9000>
-- MCP server: <http://localhost:9001>
+- Studio + API: <http://localhost:9000>
+- MCP server (HTTP): <http://localhost:9001>
+- RAG service: <http://localhost:9010>
 - Langfuse: <http://localhost:3300> (dev login `dev@draftpilot.local` / `draftpilot-dev`)
 
-Published host ports are env-configurable (defaults shown) to avoid clashing with a local
-Postgres/Redis or a shared stack: `DRAFTPILOT_POSTGRES_PORT` (55432), `DRAFTPILOT_REDIS_PORT` (56379),
-`DRAFTPILOT_UI_PORT` (9000), `DRAFTPILOT_MCP_PORT` (9001), `DRAFTPILOT_LANGFUSE_PORT` (3300). See
-`.env.example`.
+Host ports are env-configurable (`DRAFTPILOT_UI_PORT`, `DRAFTPILOT_MCP_PORT`, `DRAFTPILOT_RAG_PORT`,
+`DRAFTPILOT_POSTGRES_PORT`, `DRAFTPILOT_REDIS_PORT`, `DRAFTPILOT_LANGFUSE_PORT`); see `.env.example`.
+
+Debug stack (live source mount, hot reload, debugpy on ui :5678 / worker :5679):
+
+```bash
+docker compose -f compose.yml -f compose.dev.yml up --build
+```
 
 ### Telemetry
 
 **On by default.** Logfire ships OTLP traces/metrics/logs to the in-stack Langfuse, which
-auto-provisions a dev project on first boot whose keys match the default auth header — so traces
-flow with no extra setup (give Langfuse ~1 min to finish migrations after the first `up`). Set
-`OTEL__ENABLED=false` to disable, or override `OTEL__EXPORTER_OTLP_ENDPOINT` to point at an external
-Grafana LGTM / collector instead. **Replace the `# CHANGEME` secrets in `compose.yml` before any
-non-local use.** See `.env.example`.
+auto-provisions a dev project whose keys match the default auth header (allow ~1 min for Langfuse
+migrations on first boot). Set `OTEL__ENABLED=false` to disable, or override
+`OTEL__EXPORTER_OTLP_ENDPOINT` for an external collector. **Replace the `# CHANGEME` secrets in
+`compose.yml` before any non-local use.**
 
 ## Local development
 
-Requires a local Postgres + Redis (or run `docker compose up postgres redis`).
+Requires a local Postgres + Redis (or `docker compose up postgres redis`) and Node.js.
 
 ```bash
-uv sync --group ui
+uv sync --all-groups                                   # or --group web for just the app
 uv run alembic upgrade head
-uv run python -m draftpilot.ui.main                    # UI on :8000
+npm --prefix frontend install
+npm --prefix frontend run build                        # typecheck + build -> frontend/dist
+uv run python -m draftpilot.api                        # API + studio on :8000
+npm --prefix frontend run dev                          # optional Vite HMR on :5173 (proxies /api)
 uv run arq draftpilot.worker.settings.WorkerSettings   # worker (separate shell)
+uv run python -m draftpilot.mcp                        # MCP server over stdio
 ```
 
-Connection settings are overridable via prefixed environment variables — e.g. `POSTGRES__HOST`,
-`REDIS__HOST`, `QUEUE__DB`, `UI__PORT`, `OTEL__ENABLED`, `LLM__*`.
+Settings use prefixed environment variables with a `__` delimiter — e.g. `POSTGRES__HOST`,
+`REDIS__HOST`, `WEB__PORT`, `API__TOKEN`, `LLM__*`, `MCP__*`, `RAG__*`, `OTEL__ENABLED`. Provider
+credentials are encrypted with a Fernet key in `SECRETS__MASTER_KEY`.
 
-## Browser tests
+## Testing
 
-Browser journeys mock the API and do not use live Compose database state. Run them portably in the
-pinned Playwright container with `docker compose --profile test run --rm e2e`; see `docs/testing.md`.
-Provider credentials should be encrypted with a valid Fernet key in `SECRETS__MASTER_KEY` before
-being persisted. See `docs/mcp.md` for the external MCP capability boundary.
+| Tier | Command | Needs |
+| --- | --- | --- |
+| 0 — deterministic | `uv run pytest` | nothing (default) |
+| 1 — local model | `uv run pytest -m lmstudio` | LM Studio local server |
+| Browser | `uv run pytest tests/e2e` | stack on :9000, `uv run playwright install chromium` |
+| Browser (container) | `docker compose --profile test run --rm e2e` | Docker |
 
-## Try the vertical slice
-
-Open the UI, create a **Project**, add a **Screenplay**, write a few **Scenes**, then click
-**Run analysis**. The ARQ worker computes structural metrics (and, if an LLM provider is configured,
-a short qualitative note), caches the result in Redis, and the UI displays it.
+Browser journeys mock the API with Playwright routes and never depend on live database state.
+Quality gates: `uv run ruff check src tests`, `uv run mypy src`, `uv run interrogate src migrations`,
+`npm --prefix frontend run build`. See `docs/testing.md`.
 
 ## Documentation
 
@@ -74,7 +85,10 @@ a short qualitative note), caches the result in Redis, and the UI displays it.
 uv run zensical serve     # live docs
 ```
 
-See `docs/` and `zensical.toml`.
+- Roadmap: [`docs/roadmap.md`](docs/roadmap.md)
+- v1 gap analysis: [`docs/dev/v1-gap-analysis.md`](docs/dev/v1-gap-analysis.md)
+- MCP capability boundary: [`docs/mcp.md`](docs/mcp.md)
+- Credits: [`docs/references.md`](docs/references.md)
 
 ## License
 

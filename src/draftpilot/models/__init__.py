@@ -1,7 +1,7 @@
 """SQLModel domain models.
 
 Importing this package registers every table on ``SQLModel.metadata`` — Alembic
-and ``create_db_and_tables`` rely on that side effect.
+relies on that side effect.
 """
 
 from draftpilot.models.act import (

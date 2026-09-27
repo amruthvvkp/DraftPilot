@@ -1,12 +1,12 @@
 """Tests for project-wizard payload normalization."""
 
-from draftpilot.models import ReferenceKind, ScreeningType
-from draftpilot.ui.project_wizard import (
+from draftpilot.core.project_wizard import (
     ProjectReferenceDraft,
     ProjectWizardData,
     build_project_create,
     reference_create_payloads,
 )
+from draftpilot.models import ReferenceKind, ScreeningType
 
 
 def test_build_project_create_normalizes_optional_values_and_lists() -> None:

@@ -10,8 +10,8 @@ with this project's MIT license (e.g. GPL).
 - **Final Draft** — the web interface (project vault, navigator + script + panels editor
   layout) inspires DraftPilot's shell and screenplay workspace. Inspiration only; no Final
   Draft code or assets are used. <https://www.finaldraft.com/>
-- **NiceGUI** Trello-cards example — reference for the planned beat-board drag-and-drop.
-  MIT. <https://github.com/zauberzeug/nicegui>
+- **Beat board drag-and-drop** — the planned beat board will use a React drag-and-drop
+  library; it will be recorded here (name, license, link) once chosen.
 
 ## Reused libraries
 

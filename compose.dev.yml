@@ -5,7 +5,7 @@
 # Then attach VS Code: "Remote Attach (ui)" → :5678, "Remote Attach (worker)" → :5679.
 # debugpy listens but does NOT wait for a client, so the stack runs with or without
 # the debugger attached. Source is bind-mounted, so edits land live (the project is
-# installed editable); set UI__RELOAD=true for the UI to hot-reload.
+# installed editable); WEB__RELOAD=true makes the web process reload on src/ changes.
 
 services:
   ui:
@@ -19,7 +19,7 @@ services:
     ports:
       - "${DRAFTPILOT_UI_DEBUGPY_PORT:-5678}:5678"
     environment:
-      UI__RELOAD: "true"
+      WEB__RELOAD: "true"
     command:
       [
         "uv",
@@ -30,7 +30,7 @@ services:
         "--listen",
         "0.0.0.0:5678",
         "-m",
-        "draftpilot.ui.main",
+        "draftpilot.api",
       ]
 
   worker:

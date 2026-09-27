@@ -31,5 +31,5 @@ COPY --from=frontend-build /frontend/dist /app/frontend/dist
 ARG INSTALL_DEBUGPY=false
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-cache --group ui \
+    uv sync --frozen --no-cache --group web \
     $( [ "${INSTALL_DEBUGPY}" = "true" ] && printf '%s' "--group debugpy" )

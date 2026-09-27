@@ -1,4 +1,4 @@
-# DraftPilot stack: UI (NiceGUI/FastAPI), ARQ worker, MCP server, Postgres, Redis.
+# DraftPilot stack: web (FastAPI API + React studio), ARQ worker, MCP server, RAG, Postgres, Redis.
 #
 # `docker compose up` brings up the WHOLE stack — app (ui/worker/mcp), Postgres,
 # Redis, AND a self-hosted Langfuse (web/worker/clickhouse/minio/postgres/redis).
@@ -81,10 +81,9 @@ services:
       dockerfile: ./Dockerfile.ui
     ports:
       - "${DRAFTPILOT_UI_PORT:-9000}:8000"
-    command: ["uv", "run", "python", "-m", "draftpilot.ui.main"]
+    command: ["uv", "run", "python", "-m", "draftpilot.api"]
     environment:
       <<: *app-env
-      UI__STORAGE_SECRET: change-me-in-production
       # Empty = open API (the UI logs a warning because :9000 is published). Set for any shared use.
       API__TOKEN: ${API__TOKEN:-}
     extra_hosts: *extra-hosts

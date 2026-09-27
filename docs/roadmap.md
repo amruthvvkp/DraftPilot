@@ -143,7 +143,7 @@ autocomplete, Tab-to-next-element transitions, and paired dual dialogue.
 Add a Final Draft–style timeline board with a time ruler, act and character lanes, draggable scene
 cards, keyboard reorder fallback, and a reversible reorder proposal that recalculates screenplay
 order and dependent runtime offsets.
-Beat-board drag-drop (NiceGUI trello example) with timeline/act view toggle; per-section
+Beat-board drag-drop with timeline/act view toggle; per-section
 context refs (camera, palette, location, characters, reference scenes, directors, films,
 styles, lighting plans, and color palettes); smart typing; dual + translated dialogue editing;
 timeline scrubber dropdown. Add project and scene instruction editors with clear inheritance and

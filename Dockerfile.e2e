@@ -8,7 +8,7 @@ COPY src ./src
 COPY tests ./tests
 
 RUN pip install --no-cache-dir uv \
-    && UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --group ui --group e2e
+    && UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --frozen --group web --group e2e
 
 ENV PATH="/opt/venv/bin:${PATH}"
 CMD ["pytest", "-q", "tests/e2e", "--browser", "chromium", "--base-url", "http://ui:8000"]

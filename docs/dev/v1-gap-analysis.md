@@ -19,8 +19,9 @@ Legend: ✅ done · 🟡 partial · ❌ missing · 🔴 broken.
 | Step | Status | Commit | Notes |
 |---|---|---|---|
 | G0 · Restore green | ✅ done | `8b27c0c` | 148 unit, 15 e2e, 1 LM Studio (Tier 1) test passing; ruff, mypy and interrogate clean |
-| G1 · Security | ✅ done | this commit | REST token auth and browser session; MCP writes need a writer-decided, argument-bound, single-use approval (verified live); proposal reject; fixed the unreachable `translation.propose` |
-| G2 · Remove NiceGUI | ⏳ next | | Also stop startup `create_db_and_tables()`, which competes with Alembic |
+| G1 · Security | ✅ done | `f585ea5` | REST token auth and browser session; MCP writes need a writer-decided, argument-bound, single-use approval (verified live); proposal reject; fixed the unreachable `translation.propose` |
+| G2 · Remove NiceGUI | ✅ done | this commit | FastAPI `create_app()` + uvicorn (`python -m draftpilot.api`); `WEB__` settings; `web` group; SPA fallback confined to `dist`; removed startup `create_db_and_tables()`; docs, skills and agents updated |
+| G3 · Data backbone | ⏳ next | | |
 
 Found along the way and queued: there's **no project delete (or duplicate) endpoint**; this is vault work for G8.
 

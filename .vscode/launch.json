@@ -24,10 +24,10 @@
       "subProcess": true
     },
     {
-      "name": "(Local) UI",
+      "name": "(Local) Web",
       "type": "debugpy",
       "request": "launch",
-      "module": "draftpilot.ui.main",
+      "module": "draftpilot.api",
       "envFile": "${workspaceFolder}/.env",
       "justMyCode": false
     },

@@ -3,10 +3,10 @@
 Run the isolated Python suite and static gates with the local UV cache:
 
 ```bash
-UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui pytest -q tests --ignore=tests/e2e
-UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui ruff check src tests
-UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui mypy src
-UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui interrogate src migrations
+UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run pytest -q tests --ignore=tests/e2e
+UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run ruff check src tests
+UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run mypy src
+UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run interrogate src migrations
 ```
 
 ## Test tiers

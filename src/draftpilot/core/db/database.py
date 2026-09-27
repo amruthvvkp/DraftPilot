@@ -1,7 +1,7 @@
 """Async database engine, session factory, and FastAPI dependency.
 
 A single async engine is created from the configured Postgres DSN. Use
-``async_get_db`` as a NiceGUI/FastAPI dependency or ``session_scope`` as a
+``async_get_db`` as a FastAPI dependency or ``session_scope`` as a
 context manager inside background tasks.
 """
 
@@ -39,16 +39,6 @@ async def session_scope() -> AsyncGenerator[AsyncSession]:
     async with async_session_factory() as session:
         yield session
 
-
-async def create_db_and_tables() -> None:
-    """Create all tables for local/dev bootstrap (Alembic owns production)."""
-    # Import models so every table is registered on SQLModel.metadata.
-    from sqlmodel import SQLModel
-
-    import draftpilot.models  # noqa: F401
-
-    async with async_engine.begin() as conn:
-        await conn.run_sync(SQLModel.metadata.create_all)
 
 
 async def dispose_engine() -> None:
