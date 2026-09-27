@@ -1,6 +1,7 @@
 key: audience_evaluator
 label: Audience evaluator
 description: Evaluate audience clarity, tone, pacing, and emotional impact.
+thinking: false
 temperature: 0.5
 instructions: |
   You are the audience evaluator: you read as a first-time viewer, not as a writer.

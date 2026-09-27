@@ -13,7 +13,7 @@ from time import monotonic
 from typing import Any
 
 import logfire
-from pydantic_ai import Agent, RunContext, UsageLimits
+from pydantic_ai import Agent, ModelRetry, ModelSettings, RunContext, UsageLimits
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 from pydantic_ai.run import AgentRunResult
@@ -21,6 +21,7 @@ from pydantic_ai.run import AgentRunResult
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.specs import RoleSpec
 from draftpilot.core.agent_identity import InternalAgent, acting_as
+from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
 from draftpilot.models import AgentRun
 
@@ -36,7 +37,15 @@ READ_TOOLS = frozenset(
         "read_project_evaluations",
     }
 )
-PROPOSE_TOOLS = frozenset({"propose_screenplay_change", "propose_timeline_reorder", "propose_dialogue_translation"})
+PROPOSE_TOOLS = frozenset(
+    {
+        "propose_screenplay_change",
+        "propose_timeline_reorder",
+        "propose_dialogue_translation",
+        "list_room_workflows",
+        "start_room_workflow",
+    }
+)
 EDIT_TOOLS = frozenset({"apply_story_operation", "start_context_workflow"})
 
 
@@ -99,20 +108,40 @@ def _context_instructions(ctx: RunContext[RoomDeps]) -> str:
 BASE_INSTRUCTIONS = (
     "You are part of DraftPilot's writers' room, working for one screenwriter. "
     "Answer the writer directly and concretely. Preserve the screenplay's language. "
-    "Use the DraftPilot tools to read the actual project before making claims about it."
+    "Use the DraftPilot tools to read the actual project before making claims about it. "
+    "Read economically: start from the Story twin and project overview, use retrieve_project_context "
+    "to find the passages that matter, and read only the scenes you need (by scene_ids or a small page), "
+    "never the whole script."
 )
 
 
-def build_room_agent(spec: RoleSpec, model: Any, permission_mode: str) -> Agent[RoomDeps, str]:
-    """Build a role agent with its spec, the writer's context, and permission-filtered MCP tools."""
-    agent: Agent[RoomDeps, str] = Agent(
+def role_model_settings(spec: RoleSpec) -> ModelSettings:
+    """Return a role's sampling settings, with reasoning off when the role or ``LLM__THINKING`` says so."""
+    model_settings = ModelSettings(temperature=spec.temperature, max_tokens=spec.max_tokens)
+    thinking = {"on": True, "off": False}.get(settings.llm.thinking, spec.thinking)
+    if not thinking:
+        # The unified flag covers Anthropic/Google; OpenAI-compatible servers (LM Studio) need the effort.
+        model_settings["thinking"] = False
+        model_settings["openai_reasoning_effort"] = "none"  # type: ignore[typeddict-unknown-key]
+    return model_settings
+
+
+def build_room_agent(
+    spec: RoleSpec, model: Any, permission_mode: str, output_type: Any = str, *, tools: bool = True
+) -> Agent[RoomDeps, Any]:
+    """Build a role agent with its spec, the writer's context, and (unless ``tools=False``) permission-filtered MCP tools."""
+    agent: Agent[RoomDeps, Any] = Agent(
         model,
         deps_type=RoomDeps,
         name=spec.key,
-        toolsets=[room_toolset(permission_mode)],
-        model_settings={"temperature": spec.temperature},
+        output_type=output_type,
+        toolsets=[room_toolset(permission_mode)] if tools else [],
+        model_settings=role_model_settings(spec),
         retries=2,
     )
+
+    if spec.key == SHOWRUNNER:
+        _add_consult_tool(agent)
 
     @agent.instructions
     def instructions(ctx: RunContext[RoomDeps]) -> str:
@@ -124,6 +153,59 @@ def build_room_agent(spec: RoleSpec, model: Any, permission_mode: str) -> Agent[
         return "\n\n".join([BASE_INSTRUCTIONS, spec.instructions.strip(), _context_instructions(ctx)])
 
     return agent
+
+
+SHOWRUNNER = "showrunner"
+SPECIALISTS = frozenset(
+    {
+        "story_architect",
+        "story_editor",
+        "brainstormer",
+        "character_specialist",
+        "scene_writer",
+        "script_editor",
+        "script_doctor",
+        "researcher",
+        "continuity_supervisor",
+        "associate_director",
+        "audience_evaluator",
+        "coverage_reader",
+    }
+)
+
+
+def _add_consult_tool(agent: Agent[RoomDeps, Any]) -> None:
+    """Give the showrunner a tool to delegate one brief to one specialist."""
+
+    @agent.tool
+    async def consult(ctx: RunContext[RoomDeps], role: str, brief: str) -> str:
+        """Ask one room specialist to handle a self-contained brief and return their answer.
+
+        role: one of story_architect, story_editor, brainstormer, character_specialist, scene_writer,
+        script_editor, script_doctor, researcher, continuity_supervisor, associate_director,
+        audience_evaluator, coverage_reader.
+        """
+        from draftpilot.agents.specs import role_spec
+
+        if role not in SPECIALISTS:
+            raise ModelRetry(f"Unknown specialist {role!r}; choose one of {', '.join(sorted(SPECIALISTS))}")
+        spec = role_spec(role)
+        specialist = build_room_agent(spec, ctx.model, ctx.deps.permission_mode)
+        meter = RunMeter(
+            ctx.deps.project_id,
+            role,
+            "delegate",
+            getattr(ctx.model, "system", ""),
+            getattr(ctx.model, "model_name", ""),
+        )
+        with logfire.span("showrunner consults {role}", role=role, brief=brief[:500]):
+            try:
+                result = await specialist.run(brief, deps=ctx.deps, usage=ctx.usage, usage_limits=usage_limits(spec))
+            except Exception as exc:
+                await meter.finish(None, exc)
+                raise
+        await meter.finish(result)
+        return f"[{spec.label}] {result.output}"
 
 
 def usage_limits(spec: RoleSpec) -> UsageLimits:
@@ -207,7 +289,38 @@ async def run_room_agent(
     workflow_run_id: int | None = None,
 ) -> tuple[str, AgentRun]:
     """Run one room agent to completion and record its AgentRun."""
-    agent = build_room_agent(spec, model, deps.permission_mode)
+    reply: str
+    reply, record = await run_role(
+        spec,
+        model,
+        deps,
+        prompt,
+        str,
+        provider=provider,
+        model_name=model_name,
+        kind=kind,
+        history=history,
+        workflow_run_id=workflow_run_id,
+    )
+    return str(reply), record
+
+
+async def run_role[OutputT](
+    spec: RoleSpec,
+    model: Any,
+    deps: RoomDeps,
+    prompt: str,
+    output_type: type[OutputT] | Any,
+    *,
+    provider: str,
+    model_name: str,
+    kind: str = "chat",
+    history: list[ModelMessage] | None = None,
+    workflow_run_id: int | None = None,
+    tools: bool = True,
+) -> tuple[OutputT, AgentRun]:
+    """Run one room role to a typed output and record its AgentRun."""
+    agent = build_room_agent(spec, model, deps.permission_mode, output_type, tools=tools)
     meter = RunMeter(deps.project_id, spec.key, kind, provider, model_name, workflow_run_id)
     async with measured_run(meter, workflow_run_id):
         try:
@@ -216,4 +329,4 @@ async def run_room_agent(
             await meter.finish(None, exc)
             raise
     record = await meter.finish(result)
-    return str(result.output), record
+    return result.output, record

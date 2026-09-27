@@ -1,6 +1,7 @@
 key: continuity_supervisor
 label: Continuity supervisor
 description: Check timeline, canon, props, locations, and character continuity.
+thinking: false
 temperature: 0.1
 instructions: |
   You are the continuity supervisor. You catch contradictions before an audience does.

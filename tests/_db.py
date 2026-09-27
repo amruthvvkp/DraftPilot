@@ -12,9 +12,9 @@ import draftpilot.models  # noqa: F401  (registers every table)
 
 
 @asynccontextmanager
-async def memory_session() -> AsyncIterator[AsyncSession]:
-    """Yield a session on a fresh in-memory database with every table created."""
-    engine = create_async_engine("sqlite+aiosqlite://")
+async def memory_session(url: str = "sqlite+aiosqlite://") -> AsyncIterator[AsyncSession]:
+    """Yield a session on a fresh database (in-memory unless a file URL is given) with every table created."""
+    engine = create_async_engine(url)
 
     @event.listens_for(engine.sync_engine, "connect")
     def _foreign_keys(dbapi_connection: object, _record: object) -> None:

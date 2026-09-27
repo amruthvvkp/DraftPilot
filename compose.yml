@@ -32,6 +32,9 @@ x-app-env: &app-env
   # Basic base64("pk-lf-draftpilot-dev:sk-lf-draftpilot-dev") — matches the
   # LANGFUSE_INIT_* bootstrap keys on langfuse-web. # CHANGEME for non-local use.
   OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
+  # Langfuse score API keys (feedback, proposal decisions, online checks). # CHANGEME for non-local use.
+  OTEL__LANGFUSE_PUBLIC_KEY: ${OTEL__LANGFUSE_PUBLIC_KEY:-pk-lf-draftpilot-dev}
+  OTEL__LANGFUSE_SECRET_KEY: ${OTEL__LANGFUSE_SECRET_KEY:-sk-lf-draftpilot-dev}
 
 # Lets containers reach a collector running on the host (works on Linux too).
 x-extra-hosts: &extra-hosts

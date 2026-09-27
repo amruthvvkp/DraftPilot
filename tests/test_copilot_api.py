@@ -23,6 +23,8 @@ def test_retrieve_context_returns_bounded_citations(monkeypatch: pytest.MonkeyPa
     class Response:
         """Return a deterministic RAG payload."""
 
+        content = b"{}"
+
         def raise_for_status(self) -> None:
             """Accept the fixture response."""
 
@@ -50,7 +52,7 @@ def test_retrieve_context_returns_bounded_citations(monkeypatch: pytest.MonkeyPa
             assert kwargs["json"] == {"query": "Find the reveal", "limit": 8}
             return Response()
 
-    monkeypatch.setattr("draftpilot.core.copilot.httpx.AsyncClient", Client)
+    monkeypatch.setattr("draftpilot.core.rag_client.httpx.AsyncClient", Client)
     assert run_async(retrieve_context(7, "Find the reveal"))[0]["citation"] == {"source_id": "artifact:3"}
 
 

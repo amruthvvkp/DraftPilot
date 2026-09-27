@@ -10,7 +10,12 @@ deterministic metrics even when no model is reachable.
 import httpx
 import logfire
 
-from draftpilot.core import events, twins
+from draftpilot.agents.workflow_runner import (
+    ROOM_WORKFLOW_KIND,
+    WorkflowCancelled,
+    execute_room_workflow,
+)
+from draftpilot.core import events, twins, usefulness
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
@@ -140,6 +145,11 @@ async def refresh_story_twin(ctx: dict, project_id: int) -> dict[str, int]:
         return counts
 
 
+async def push_langfuse_scores(ctx: dict, scores: list[dict[str, object]]) -> dict[str, int]:
+    """Send queued usefulness scores to Langfuse."""
+    return {"accepted": await usefulness.push_scores(scores)}
+
+
 async def delete_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:
     """Delete one approved document through the isolated RAG HTTP boundary."""
     project_id = document.get("project_id")
@@ -173,19 +183,25 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
             copilot_run = run.kind == "copilot_response"
             evaluation_run = run.kind == "evaluation"
             context_run = run.kind == "context_generation"
+            room_run = run.kind == ROOM_WORKFLOW_KIND
             screenplay_id = run.input.get("screenplay_id")
-            if not copilot_run and not isinstance(screenplay_id, int):
+            if not copilot_run and not room_run and not isinstance(screenplay_id, int):
                 await workflow_runs_crud.update_status(
                     session, run, "failed", error="screenplay_id is required"
                 )
                 return {"error": "invalid_input"}
         try:
-            if context_run:
+            if room_run:
+                result = await execute_room_workflow(run)
+            elif context_run:
                 return await _execute_context_generation(ctx, run)
-            if copilot_run:
+            elif copilot_run:
                 return await _execute_copilot_run(ctx, run)
-            assert isinstance(screenplay_id, int)
-            result = await evaluate_screenplay(ctx, run) if evaluation_run else await analyze_screenplay(ctx, screenplay_id, run.agent_role)
+            else:
+                assert isinstance(screenplay_id, int)
+                result = await evaluate_screenplay(ctx, run) if evaluation_run else await analyze_screenplay(ctx, screenplay_id, run.agent_role)
+        except WorkflowCancelled:
+            return {"status": "cancelled"}
         except Exception as exc:  # noqa: BLE001 - worker failure boundary records retry state
             return await _retry_or_fail(ctx, run_id, exc)
         async with session_scope() as session:

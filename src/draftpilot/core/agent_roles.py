@@ -6,7 +6,13 @@ from pydantic import BaseModel
 
 PermissionMode = Literal["chat_only", "suggest", "scoped_edit", "project_edit"]
 AgentRoleKey = Literal[
+    "showrunner",
     "story_architect",
+    "story_editor",
+    "brainstormer",
+    "scene_writer",
+    "script_doctor",
+    "coverage_reader",
     "researcher",
     "character_specialist",
     "script_editor",
@@ -26,7 +32,13 @@ class AgentRole(BaseModel):
 
 
 AGENT_ROLES: tuple[AgentRole, ...] = (
+    AgentRole(key="showrunner", label="Showrunner", description="Run the room: plan, consult specialists, and bring back one clear answer."),
     AgentRole(key="story_architect", label="Story architect", description="Shape premise, structure, causality, and thematic arcs."),
+    AgentRole(key="story_editor", label="Story editor", description="Build and repair outlines, beat sheets, and pacing across acts."),
+    AgentRole(key="brainstormer", label="Brainstormer", description="Generate divergent premises, twists, set pieces, and alternatives."),
+    AgentRole(key="scene_writer", label="Scene writer", description="Draft and redraft scenes from beats in the writer's voice."),
+    AgentRole(key="script_doctor", label="Script doctor", description="Diagnose what is not working and prescribe targeted rewrites."),
+    AgentRole(key="coverage_reader", label="Coverage reader", description="Write studio-style coverage with graded craft and a verdict."),
     AgentRole(key="researcher", label="Researcher", description="Find and cite project-relevant research context."),
     AgentRole(key="character_specialist", label="Character specialist", description="Develop character wants, needs, arcs, and relationships."),
     AgentRole(key="script_editor", label="Script editor", description="Review screenplay craft, clarity, rhythm, and formatting."),

@@ -18,6 +18,10 @@ class RoleSpec(BaseModel):
     instructions: str = Field(min_length=20)
     temperature: float = Field(default=0.5, ge=0, le=2)
     max_requests: int = Field(default=12, ge=1, le=100)
+    # Bounds one response, reasoning included, so a local model cannot think forever.
+    max_tokens: int = Field(default=16384, ge=256, le=32768)
+    # Whether the model reasons before answering. Evaluative roles turn it off: they grade, not create.
+    thinking: bool = True
 
 
 @cache

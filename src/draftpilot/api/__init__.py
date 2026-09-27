@@ -14,6 +14,7 @@ from draftpilot.api.copilot import router as copilot_router
 from draftpilot.api.evaluations import router as evaluations_router
 from draftpilot.api.events import router as events_router
 from draftpilot.api.exports import router as exports_router
+from draftpilot.api.insights import router as insights_router
 from draftpilot.api.knowledge_graph import router as knowledge_graph_router
 from draftpilot.api.mcp_access import router as mcp_access_router
 from draftpilot.api.mcp_approvals import router as mcp_approvals_router
@@ -62,6 +63,7 @@ protected.include_router(room_router)
 protected.include_router(retrieval_router)
 protected.include_router(twin_router)
 protected.include_router(writer_router)
+protected.include_router(insights_router)
 router.include_router(protected)
 
 __all__ = ["router"]

@@ -77,7 +77,10 @@ mark downstream artifacts stale, and trigger an incremental RAG refresh; MCP use
 requires the `story.operation` grant and explicit approval.
 
 `propose_screenplay_change` accepts typed scene `heading`/`body` operations or semantic-block
-`element_type`/text/layout operations when `block_id` is supplied. It stores a reviewable agent
+`element_type`/text/layout operations when `block_id` is supplied. To rewrite a whole scene, pass
+`operation={"fountain": "<the scene in Fountain>"}` without a `block_id`: the text is parsed into
+typed blocks, and approval replaces the scene's blocks in place (ids stay stable, authorship becomes
+`proposal:<id>`), while rollback restores the exact prior blocks. It stores a reviewable agent
 proposal using the scene's current server-derived version. It never applies the operation;
 approval and optimistic-concurrency checks remain on the DraftPilot approval boundary. External
 clients use `review_screenplay_proposal` to approve or roll back the same proposal records; it
@@ -177,3 +180,10 @@ multicast addresses; loopback endpoints remain available for local-first service
 resolve before a session is opened. Responses are bounded by the configured output limit. External
 MCP results must still be translated into typed DraftPilot operations before any project mutation;
 the client never receives database credentials or a database connection.
+
+## Writers' room workflows
+
+`list_room_workflows` returns every room workflow with its parameter JSON schema, and
+`start_room_workflow(project_id, workflow, params)` starts one as a durable run (capability
+`room.workflow`; follow it with `read_workflow_run`). Generative workflows end in proposals the writer
+reviews; analytic ones end in a report on the run. See [Writers' room](writers-room.md).

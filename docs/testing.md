@@ -17,6 +17,7 @@ UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run interrogate src migrations
 | e2e · browser | the running stack on `:9000` | `uv run pytest tests/e2e` | Playwright journeys. Tests are auto-marked `e2e` |
 | 1 · local model | LM Studio server | `uv run pytest -m lmstudio` | Real PydanticAI calls against local LM Studio |
 | postgres | the stack's Postgres (pgvector) on `:55432` | `uv run pytest -m postgres` | The pgvector hybrid retrieval store, in a throwaway schema |
+| 2 · evals | LM Studio server | `uv run python -m draftpilot.evals` | Quality of the room on Big Fish against committed baselines (see [Evals and usefulness](evals.md)) |
 
 All LLM-backed tests run against local LM Studio. They never fall back to a cloud provider. Configure
 the target with the `EVAL__` settings:

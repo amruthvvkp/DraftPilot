@@ -5,14 +5,16 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 import logfire
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
 from fastmcp.server.dependencies import get_access_token
+from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from draftpilot.agents.workflow_runner import create_room_workflow_run
+from draftpilot.agents.workflows import ROOM_WORKFLOWS
 from draftpilot.api.agent import approve_agent_proposal, rollback_agent_proposal
 from draftpilot.api.artifacts import _enqueue_index
 from draftpilot.api.backups import (
@@ -24,7 +26,7 @@ from draftpilot.api.timeline import (
     approve_timeline_proposal,
     rollback_timeline_proposal,
 )
-from draftpilot.core import events, telemetry
+from draftpilot.core import events, rag_client, telemetry
 from draftpilot.core.agent_identity import current_internal_agent
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
@@ -38,12 +40,18 @@ from draftpilot.core.context_workflows import (
 from draftpilot.core.db import session_scope
 from draftpilot.core.exports import ExportError, write_export
 from draftpilot.core.mcp_auth import client_id_for_token
-from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.queue import enqueue_best_effort, get_arq_pool
+from draftpilot.core.scene_proposals import (
+    parse_scene_fountain,
+    rewrite_operation,
+    rewrite_snapshot,
+)
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.html import render_html
-from draftpilot.core.screenplay.hydrate import load_screenplay_doc
+from draftpilot.core.screenplay.hydrate import block_to_doc, load_screenplay_doc
 from draftpilot.core.screenplay.pdf import render_pdf
+from draftpilot.core.screenplay.schema import ActDoc, SceneDoc, ScreenplayDoc
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
 from draftpilot.core.story_operations import validate_story_operation
@@ -356,21 +364,7 @@ async def retrieve_project_context(
             raise ValueError(str(exc)) from exc
     if not 1 <= limit <= 50 or not query.strip():
         raise ValueError("Query and limit are invalid")
-    url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}/search"
-    headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
-    async with httpx.AsyncClient(
-        timeout=settings.mcp.request_timeout_seconds
-    ) as client:
-        response = await client.post(
-            url, json={"query": query, "limit": limit}, headers=headers
-        )
-        response.raise_for_status()
-        if len(response.content) > settings.mcp.max_output_chars:
-            raise ValueError("RAG response exceeds MCP output limit")
-        result = response.json()
-    if not isinstance(result, dict):
-        raise ValueError("RAG response is invalid")
-    return result
+    return await rag_client.search(project_id, query, limit, timeout=settings.mcp.request_timeout_seconds)
 
 
 @mcp.tool
@@ -471,11 +465,18 @@ async def read_screenplay_scenes(
     ctx: Context,
     scene_ids: list[int] | None = None,
     offset: int = 0,
-    limit: int = 20,
+    limit: int = 10,
+    format: str = "fountain",
 ) -> dict[str, object]:
-    """Read scenes and their semantic blocks: pick ``scene_ids`` or page with ``offset``/``limit``."""
+    """Read scenes: pick ``scene_ids`` or page with ``offset``/``limit``.
+
+    ``format="fountain"`` (default) returns each scene as compact Fountain text; ``format="blocks"``
+    returns the typed semantic blocks with ids, which block-level proposals need.
+    """
     client_id = _client_id(ctx)
     limit = max(1, min(limit, 50))
+    if format not in {"fountain", "blocks"}:
+        raise ValueError("format must be 'fountain' or 'blocks'")
     async with session_scope() as session:
         try:
             await authorize_invocation(
@@ -493,18 +494,44 @@ async def read_screenplay_scenes(
         else:
             scenes = all_scenes[max(offset, 0) : max(offset, 0) + limit]
         blocks = await blocks_crud.list_for_scenes(session, [scene.id for scene in scenes if scene.id is not None])
-    by_scene: dict[int, list[dict[str, object]]] = {}
+    by_scene: dict[int, list[Any]] = {}
     for block in blocks:
-        by_scene.setdefault(block.scene_id, []).append(block.model_dump(mode="json"))
+        by_scene.setdefault(block.scene_id, []).append(block)
+    if format == "fountain":
+        rendered: list[dict[str, object]] = [
+            {
+                "scene_id": scene.id,
+                "number": all_scenes.index(scene) + 1,
+                "version": scene.version,
+                "fountain": render_fountain(
+                    ScreenplayDoc(
+                        acts=[
+                            ActDoc(
+                                scenes=[
+                                    SceneDoc(
+                                        heading=scene.heading,
+                                        blocks=[block_to_doc(block) for block in by_scene.get(scene.id or 0, [])],
+                                    )
+                                ]
+                            )
+                        ]
+                    )
+                ).strip(),
+            }
+            for scene in scenes
+        ]
+    else:
+        rendered = [
+            {"scene": scene.model_dump(mode="json"), "blocks": [block.model_dump(mode="json") for block in by_scene.get(scene.id or 0, [])]}
+            for scene in scenes
+        ]
     result = {
         "project_id": project_id,
         "screenplay_id": screenplay_id,
         "total_scenes": len(all_scenes),
         "offset": 0 if scene_ids else max(offset, 0),
-        "scenes": [
-            {"scene": scene.model_dump(mode="json"), "blocks": by_scene.get(scene.id or 0, [])}
-            for scene in scenes
-        ],
+        "format": format,
+        "scenes": rendered,
     }
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Screenplay response exceeds MCP output limit; request fewer scenes")
@@ -1062,6 +1089,44 @@ async def control_workflow_run(
 
 
 @mcp.tool
+async def list_room_workflows() -> list[dict[str, object]]:
+    """List the writers' room workflows (notes→outline, rewrite, arcs, panel, coverage, ...) and their parameters."""
+    return [
+        {
+            "key": workflow.key,
+            "label": workflow.label,
+            "description": workflow.description,
+            "proposes": workflow.proposes,
+            "params_schema": workflow.params.model_json_schema(),
+        }
+        for workflow in ROOM_WORKFLOWS.values()
+    ]
+
+
+@mcp.tool
+async def start_room_workflow(
+    project_id: int, workflow: str, params: dict[str, object], ctx: Context
+) -> dict[str, object]:
+    """Start a durable writers' room workflow; follow it with read_workflow_run. Results arrive as proposals or a report."""
+    client_id = _client_id(ctx)
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "room.workflow", "start", {"workflow": workflow})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        if await projects_crud.get(session, project_id) is None:
+            raise ValueError("Project not found")
+        try:
+            run = await create_room_workflow_run(session, project_id, workflow, dict(params))
+        except KeyError as exc:
+            raise ValueError(f"Unknown room workflow; choose one of {', '.join(ROOM_WORKFLOWS)}") from exc
+        except ValidationError as exc:
+            raise ValueError(f"Invalid workflow parameters: {exc.errors(include_url=False)}") from exc
+    await enqueue_best_effort("execute_workflow", run.id, description="room workflow enqueue")
+    return WorkflowRunRead.model_validate(run).model_dump(mode="json")
+
+
+@mcp.tool
 async def propose_screenplay_change(
     project_id: int,
     scene_id: int,
@@ -1070,9 +1135,20 @@ async def propose_screenplay_change(
     ctx: Context,
     block_id: int | None = None,
 ) -> dict[str, object]:
-    """Persist a typed scene or semantic-block proposal without applying changes."""
+    """Persist a typed scene or semantic-block proposal without applying changes.
+
+    To rewrite a whole scene, pass ``operation={"fountain": "<the scene in Fountain>"}`` without a block_id.
+    """
     target_kind = "block" if block_id is not None else "scene"
-    allowed = {"element_type", "text", "is_dual", "dual_group"} if block_id is not None else {"heading", "body"}
+    rewrite = block_id is None and set(operation) == {"fountain"}
+    if rewrite:
+        if not isinstance(operation["fountain"], str):
+            raise ValueError("fountain must be the scene text")
+        operation = rewrite_operation(parse_scene_fountain(operation["fountain"]))
+    if block_id is not None:
+        allowed = {"element_type", "text", "is_dual", "dual_group"}
+    else:
+        allowed = {"heading", "blocks"} if rewrite else {"heading", "body"}
     if not operation or set(operation) - allowed:
         raise ValueError("Unsupported typed screenplay operation")
     if block_id is not None:
@@ -1121,6 +1197,8 @@ async def propose_screenplay_change(
                     for key in operation
                 },
             }
+        elif rewrite:
+            before = await rewrite_snapshot(session, scene)
         else:
             before = {key: getattr(scene, key) for key in operation}
         proposal = await proposals_crud.create(

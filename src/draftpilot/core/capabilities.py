@@ -25,6 +25,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="screenplay.rollback", description="Roll back an approved screenplay proposal.", scope="scene", mutates=True, approval_required=True),
     Capability(name="context.read", description="Read scoped project and scene context.", scope="artifact"),
     Capability(name="context.generate", description="Start a cited, review-only context workflow run.", scope="artifact"),
+    Capability(name="room.workflow", description="Start a writers' room workflow that ends in reviewable proposals or a report.", scope="project"),
     Capability(name="context.apply", description="Apply an approved context suggestion as a canonical graph node.", scope="artifact", mutates=True, approval_required=True),
     Capability(name="knowledge_graph.read", description="Read project-scoped canon nodes and relationships.", scope="project"),
     Capability(name="copilot.write", description="Persist a context-bearing Copilot conversation turn.", scope="project", mutates=True, approval_required=False),
@@ -45,7 +46,7 @@ CAPABILITIES: tuple[Capability, ...] = (
 )
 
 _PAGE_CAPABILITIES: dict[str, tuple[str, ...]] = {
-    "studio": ("outline.read", "story.operation", "context.read", "context.generate", "knowledge_graph.read", "revisions.read"),
+    "studio": ("outline.read", "story.operation", "context.read", "context.generate", "room.workflow", "knowledge_graph.read", "revisions.read"),
     "timeline": ("timeline.propose", "screenplay.read", "context.read", "revisions.read"),
     "review": ("evaluations.read", "screenplay.read", "context.read", "revisions.read", "screenplay.propose", "screenplay.approve", "screenplay.rollback"),
     "exports": ("exports.read", "exports.create", "backups.read", "backups.create", "backups.restore"),

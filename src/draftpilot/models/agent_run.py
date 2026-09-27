@@ -54,3 +54,26 @@ class AgentRunRead(SQLModel):
     tools_used: list[str]
     error: str | None
     created_at: datetime
+
+
+class AgentFeedback(SQLModel, table=True):  # type: ignore[call-arg]
+    """Record the writer's verdict on an agent's work: a thumbs up or down, with an optional note."""
+
+    __tablename__ = "agent_feedback"
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    agent_run_id: int | None = Field(default=None, foreign_key="agent_run.id", index=True)
+    workflow_run_id: int | None = Field(default=None, foreign_key="workflow_run.id", index=True)
+    rating: int = Field(ge=-1, le=1)
+    comment: str = Field(default="", max_length=2000)
+    created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+
+
+class AgentFeedbackCreate(SQLModel):
+    """Give feedback on one agent run or one room workflow run."""
+
+    agent_run_id: int | None = None
+    workflow_run_id: int | None = None
+    rating: int = Field(ge=-1, le=1)
+    comment: str = Field(default="", max_length=2000)

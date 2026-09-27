@@ -45,6 +45,10 @@ Copyright &copy; 2026 Amruth Vithala
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
   { "Get started" = "index.md" },
+  { "Writers' room" = "writers-room.md" },
+  { "MCP integration" = "mcp.md" },
+  { "Evals & usefulness" = "evals.md" },
+  { "Testing" = "testing.md" },
   { "Roadmap" = "roadmap.md" },
   { "Developer guide" = [
     { "v1 gap analysis" = "dev/v1-gap-analysis.md" },

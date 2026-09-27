@@ -27,6 +27,8 @@ src/draftpilot/
   core/        config (pydantic-settings), telemetry, db/, cache/, queue/, screenplay/, domain services
   models/      SQLModel domain: Project → Screenplay → Act → Scene → Block (+ story, agents, MCP access)
   crud/        thin async CRUD per model
+  agents/      writers' room: role specs (specs/*.yaml), runtime, room workflows (pydantic_graph)
+  evals/       pydantic_evals suites on LM Studio (`python -m draftpilot.evals`) + online checks
   worker/      ARQ WorkerSettings + task functions
   mcp/         FastMCP server (HTTP + stdio)
 frontend/      React/Vite studio (src/, public/ assets; build → dist/)
@@ -71,7 +73,8 @@ docker compose -f compose.yml -f compose.dev.yml up --build
   (the `protected` router, so `API__TOKEN` applies). See `frontend/CLAUDE.md`.
 - Agents never write silently: they create proposals the writer approves; MCP approval-required calls
   need a writer-decided `approval_id` (see `docs/mcp.md`).
-- Any change to an agent, prompt, spec or tool must run that agent's evals on LM Studio.
+- Any change to an agent, prompt, spec or tool must run that agent's evals on LM Studio
+  (`uv run python -m draftpilot.evals <suite>`; baselines in `evals/baselines/`, see `docs/evals.md`).
 - After model changes: `uv run alembic revision --autogenerate -m "..."`, then **review it** — the
   existing schema has known TEXT/AutoString drift that autogenerate re-detects; keep only your
   change (hand-write it if needed), check `downgrade`, then `upgrade head`.

@@ -1,7 +1,7 @@
 """Application settings loaded from environment variables and pyproject.toml."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -58,6 +58,18 @@ class OTELConfig(BaseSettings):
 
     exporter_otlp_endpoint: str = "http://localhost:4318"
     enabled: bool = False
+    # Langfuse score API (writer feedback, proposal decisions, online checks). Empty keys disable scores.
+    langfuse_host: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: SecretStr = SecretStr("")
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def langfuse_base_url(self) -> str:
+        """Return the Langfuse base URL: explicit, or derived from its OTLP endpoint."""
+        if self.langfuse_host:
+            return self.langfuse_host.rstrip("/")
+        return self.exporter_otlp_endpoint.split("/api/public/otel")[0].rstrip("/")
 
 
 class PostgresSettings(BaseSettings):
@@ -136,6 +148,9 @@ class LLMSettings(BaseSettings):
     # Other private or link-local provider targets stay blocked to prevent SSRF.
     trusted_model_hosts: list[str] = Field(default_factory=lambda: ["host.docker.internal"])
     request_timeout_seconds: float = Field(default=120.0, gt=0)
+    # Model reasoning: "auto" follows each role's spec, "on"/"off" force it for every role. Off is
+    # several times faster on local reasoning models (e.g. Qwen in LM Studio).
+    thinking: Literal["auto", "on", "off"] = "auto"
 
 
 class SecretsSettings(BaseSettings):

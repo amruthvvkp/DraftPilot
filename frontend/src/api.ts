@@ -177,7 +177,7 @@ export type AgentRole = { key: string; label: string; description: string; defau
 
 export type Capability = { name: string; description: string; scope: string; mutates: boolean; approval_required: boolean }
 
-export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; result: Record<string, unknown> | null; error: string | null; attempt_count: number; max_attempts: number }
+export type WorkflowRun = { id: number; project_id: number; kind: string; status: string; input?: Record<string, unknown>; result: Record<string, unknown> | null; error: string | null; attempt_count: number; max_attempts: number; created_at?: string; updated_at?: string }
 
 export type ContextWorkflowSpec = { key: string; label: string; description: string; input_artifact_kinds: string[]; output_kind: string; evaluator: string; agent_role: string; permission_mode: string }
 
@@ -297,7 +297,7 @@ export function reorderProjectBlocks(projectId: number, sceneId: number, version
 
 export type ProjectEvent = { kind: string; project_id: number; client: string | null; at: string; data: Record<string, unknown> }
 
-export const PROJECT_EVENT_KINDS = ['scene.changed', 'proposal.changed', 'timeline.changed', 'translation.changed', 'artifact.changed', 'approval.changed', 'run.changed'] as const
+export const PROJECT_EVENT_KINDS = ['scene.changed', 'screenplay.changed', 'proposal.changed', 'timeline.changed', 'translation.changed', 'artifact.changed', 'approval.changed', 'run.changed', 'workflow.progress'] as const
 
 /** Subscribe to a project's live change stream; returns an unsubscribe function. */
 export function subscribeProjectEvents(projectId: number, onEvent: (event: ProjectEvent) => void): () => void {
@@ -599,4 +599,32 @@ export function deleteKnowledgeEdge(projectId: number, edgeId: number): Promise<
 
 export function getAgentRoles(): Promise<AgentRole[]> {
   return request<AgentRole[]>('/api/v1/agents/roles')
+}
+
+export type JsonSchema = { type?: string; title?: string; description?: string; default?: unknown; minimum?: number; maximum?: number; maxLength?: number; items?: JsonSchema; properties?: Record<string, JsonSchema>; required?: string[]; anyOf?: JsonSchema[]; $ref?: string }
+
+export type RoomWorkflow = { key: string; label: string; description: string; roles: string[]; proposes: boolean; params_schema: JsonSchema }
+
+export function listRoomWorkflows(projectId: number): Promise<RoomWorkflow[]> {
+  return request<RoomWorkflow[]>(`/api/v1/projects/${projectId}/room/workflows`)
+}
+
+export function startRoomWorkflow(projectId: number, workflow: string, params: Record<string, unknown>, providerProfileId: number | null = null): Promise<WorkflowRun> {
+  return request<WorkflowRun>(`/api/v1/projects/${projectId}/room/workflows`, { method: 'POST', body: JSON.stringify({ workflow, params, provider_profile_id: providerProfileId }) })
+}
+
+export function listWorkflowRuns(projectId: number): Promise<WorkflowRun[]> {
+  return request<WorkflowRun[]>(`/api/v1/projects/${projectId}/runs`)
+}
+
+export type WorkflowInsight = { runs: number; succeeded: number; failed: number; approved: number; rejected: number; rolled_back: number; pending: number; up: number; down: number; acceptance: number | null; retention: number | null; thumbs_up_share: number | null; usefulness: number | null; mean_duration_s: number | null }
+export type RoleInsight = { runs: number; failure_rate: number | null; tokens: number; mean_duration_s: number | null }
+export type Insights = { workflows: Record<string, WorkflowInsight>; roles: Record<string, RoleInsight> }
+
+export function getInsights(projectId: number): Promise<Insights> {
+  return request<Insights>(`/api/v1/projects/${projectId}/insights`)
+}
+
+export function giveFeedback(projectId: number, target: { workflow_run_id?: number; agent_run_id?: number }, rating: 1 | -1, comment = ''): Promise<unknown> {
+  return request<unknown>(`/api/v1/projects/${projectId}/feedback`, { method: 'POST', body: JSON.stringify({ ...target, rating, comment }) })
 }

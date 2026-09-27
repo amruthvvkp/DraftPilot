@@ -5,8 +5,8 @@ A single async engine is created from the configured Postgres DSN. Use
 context manager inside background tasks.
 """
 
-from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncGenerator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -39,6 +39,17 @@ async def session_scope() -> AsyncGenerator[AsyncSession]:
     async with async_session_factory() as session:
         yield session
 
+
+@contextmanager
+def bound_to(engine: AsyncEngine) -> Iterator[None]:
+    """Point every ``session_scope``/``async_get_db`` session at another engine (evals use an isolated database)."""
+    global async_session_factory
+    previous = async_session_factory
+    async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
+    try:
+        yield
+    finally:
+        async_session_factory = previous
 
 
 async def dispose_engine() -> None:

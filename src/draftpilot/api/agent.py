@@ -11,7 +11,15 @@ from draftpilot.api.projects import _enqueue_rag_index
 from draftpilot.core import events
 from draftpilot.core.agent_roles import normalize_permission_mode
 from draftpilot.core.db import async_get_db
+from draftpilot.core.scene_proposals import (
+    append_scenes,
+    apply_scene_rewrite,
+    remove_appended_scenes,
+    rewrite_snapshot,
+)
 from draftpilot.core.scene_sync import SceneLike, scene_changed
+from draftpilot.core.screenplay.schema import BlockDoc
+from draftpilot.core.usefulness import record_decision
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -26,6 +34,7 @@ from draftpilot.models import (
     AgentProposalRead,
     BlockType,
     DialogueTranslation,
+    Scene,
 )
 
 router = APIRouter(prefix="/projects/{project_id}/agent-proposals", tags=["agent"])
@@ -86,7 +95,7 @@ async def _authorize_proposal_mode(
 def _validate_operation(target_kind: str, operation: dict[str, Any]) -> None:
     """Reject operation fields that do not belong to the selected target type."""
     allowed = {
-        "scene": {"heading", "body"},
+        "scene": {"heading", "body", "blocks"},
         "block": {"element_type", "text", "is_dual", "dual_group"},
         "artifact": {"title", "content", "depends_on", "artifact_metadata"},
         "dialogue_translation": {"language", "text", "status"},
@@ -105,6 +114,14 @@ def _validate_operation(target_kind: str, operation: dict[str, Any]) -> None:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid dual-dialogue marker")
         if "dual_group" in operation and operation["dual_group"] is not None and not isinstance(operation["dual_group"], int):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid dual-dialogue group")
+    if target_kind == "scene" and "blocks" in operation:
+        blocks = operation["blocks"]
+        if "body" in operation or not isinstance(blocks, list) or not blocks or len(blocks) > 400:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid scene rewrite")
+        try:
+            [BlockDoc.model_validate(item) for item in blocks]
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid scene rewrite") from exc
     if target_kind == "dialogue_translation" and (
         not isinstance(operation.get("language"), str)
         or not isinstance(operation.get("text"), str)
@@ -147,6 +164,51 @@ async def _block_target(
     if scene is None or block is None or block.scene_id != scene_id:
         return None
     return scene, block
+
+
+async def _approve_appended_scenes(
+    session: AsyncSession, project_id: int, proposal: AgentProposal
+) -> AgentProposalRead:
+    """Append a proposal's new scenes to its screenplay and remember their ids for rollback."""
+    screenplay = await screenplays_crud.get(session, proposal.target_id)
+    scenes = proposal.operation.get("append_scenes")
+    if screenplay is None or screenplay.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal target not found")
+    if not isinstance(scenes, list) or not scenes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid scene append")
+    created = await append_scenes(session, proposal.target_id, scenes, f"proposal:{proposal.id}")
+    proposal.status = "approved"
+    proposal.diff = {**proposal.diff, "created_scene_ids": created}
+    proposal.updated_at = datetime.now(UTC)
+    session.add(proposal)
+    await session.commit()
+    await session.refresh(proposal)
+    for scene_id in created:
+        scene = await scenes_crud.get(session, scene_id)
+        if scene is not None:
+            await scene_changed(session, project_id, cast(SceneLike, scene), reason="proposal.approved")
+    await events.publish(project_id, "proposal.changed", {"proposal_id": proposal.id, "status": "approved"})
+    return AgentProposalRead.model_validate(proposal)
+
+
+async def _rollback_appended_scenes(
+    session: AsyncSession, project_id: int, proposal: AgentProposal
+) -> AgentProposalRead:
+    """Remove the scenes an approved append created, unless the writer has since edited them."""
+    created = proposal.diff.get("created_scene_ids")
+    if not isinstance(created, list):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid scene append rollback")
+    try:
+        await remove_appended_scenes(session, [int(item) for item in created])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    proposal.status = "rolled_back"
+    proposal.updated_at = datetime.now(UTC)
+    session.add(proposal)
+    await session.commit()
+    await session.refresh(proposal)
+    await events.publish(project_id, "screenplay.changed", {"screenplay_id": proposal.target_id, "reason": "proposal.rolled_back"})
+    return AgentProposalRead.model_validate(proposal)
 
 
 @router.get("", response_model=list[AgentProposalRead])
@@ -225,6 +287,8 @@ async def create_agent_proposal(
         )
         # Rollback restores every "before" key, so the block's prior authorship comes back too.
         snapshot["origin"] = block_target[1].origin
+    elif data.target_kind == "scene" and "blocks" in data.operation:
+        snapshot = await rewrite_snapshot(session, cast(Scene, target))
     else:
         before = data.operation.keys() & {"title", "content", "depends_on", "artifact_metadata", "heading", "body"}
         snapshot = {key: getattr(target, key) for key in before}
@@ -244,8 +308,7 @@ async def create_agent_proposal(
     return AgentProposalRead.model_validate(proposal)
 
 
-@router.post("/{proposal_id}/approve", response_model=AgentProposalRead)
-async def approve_agent_proposal(
+async def _approve(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
 ) -> AgentProposalRead:
     """Apply a typed proposal only when its target version is unchanged."""
@@ -254,6 +317,8 @@ async def approve_agent_proposal(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
     if proposal.status != "proposed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal is not pending")
+    if proposal.target_kind == "screenplay":
+        return await _approve_appended_scenes(session, project_id, proposal)
     await _authorize_proposal_mode(
         session,
         project_id,
@@ -335,8 +400,21 @@ async def approve_agent_proposal(
         await scene_changed(session, project_id, cast(SceneLike, target), reason="proposal.approved")
         return AgentProposalRead.model_validate(proposal)
     operation = proposal.operation
+    if proposal.target_kind == "scene" and "blocks" in operation:
+        _validate_operation("scene", operation)
+        heading = operation.get("heading")
+        proposal.status = "approved"
+        proposal.updated_at = datetime.now(UTC)
+        session.add(proposal)
+        await apply_scene_rewrite(
+            session, cast(Scene, target), heading if isinstance(heading, str) else None, operation["blocks"], f"proposal:{proposal.id}"
+        )
+        await session.refresh(proposal)
+        await scene_changed(session, project_id, cast(SceneLike, target), reason="proposal.approved")
+        await events.publish(project_id, "proposal.changed", {"proposal_id": proposal.id, "status": "approved"})
+        return AgentProposalRead.model_validate(proposal)
     allowed = (
-        {"heading", "body"}
+        {"heading", "body", "blocks"}
         if proposal.target_kind == "scene"
         else {"title", "content", "depends_on", "artifact_metadata"}
     )
@@ -360,8 +438,7 @@ async def approve_agent_proposal(
     return AgentProposalRead.model_validate(proposal)
 
 
-@router.post("/{proposal_id}/reject", response_model=AgentProposalRead)
-async def reject_agent_proposal(
+async def _reject(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
 ) -> AgentProposalRead:
     """Reject a pending proposal without touching its target."""
@@ -378,8 +455,7 @@ async def reject_agent_proposal(
     return AgentProposalRead.model_validate(proposal)
 
 
-@router.post("/{proposal_id}/rollback", response_model=AgentProposalRead)
-async def rollback_agent_proposal(
+async def _rollback(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
 ) -> AgentProposalRead:
     """Rollback an approved proposal as a new versioned target mutation."""
@@ -388,6 +464,8 @@ async def rollback_agent_proposal(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
     if proposal.status != "approved":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal is not approved")
+    if proposal.target_kind == "screenplay":
+        return await _rollback_appended_scenes(session, project_id, proposal)
     target: Any | None
     block_target: tuple[Any, Any] | None = None
     if proposal.target_kind == "scene":
@@ -427,6 +505,14 @@ async def rollback_agent_proposal(
             session.add(existing)
         elif existing is not None:
             await session.delete(existing)
+    if proposal.target_kind == "scene" and "blocks" in proposal.before:
+        proposal.status = "rolled_back"
+        proposal.updated_at = datetime.now(UTC)
+        session.add(proposal)
+        await apply_scene_rewrite(session, cast(Scene, target), proposal.before.get("heading"), proposal.before["blocks"], None)
+        await session.refresh(proposal)
+        await scene_changed(session, project_id, cast(SceneLike, target), reason="proposal.rolled_back")
+        return AgentProposalRead.model_validate(proposal)
     if proposal.target_kind == "block":
         if block_target is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal target not found")
@@ -450,3 +536,40 @@ async def rollback_agent_proposal(
     elif proposal.target_kind == "artifact":
         await events.publish(project_id, "artifact.changed", {"artifact_id": target.id, "version": target.version})
     return AgentProposalRead.model_validate(proposal)
+
+
+@router.post("/{proposal_id}/approve", response_model=AgentProposalRead)
+async def approve_agent_proposal(
+    project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
+) -> AgentProposalRead:
+    """Apply a typed proposal only when its target version is unchanged."""
+    result = await _approve(project_id, proposal_id, session)
+    await _record(session, proposal_id)
+    return result
+
+
+@router.post("/{proposal_id}/reject", response_model=AgentProposalRead)
+async def reject_agent_proposal(
+    project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
+) -> AgentProposalRead:
+    """Reject a pending proposal without touching its target."""
+    result = await _reject(project_id, proposal_id, session)
+    await _record(session, proposal_id)
+    return result
+
+
+@router.post("/{proposal_id}/rollback", response_model=AgentProposalRead)
+async def rollback_agent_proposal(
+    project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
+) -> AgentProposalRead:
+    """Rollback an approved proposal as a new versioned target mutation."""
+    result = await _rollback(project_id, proposal_id, session)
+    await _record(session, proposal_id)
+    return result
+
+
+async def _record(session: AsyncSession, proposal_id: int) -> None:
+    """Score the traces behind a decided proposal (best-effort)."""
+    proposal = await proposals_crud.get(session, proposal_id)
+    if proposal is not None:
+        await record_decision(session, proposal)

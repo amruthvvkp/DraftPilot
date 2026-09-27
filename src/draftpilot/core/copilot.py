@@ -14,6 +14,7 @@ from draftpilot.agents.context import load_room_context
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.runtime import run_room_agent
 from draftpilot.agents.specs import role_spec
+from draftpilot.core import rag_client
 from draftpilot.core.agent_roles import AgentRoleKey
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.db import session_scope
@@ -24,18 +25,9 @@ async def retrieve_context(project_id: int, query: str) -> list[dict[str, object
     """Retrieve bounded project context without making RAG availability a chat prerequisite."""
     if not query.strip():
         return []
-    url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}/search"
-    headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
-            response = await client.post(
-                url,
-                json={"query": query[:2_000], "limit": settings.rag.max_results},
-                headers=headers,
-            )
-            response.raise_for_status()
-            payload = response.json()
-        results = payload.get("results", []) if isinstance(payload, dict) else []
+        payload = await rag_client.search(project_id, query[:2_000], settings.rag.max_results, timeout=3.0)
+        results = payload.get("results", [])
         if not isinstance(results, list):
             return []
         return [item for item in results[: settings.rag.max_results] if isinstance(item, dict)]

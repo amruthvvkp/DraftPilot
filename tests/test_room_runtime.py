@@ -129,9 +129,9 @@ def _run(model: FunctionModel, mode: str, prompt: str = "Help.") -> tuple[str, A
     captured: list[list[ModelMessage]] = []
     original = runtime.build_room_agent
 
-    def build(spec: Any, model_: Any, permission_mode: str) -> Any:
+    def build(spec: Any, model_: Any, permission_mode: str, output_type: Any = str, **kwargs: Any) -> Any:
         """Build the real agent and capture its messages after the run."""
-        agent = original(spec, model_, permission_mode)
+        agent = original(spec, model_, permission_mode, output_type, **kwargs)
         run = agent.run
 
         async def tracked(*args: Any, **kwargs: Any) -> Any:
@@ -281,3 +281,81 @@ def test_streamed_chat_speaks_the_vercel_protocol_and_records_the_turn(
     assert [(item.kind, item.status, item.tools_used) for item in runs] == [("chat", "succeeded", ["read_project_overview"])]
     turns = run_async(room.exec(select(CopilotMessage))).all()
     assert [(item.role, item.content) for item in turns] == [("user", "Where should we open?"), ("assistant", "Open on the river.")]
+
+
+def test_showrunner_delegates_to_a_specialist_and_shares_the_budget(room: AsyncSession) -> None:
+    """The showrunner consults a specialist; both runs are recorded and usage is shared."""
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        """Script the showrunner (who has `consult`) and the specialist (who does not)."""
+        has_consult = any(tool.name == "consult" for tool in info.function_tools)
+        consulted = any(isinstance(part, ToolReturnPart) and part.tool_name == "consult" for message in messages for part in getattr(message, "parts", []))
+        if has_consult and not consulted:
+            return ModelResponse(parts=[ToolCallPart(tool_name="consult", args={"role": "continuity_supervisor", "brief": "Check Edward's age across scenes."})])
+        if has_consult:
+            return ModelResponse(parts=[TextPart(content="Continuity says it holds; I agree.")])
+        return ModelResponse(parts=[TextPart(content="No contradictions in Edward's age.")])
+
+    async def stream(messages: list[ModelMessage], info: AgentInfo) -> AsyncIterator[str]:
+        """Streaming is unused here."""
+        yield respond(messages, info).parts[0].content  # type: ignore[union-attr]
+
+    reply, record = run_async(
+        runtime.run_room_agent(
+            role_spec("showrunner"),
+            FunctionModel(respond, stream_function=stream),
+            RoomDeps(project_id=1, permission_mode="chat_only"),
+            "Is Edward's age consistent?",
+            provider="test",
+            model_name="scripted",
+        )
+    )
+    assert reply == "Continuity says it holds; I agree."
+    assert record.role == "showrunner" and record.tools_used == ["consult"]
+    runs = run_async(room.exec(select(AgentRun).order_by(AgentRun.id))).all()
+    delegate = next(run for run in runs if run.kind == "delegate")
+    assert (delegate.role, delegate.status) == ("continuity_supervisor", "succeeded")
+    assert record.requests >= 3  # two showrunner requests plus the specialist's, on one shared budget
+
+
+def test_showrunner_is_told_to_retry_on_an_unknown_specialist(room: AsyncSession) -> None:
+    """Asking for a role that does not exist sends a retry prompt, not a crash."""
+    model = _script({"tool": "consult", "args": {"role": "producer", "brief": "Budget it."}}, "Fine, I'll answer myself.")
+    captured: list[list[ModelMessage]] = []
+    original = runtime.build_room_agent
+
+    def build(spec: Any, model_: Any, permission_mode: str, output_type: Any = str, **kwargs: Any) -> Any:
+        """Capture the showrunner's messages."""
+        agent = original(spec, model_, permission_mode, output_type, **kwargs)
+        run = agent.run
+
+        async def tracked(*args: Any, **kwargs: Any) -> Any:
+            """Run and capture messages."""
+            result = await run(*args, **kwargs)
+            captured.append(result.all_messages())
+            return result
+
+        agent.run = tracked  # type: ignore[method-assign]
+        return agent
+
+    runtime.build_room_agent = build  # type: ignore[assignment]
+    try:
+        reply, _record = run_async(
+            runtime.run_room_agent(role_spec("showrunner"), model, RoomDeps(project_id=1), "Budget?", provider="test", model_name="scripted")
+        )
+    finally:
+        runtime.build_room_agent = original  # type: ignore[assignment]
+    assert reply == "Fine, I'll answer myself."
+    assert "Unknown specialist 'producer'" in " ".join(_tool_returns(captured[0]))
+
+
+def test_reasoning_follows_the_role_unless_overridden(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Evaluative roles answer without reasoning; ``LLM__THINKING`` forces it on or off for everyone."""
+    critic, writer = role_spec("script_doctor"), role_spec("scene_writer")
+    assert runtime.role_model_settings(writer).get("openai_reasoning_effort") is None
+    off = runtime.role_model_settings(critic)
+    assert off["thinking"] is False and off.get("openai_reasoning_effort") == "none" and off["max_tokens"] == critic.max_tokens
+    monkeypatch.setattr(runtime.settings.llm, "thinking", "on")
+    assert "thinking" not in runtime.role_model_settings(critic)
+    monkeypatch.setattr(runtime.settings.llm, "thinking", "off")
+    assert runtime.role_model_settings(writer)["thinking"] is False
