@@ -139,3 +139,16 @@ def test_revision_snapshot_contains_selectable_scene_sections() -> None:
     )
     assert revision.message == "Before the reveal"
     assert set(revision.snapshot) == {"heading", "blocks"}
+
+
+def test_pdf_renders_the_whole_of_big_fish() -> None:
+    """Every scene of a real script renders, including apostrophes, ampersands and angle brackets."""
+    from pathlib import Path
+
+    from draftpilot.core.screenplay.adapters.fountain import parse_fountain
+    from draftpilot.core.screenplay.pdf import render_pdf
+
+    doc = parse_fountain((Path(__file__).parent / "test_screenplays" / "Big-Fish.fountain").read_text())
+    doc.acts[0].scenes[0].heading = "INT. WILL'S & JO'S <FLAT> - NIGHT"
+    pdf = render_pdf(doc)
+    assert pdf[:4] == b"%PDF" and len(pdf) > 100_000

@@ -139,6 +139,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `GET` | `/projects` | Return all projects ordered by title. |  | 200 list of `ProjectRead` |
 | `POST` | `/projects` | Create and return a project from the submitted creative brief. | `ProjectCreateRequest` | 201 `ProjectReadWithReferences` |
 | `GET` | `/projects/deleted` | List deleted projects that can still be restored from their last backup. |  | 200 list of `object` |
+| `POST` | `/projects/deleted/{project_id}/dismiss` | Hide a deleted project from "Recently deleted" (its backups remain on disk). |  | 200 `object` |
 | `POST` | `/projects/wizard/assist` | Generate structured project wizard fields using configured LLM or fallback. | `WizardAssistRequest` | 200 `WizardAssistResponse` |
 | `DELETE` | `/projects/{project_id}` | Back up and delete a project with everything in it; restore it later from the backup. |  | 200 `object` |
 | `PATCH` | `/projects/{project_id}` | Update project instructions and metadata with optimistic concurrency. | `ProjectUpdate` | 200 `ProjectRead` |

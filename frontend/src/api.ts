@@ -653,3 +653,7 @@ export function getStoryTwin(projectId: number): Promise<StoryTwin> {
 export function refreshStoryTwin(projectId: number): Promise<Record<string, number>> {
   return request<Record<string, number>>(`/api/v1/projects/${projectId}/twin/refresh`, { method: 'POST' })
 }
+
+export function dismissDeletedProject(projectId: number): Promise<{ hidden: number }> {
+  return request<{ hidden: number }>(`/api/v1/projects/deleted/${projectId}/dismiss`, { method: 'POST' })
+}

@@ -14,7 +14,8 @@ from draftpilot.core.screenplay.schema import BlockDoc, SceneDoc, ScreenplayDoc
 
 def _text(value: str) -> str:
     """Escape screenplay text for ReportLab's paragraph markup."""
-    return escape(value).replace("\n", "<br/>")
+    # Quotes stay literal: ReportLab's parser rejects the hex references escape() would emit (&#x27;).
+    return escape(value, quote=False).replace("\n", "<br/>")
 
 
 def _paragraph(block: BlockDoc, styles: dict[str, ParagraphStyle]) -> Paragraph:

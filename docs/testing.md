@@ -15,6 +15,7 @@ UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run interrogate src migrations
 |---|---|---|---|
 | 0 · deterministic | nothing | `uv run pytest tests --ignore=tests/e2e` | Unit and API behaviour. Runs in CI. `lmstudio` tests are deselected by default |
 | e2e · browser | the running stack on `:9000` | `uv run pytest tests/e2e` | Playwright journeys. Tests are auto-marked `e2e` |
+| stack · real backend | the running stack on `:9000` | `uv run pytest tests/e2e -m stack` | A browser smoke test on Big Fish with no mocks: import, edit, reload, Story twin, room, PDF export, duplicate and delete. It creates and cleans up its own projects |
 | 1 · local model | LM Studio server | `uv run pytest -m lmstudio` | Real PydanticAI calls against local LM Studio |
 | postgres | the stack's Postgres (pgvector) on `:55432` | `uv run pytest -m postgres` | The pgvector hybrid retrieval store, in a throwaway schema |
 | 2 · evals | LM Studio server | `uv run python -m draftpilot.evals` | Quality of the room on Big Fish against committed baselines (see [Evals and usefulness](evals.md)) |

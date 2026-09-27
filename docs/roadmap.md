@@ -46,9 +46,8 @@ measurement). G8 is mostly done: themes, vault lifecycle, streaming room chat, t
 and editor fixes. G9 docs are in place. What's left for v1:
 
 - a rich-text editor (TipTap) with smart typing, and a beat board;
-- a client router and data layer, and e2e journeys against the real backend;
-- eval baselines for every suite, plus a second local judge model;
-- a browser smoke test on Big Fish against the real stack.
+- a client router and data layer;
+- eval baselines for every suite, plus a second local judge model.
 
 ## Ground-test screenplay benchmark
 

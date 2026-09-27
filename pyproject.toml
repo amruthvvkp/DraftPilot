@@ -109,11 +109,12 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 base_url = "http://localhost:9000"
 # Tier 0 (deterministic) runs by default; pass `-m lmstudio` for the local-model tier.
-addopts = "-m 'not lmstudio and not postgres'"
+addopts = "-m 'not lmstudio and not postgres and not stack'"
 markers = [
   "e2e: Playwright browser journeys against the running web stack",
   "lmstudio: needs a local LM Studio server (Tier 1); deselected by default",
   "postgres: needs the local stack's Postgres with pgvector; deselected by default",
+  "stack: browser journey against the real running stack (no mocks); deselected by default",
 ]
 
 [tool.ruff]

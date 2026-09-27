@@ -128,6 +128,7 @@ def test_delete_backs_up_then_removes_everything_and_can_be_restored(studio: tup
 
     deleted_list = client.get("/api/v1/projects/deleted").json()
     assert [(item["project_id"], item["title"]) for item in deleted_list] == [(1, "Big Fish")]
+    assert client.post("/api/v1/projects/deleted/2/dismiss").status_code == 409  # still exists
     restored = client.post(f"/api/v1/projects/1/backups/{deleted_list[0]['filename']}/restore")
     assert restored.status_code == 201, restored.text
     new_id = restored.json()["project_id"]
@@ -151,3 +152,13 @@ def test_duplicate_copies_every_draft_under_a_new_title(studio: tuple[TestClient
     assert _count(session, Screenplay, Screenplay.project_id == 3) == 1
     enqueue.assert_any_await("reindex_project", 3, description="RAG reindex enqueue")
     assert client.post("/api/v1/projects/99/duplicate", json={}).status_code == 404
+
+
+def test_dismissing_hides_a_deleted_project_but_keeps_its_backup(studio: tuple[TestClient, AsyncSession, AsyncMock], tmp_path: Path) -> None:
+    """Dismiss removes the entry from Recently deleted without deleting the backup file."""
+    client, _session, _enqueue = studio
+    backup = client.delete("/api/v1/projects/2").json()["backup"]
+    assert [item["project_id"] for item in client.get("/api/v1/projects/deleted").json()] == [2]
+    assert client.post("/api/v1/projects/deleted/2/dismiss").json() == {"hidden": 1}
+    assert client.get("/api/v1/projects/deleted").json() == []
+    assert (tmp_path / "backups" / backup).exists()

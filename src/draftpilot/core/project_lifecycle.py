@@ -75,10 +75,24 @@ async def deleted_project_backups(session: AsyncSession) -> list[dict[str, Any]]
         except BackupError:
             continue
         manifest = envelope.manifest
-        if manifest.project_id in existing or path.with_name(f"{path.name}.restored").exists():
+        if manifest.project_id in existing or path.with_name(f"{path.name}.restored").exists() or path.with_name(f"{path.name}.dismissed").exists():
             continue
         current = newest.get(manifest.project_id)
         if current is None or manifest.created_at > current["manifest"].created_at:
             title = envelope.payload.get("project", {}).get("title", f"Project {manifest.project_id}")
             newest[manifest.project_id] = {"filename": path.name, "manifest": manifest, "title": title}
     return sorted(newest.values(), key=lambda item: item["manifest"].created_at, reverse=True)
+
+
+def dismiss_deleted_project(project_id: int) -> int:
+    """Stop offering a deleted project for restore; its backups stay on disk. Return how many were hidden."""
+    hidden = 0
+    for path in sorted(settings.backup.root.glob("*.json.gz")) if settings.backup.root.exists() else []:
+        try:
+            envelope = read_backup(settings.backup.root, path.name)
+        except BackupError:
+            continue
+        if envelope.manifest.project_id == project_id:
+            path.with_name(f"{path.name}.dismissed").write_text("")
+            hidden += 1
+    return hidden

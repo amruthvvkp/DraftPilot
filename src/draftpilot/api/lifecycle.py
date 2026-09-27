@@ -13,8 +13,13 @@ from draftpilot.api.backups import (
 )
 from draftpilot.core import events
 from draftpilot.core.db import async_get_db
-from draftpilot.core.project_lifecycle import delete_project, deleted_project_backups
+from draftpilot.core.project_lifecycle import (
+    delete_project,
+    deleted_project_backups,
+    dismiss_deleted_project,
+)
 from draftpilot.core.queue import enqueue_best_effort
+from draftpilot.crud import projects as projects_crud
 from draftpilot.models import ProjectRead
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -34,6 +39,14 @@ async def list_deleted_projects(session: AsyncSession = Depends(async_get_db)) -
          "deleted_at": item["manifest"].created_at.isoformat()}
         for item in await deleted_project_backups(session)
     ]
+
+
+@router.post("/deleted/{project_id}/dismiss")
+async def dismiss_deleted(project_id: int, session: AsyncSession = Depends(async_get_db)) -> dict[str, int]:
+    """Hide a deleted project from "Recently deleted" (its backups remain on disk)."""
+    if await projects_crud.get(session, project_id) is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project still exists")
+    return {"hidden": dismiss_deleted_project(project_id)}
 
 
 @router.delete("/{project_id}")
