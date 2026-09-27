@@ -14,7 +14,7 @@ from typing import Any
 
 import logfire
 from pydantic_ai import Agent, ModelRetry, ModelSettings, RunContext, UsageLimits
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 from pydantic_ai.run import AgentRunResult
@@ -307,6 +307,12 @@ async def run_room_agent(
     return str(reply), record
 
 
+def reasoning_ran_away(error: Exception) -> bool:
+    """Return whether a failure means the model reasoned too long: out of tokens, or the server gave up waiting."""
+    message = str(error).casefold()
+    return "token limit" in message or ("timed out" in message and "without receiving data" in message)
+
+
 async def run_role[OutputT](
     spec: RoleSpec,
     model: Any,
@@ -329,10 +335,10 @@ async def run_role[OutputT](
         async with measured_run(meter, workflow_run_id):
             try:
                 result = await agent.run(prompt, deps=deps, message_history=history, usage_limits=usage_limits(spec))
-            except UnexpectedModelBehavior as exc:
+            except (UnexpectedModelBehavior, ModelHTTPError) as exc:
                 await meter.finish(None, exc)
-                if attempt == 1 and "token limit" in str(exc).casefold():
-                    # The model reasoned past its token budget before answering: answer again without reasoning.
+                if attempt == 1 and reasoning_ran_away(exc):
+                    # The model reasoned past its budget (tokens, or the server's no-data timeout): answer without reasoning.
                     logfire.warning("{role} ran out of tokens while reasoning; retrying without reasoning", role=spec.key)
                     thinking = False
                     continue

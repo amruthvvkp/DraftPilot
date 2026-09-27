@@ -380,3 +380,12 @@ def test_a_role_that_reasons_past_its_token_budget_answers_again_without_reasoni
     assert seen == [None, "none"]
     runs = run_async(room.exec(select(AgentRun))).all()
     assert [run.status for run in runs] == ["failed", "succeeded"]
+
+
+def test_runaway_reasoning_is_recognised_from_either_failure() -> None:
+    """Both the token cap and LM Studio's no-data timeout count as runaway reasoning; other errors do not."""
+    from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
+
+    assert runtime.reasoning_ran_away(UnexpectedModelBehavior("Model token limit (16384) exceeded before any response was generated."))
+    assert runtime.reasoning_ran_away(ModelHTTPError(400, "qwen", "Engine protocol predict stream timed out after 600000ms without receiving data."))
+    assert not runtime.reasoning_ran_away(ModelHTTPError(400, "qwen", "Invalid tool schema."))
