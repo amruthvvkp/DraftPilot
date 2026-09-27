@@ -172,7 +172,7 @@ def test_room_chat_streams_the_answer_and_shows_the_tools_used(page: Page) -> No
         page.route(f"**/api/v1/projects/9002/{path}", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.route("**/api/v1/projects/9002/insights", lambda route: route.fulfill(status=200, content_type="application/json", body='{"workflows":{},"roles":{}}'))
     page.route("**/api/v1/projects/9002/events", lambda route: route.fulfill(status=204, body=""))
-    page.route("**/api/v1/agent-roles", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([
         {"key": "showrunner", "label": "Showrunner", "description": "", "default_permission": "chat_only"},
         {"key": "script_editor", "label": "Script editor", "description": "", "default_permission": "chat_only"},
     ])))

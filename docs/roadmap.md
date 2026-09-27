@@ -40,6 +40,16 @@ grounded in a Story twin and a Writer twin, with MCP as the one tool surface, LM
 and full manual editing. The audited status of each item and the execution order (G0–G9) are in the
 [v1 gap analysis](dev/v1-gap-analysis.md).
 
+**Status (2026-09-27).** Done: G0–G7 (security, the FastAPI host, the data backbone, the agent
+platform on MCP, hybrid RAG, both twins, the room team, eight room workflows, evals and usefulness
+measurement). G8 is mostly done: themes, vault lifecycle, streaming room chat, the Story twin page
+and editor fixes. G9 docs are in place. What's left for v1:
+
+- a rich-text editor (TipTap) with smart typing, and a beat board;
+- a client router and data layer, and e2e journeys against the real backend;
+- eval baselines for every suite, plus a second local judge model;
+- a browser smoke test on Big Fish against the real stack.
+
 ## Ground-test screenplay benchmark
 
 The first serious validation project is a writer-owned 165-page feature screenplay developed in

@@ -26,6 +26,8 @@ jobs:
       - run: uv run ruff check src migrations tests
       - run: uv run mypy src
       - run: uv run interrogate src migrations
+      - name: Build the docs (strict)
+        run: uv run --group docs zensical build --strict
 
   browser:
     name: Containerized Playwright

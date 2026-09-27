@@ -43,6 +43,7 @@ dev = [
 ]
 debugpy = ["debugpy>=1.8.22"]
 docs = [
+  "mkdocstrings-python>=1.18",
   "zensical>=0.0.65",
 ]
 e2e = ["pytest-playwright>=0.9.0"]
