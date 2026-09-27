@@ -11,7 +11,7 @@ from _db import memory_session
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
 
-from draftpilot.core.agent_identity import InternalAgent, acting_as
+from draftpilot.core.agent_identity import InternalAgent, identity_meta
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain
 from draftpilot.core.screenplay.hydrate import save_screenplay_doc
 from draftpilot.models import Project, Screenplay
@@ -48,14 +48,14 @@ def test_scene_reads_default_to_compact_fountain(monkeypatch: pytest.MonkeyPatch
 
             monkeypatch.setattr(server, "session_scope", scope)
             monkeypatch.setattr("draftpilot.core.events.get_redis", lambda: _NoRedis())
-            with acting_as(InternalAgent(project_id=1, role="script_editor")):
-                async with Client(server.mcp) as client:
-                    compact = (await client.call_tool("read_screenplay_scenes", {"project_id": 1, "screenplay_id": 1})).structured_content
-                    blocks = (
-                        await client.call_tool("read_screenplay_scenes", {"project_id": 1, "screenplay_id": 1, "format": "blocks"})
-                    ).structured_content
-                    with pytest.raises(ToolError):
-                        await client.call_tool("read_screenplay_scenes", {"project_id": 1, "screenplay_id": 1, "format": "xml"})
+            meta = identity_meta(InternalAgent(project_id=1, role="script_editor"))
+            async with Client(server.mcp) as client:
+                compact = (await client.call_tool("read_screenplay_scenes", {"project_id": 1, "screenplay_id": 1}, meta=meta)).structured_content
+                blocks = (
+                    await client.call_tool("read_screenplay_scenes", {"project_id": 1, "screenplay_id": 1, "format": "blocks"}, meta=meta)
+                ).structured_content
+                with pytest.raises(ToolError):
+                    await client.call_tool("read_screenplay_scenes", {"project_id": 1, "screenplay_id": 1, "format": "xml"}, meta=meta)
             assert compact is not None and blocks is not None
             assert len(compact["scenes"]) == 10 and compact["total_scenes"] == 191
             second = compact["scenes"][1]

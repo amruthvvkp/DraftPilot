@@ -1,8 +1,8 @@
 """Test room agents working through DraftPilot's in-process MCP server (deterministic models)."""
 
 import json
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
 import pytest
@@ -124,27 +124,29 @@ async def _no_pool() -> Any:
     raise ConnectionError("no queue in tests")
 
 
+@contextmanager
+def _capturing(role: str, captured: list[list[ModelMessage]]) -> Iterator[None]:
+    """Keep the full message history of every run of one role's shared agent."""
+    agent = runtime.room_agents()[role]
+    run = agent.run
+
+    async def tracked(*args: Any, **kwargs: Any) -> Any:
+        """Run the agent and keep its messages."""
+        result = await run(*args, **kwargs)
+        captured.append(result.all_messages())
+        return result
+
+    agent.run = tracked  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        del agent.run
+
+
 def _run(model: FunctionModel, mode: str, prompt: str = "Help.") -> tuple[str, AgentRun, list[ModelMessage]]:
     """Run the story architect once and return the reply, AgentRun, and messages."""
     captured: list[list[ModelMessage]] = []
-    original = runtime.build_room_agent
-
-    def build(spec: Any, model_: Any, permission_mode: str, output_type: Any = str, **kwargs: Any) -> Any:
-        """Build the real agent and capture its messages after the run."""
-        agent = original(spec, model_, permission_mode, output_type, **kwargs)
-        run = agent.run
-
-        async def tracked(*args: Any, **kwargs: Any) -> Any:
-            """Run the agent and keep its full message history."""
-            result = await run(*args, **kwargs)
-            captured.append(result.all_messages())
-            return result
-
-        agent.run = tracked  # type: ignore[method-assign]
-        return agent
-
-    runtime.build_room_agent = build  # type: ignore[assignment]
-    try:
+    with _capturing("story_architect", captured):
         reply, record = run_async(
             runtime.run_room_agent(
                 role_spec("story_architect"),
@@ -155,8 +157,6 @@ def _run(model: FunctionModel, mode: str, prompt: str = "Help.") -> tuple[str, A
                 model_name="scripted",
             )
         )
-    finally:
-        runtime.build_room_agent = original  # type: ignore[assignment]
     return reply, record, captured[0]
 
 
@@ -322,29 +322,10 @@ def test_showrunner_is_told_to_retry_on_an_unknown_specialist(room: AsyncSession
     """Asking for a role that does not exist sends a retry prompt, not a crash."""
     model = _script({"tool": "consult", "args": {"role": "producer", "brief": "Budget it."}}, "Fine, I'll answer myself.")
     captured: list[list[ModelMessage]] = []
-    original = runtime.build_room_agent
-
-    def build(spec: Any, model_: Any, permission_mode: str, output_type: Any = str, **kwargs: Any) -> Any:
-        """Capture the showrunner's messages."""
-        agent = original(spec, model_, permission_mode, output_type, **kwargs)
-        run = agent.run
-
-        async def tracked(*args: Any, **kwargs: Any) -> Any:
-            """Run and capture messages."""
-            result = await run(*args, **kwargs)
-            captured.append(result.all_messages())
-            return result
-
-        agent.run = tracked  # type: ignore[method-assign]
-        return agent
-
-    runtime.build_room_agent = build  # type: ignore[assignment]
-    try:
+    with _capturing("showrunner", captured):
         reply, _record = run_async(
             runtime.run_room_agent(role_spec("showrunner"), model, RoomDeps(project_id=1), "Budget?", provider="test", model_name="scripted")
         )
-    finally:
-        runtime.build_room_agent = original  # type: ignore[assignment]
     assert reply == "Fine, I'll answer myself."
     assert "Unknown specialist 'producer'" in " ".join(_tool_returns(captured[0]))
 

@@ -1,5 +1,6 @@
 """Stream a room agent's reply to the studio over the Vercel AI SDK UI-message protocol."""
 
+from dataclasses import replace
 from typing import Any
 
 import logfire
@@ -12,8 +13,10 @@ from pydantic_ai.ui.vercel_ai import VercelAIAdapter
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.runtime import (
     RunMeter,
-    build_room_agent,
     measured_run,
+    role_model_settings,
+    room_agents,
+    run_model,
     usage_limits,
 )
 from draftpilot.agents.specs import RoleSpec
@@ -43,11 +46,10 @@ async def stream_room_chat(
     retrieve: Any,
 ) -> StreamingResponse:
     """Run one streamed chat turn as the internal agent and record its AgentRun and transcript."""
-    agent = build_room_agent(spec, model, deps_without_context.permission_mode)
-    adapter = await VercelAIAdapter.from_request(request, agent=agent, sdk_version=6)
+    adapter = await VercelAIAdapter.from_request(request, agent=room_agents()[spec.key], sdk_version=6)
     prompt = last_user_text(adapter.messages)
     context = await retrieve(deps_without_context.project_id, prompt) if prompt else []
-    deps = RoomDeps(**{**deps_without_context.__dict__, "retrieved_context": context})
+    deps = replace(deps_without_context, retrieved_context=context, model_ref=run_model(model, deps_without_context))
     meter = RunMeter(deps.project_id, spec.key, "chat", provider, model_name)
 
     async def on_complete(result: AgentRunResult[Any]) -> None:
@@ -73,7 +75,13 @@ async def stream_room_chat(
         """Stream protocol events while bound to the internal agent identity."""
         async with measured_run(meter):
             try:
-                async for event in adapter.run_stream(deps=deps, usage_limits=usage_limits(spec), on_complete=on_complete):
+                async for event in adapter.run_stream(
+                    deps=deps,
+                    model=deps.model_ref,
+                    model_settings=role_model_settings(spec),
+                    usage_limits=usage_limits(spec),
+                    on_complete=on_complete,
+                ):
                     yield event
             except Exception as exc:
                 logfire.warning("Room chat failed: {exc}", exc=str(exc))

@@ -7,6 +7,8 @@ from typing import Any
 
 from temporalio import activity
 
+from draftpilot.agents import workflow_runner
+from draftpilot.agents.workflows import RoomRunInput
 from draftpilot.worker import functions
 
 HEARTBEAT_SECONDS = 10
@@ -75,9 +77,21 @@ async def run_job(run_id: int) -> dict[str, Any]:
 
 
 @activity.defn
-async def finish_run(run_id: int, status: str, result: dict[str, Any] | None, error: str | None) -> None:
-    """Record a run's terminal state in its Postgres copy."""
-    await functions.finish_run(run_id, status, result, error)
+async def finish_run(run_id: int, status: str, result: dict[str, Any] | None, error: str | None) -> str:
+    """Record a run's terminal state in its Postgres copy and return the status it ended in."""
+    return await functions.finish_run(run_id, status, result, error)
+
+
+@activity.defn
+async def prepare_room_run(run_id: int) -> tuple[str, RoomRunInput]:
+    """Resolve a room run's workflow, model (including LM Studio ``auto``) and room context."""
+    return await workflow_runner.prepare_room_run(run_id)
+
+
+@activity.defn
+async def room_checks(result: dict[str, Any]) -> dict[str, Any]:
+    """Score a finished room workflow with the online checks."""
+    return workflow_runner.with_checks(result)
 
 
 ACTIVITIES: list[Callable[..., Any]] = [
@@ -89,4 +103,14 @@ ACTIVITIES: list[Callable[..., Any]] = [
     begin_run,
     run_job,
     finish_run,
+    prepare_room_run,
+    room_checks,
 ]
+
+
+def all_activities() -> list[Callable[..., Any]]:
+    """Return the job activities, the room workflows' database steps, and the room agents' model and tool calls."""
+    from draftpilot.agents.runtime import room_agent_activities
+    from draftpilot.agents.workflows import ROOM_ACTIVITIES
+
+    return [*ACTIVITIES, *ROOM_ACTIVITIES, *room_agent_activities()]

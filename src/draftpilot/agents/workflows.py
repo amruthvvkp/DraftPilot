@@ -1,24 +1,28 @@
-"""Room workflows: the writers' room as repeatable multi-agent graphs with a human gate at the end.
+"""Room workflows: the writers' room as repeatable, durable multi-agent workflows with a human gate at the end.
 
-Each workflow is a ``pydantic_graph`` graph whose steps consult room roles for typed outputs.
-Generative workflows (outline, character arcs, scene rewrite, scene drafting) end in reviewable
-proposals the writer approves; analytic ones (brainstorm, audience panel, coverage, continuity)
-return a report. Nothing is ever written to the script or story silently.
+The workflows themselves are Temporal workflows in ``agents/room_workflows.py``. Each step
+consults one room role for a typed output. This module holds what they share: the typed
+outputs and parameters, the pure text helpers, the catalogue, and the activities that touch the
+database (loading scenes, finding leads, and the gates that create proposals). Generative
+workflows (outline, character arcs, scene rewrite, scene drafting) end in reviewable proposals the
+writer approves, and analytic ones (brainstorm, audience panel, coverage, continuity) return a
+report. Nothing is ever written to the script or story silently.
 """
 
+import uuid
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
+from datetime import timedelta
 from statistics import mean
-from time import monotonic
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
-from pydantic_graph import GraphBuilder, StepContext, reduce_list_append
 from sqlmodel.ext.asyncio.session import AsyncSession
+from temporalio import activity
+from temporalio.common import RetryPolicy
 
 from draftpilot.agents.deps import RoomDeps
-from draftpilot.agents.runtime import run_role
-from draftpilot.agents.specs import role_spec
+from draftpilot.core import events
 from draftpilot.core.db import session_scope
 from draftpilot.core.scene_proposals import (
     append_operation,
@@ -34,7 +38,8 @@ from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
-from draftpilot.models import AgentProposal, Scene, StoryArtifact
+from draftpilot.crud import workflow_runs as runs_crud
+from draftpilot.models import AgentProposal, AgentRun, Scene, StoryArtifact
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Typed outputs the room hands back to the graph
@@ -243,63 +248,27 @@ class ContinuityParams(BaseModel):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Graph state, deps, and the one consult helper every step uses
+# What a run carries, and the prompts every step shares
 # ---------------------------------------------------------------------------------------------------------------------
 
-ProgressHook = Callable[[list[dict[str, Any]]], Awaitable[None]]
-
 
 @dataclass
-class WorkflowDeps:
-    """What every step needs: the model, the room context, and where to report progress."""
+class RoomRunInput:
+    """Start a room workflow: which one, its validated parameters, and the room's context and model."""
 
-    model: Any
-    provider: str
-    model_name: str
+    workflow: str
+    params: dict[str, Any]
     room: RoomDeps
-    run_id: int | None = None
-    progress: ProgressHook | None = None
 
 
 @dataclass
-class WorkflowState:
-    """The trail of consultations plus working values a loop carries between rounds."""
+class ProgressUpdate:
+    """The trail so far, for the run's Postgres copy and the live trail in the studio."""
 
-    trail: list[dict[str, Any]] = field(default_factory=list)
-    rounds: int = 0
-    draft: Any = None
-    critique: Critique | None = None
-    context: str = ""
-
-
-if TYPE_CHECKING:
-
-    class Ctx[InputT](Protocol):
-        """Type-checking view of a step context (mypy cannot read pydantic_graph's inferred-variance TypeVars)."""
-
-        @property
-        def state(self) -> "WorkflowState":
-            """Return the shared graph state."""
-            ...
-
-        @property
-        def deps(self) -> "WorkflowDeps":
-            """Return the run's dependencies."""
-            ...
-
-        @property
-        def inputs(self) -> InputT:
-            """Return this step's input."""
-            ...
-
-else:
-
-    class Ctx:
-        """Alias ``Ctx[InputT]`` to ``StepContext[WorkflowState, WorkflowDeps, InputT]`` at runtime."""
-
-        def __class_getitem__(cls, item: object) -> object:
-            """Return the real parametrised step context type."""
-            return StepContext[WorkflowState, WorkflowDeps, item]
+    run_id: int | None
+    project_id: int
+    workflow: str
+    trail: list[dict[str, Any]]
 
 
 STEP_GUIDANCE = (
@@ -313,41 +282,14 @@ SELF_CONTAINED = (
     "Submit your result with the output tool."
 )
 
-
-async def consult[OutputT](
-    ctx: Ctx[Any], step: str, role: str, prompt: str, output_type: type[OutputT], *, tools: bool = True
-) -> OutputT:
-    """Ask one room role for a typed output, record it on the trail, and report progress."""
-    deps = ctx.deps
-    started = monotonic()
-    output: OutputT
-    output, record = await run_role(
-        role_spec(role),
-        deps.model,
-        deps.room,
-        f"{prompt}\n\n{STEP_GUIDANCE if tools else SELF_CONTAINED}",
-        output_type,
-        provider=deps.provider,
-        model_name=deps.model_name,
-        kind="workflow",
-        workflow_run_id=deps.run_id,
-        tools=tools,
-    )
-    ctx.state.trail.append(
-        {
-            "step": step,
-            "role": role,
-            "agent_run_id": record.id,
-            "duration_ms": round((monotonic() - started) * 1000),
-            "output": output.model_dump(mode="json") if isinstance(output, BaseModel) else output,
-        }
-    )
-    if deps.progress is not None:
-        await deps.progress(ctx.state.trail)
-    return output
+# Database steps are quick; a ValueError is the workflow's own "cannot do this" and never retried.
+STEP_ACTIVITY: dict[str, Any] = {
+    "start_to_close_timeout": timedelta(minutes=2),
+    "retry_policy": RetryPolicy(maximum_attempts=3, non_retryable_error_types=["ValueError", "KeyError", "LookupError"]),
+}
 
 
-def _critique_text(critique: Critique) -> str:
+def critique_text(critique: Critique) -> str:
     """Render a critique for the next revision prompt."""
     return (
         f"Score {critique.score}/10.\nProblems:\n- " + "\n- ".join(critique.problems or ["(none)"])
@@ -355,50 +297,13 @@ def _critique_text(critique: Critique) -> str:
     )
 
 
-def _outline_text(outline: Outline) -> str:
+def outline_text(outline: Outline) -> str:
     """Render an outline as numbered beats."""
     beats = "\n".join(f"{index}. [Act {beat.act}] {beat.title}: {beat.summary}" for index, beat in enumerate(outline.beats, 1))
     return f"Logline: {outline.logline}\n{beats}"
 
 
-# ---------------------------------------------------------------------------------------------------------------------
-# Human gates: proposals the writer reviews
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-async def _artifact(session: AsyncSession, project_id: int, kind: str, title: str) -> StoryArtifact:
-    """Return the project's artifact of a kind, creating an empty one to propose into."""
-    for artifact in await artifacts_crud.list_for_project(session, project_id):
-        if artifact.kind == kind:
-            return artifact
-    artifact = StoryArtifact(project_id=project_id, kind=kind, title=title)
-    session.add(artifact)
-    await session.commit()
-    await session.refresh(artifact)
-    return artifact
-
-
-async def _propose_artifact(
-    session: AsyncSession, deps: WorkflowDeps, artifact: StoryArtifact, operation: dict[str, Any], summary: str
-) -> int:
-    """Create a reviewable artifact proposal and return its id."""
-    proposal = await proposals_crud.create(
-        session,
-        AgentProposal(
-            project_id=deps.room.project_id,
-            run_id=deps.run_id,
-            target_kind="artifact",
-            target_id=artifact.id or 0,
-            operation=operation,
-            diff={"summary": summary},
-            before={key: getattr(artifact, key) for key in operation},
-            base_version=artifact.version,
-        ),
-    )
-    return proposal.id or 0
-
-
-def _markdown_outline(outline: Outline) -> str:
+def markdown_outline(outline: Outline) -> str:
     """Render an outline as the markdown an outline artifact holds."""
     lines = [f"**Logline:** {outline.logline}", ""]
     for act in sorted({beat.act for beat in outline.beats}):
@@ -406,301 +311,6 @@ def _markdown_outline(outline: Outline) -> str:
         lines.extend(f"- **{beat.title}** — {beat.summary}" for beat in outline.beats if beat.act == act)
         lines.append("")
     return "\n".join(lines).strip()
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# notes → outline: draft, critique, revise until good enough, then propose
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def _outline_graph() -> Any:
-    """Build the evaluator-optimizer graph that turns notes into a critiqued outline."""
-    g = GraphBuilder(
-        name="notes_to_outline", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=OutlineParams, output_type=dict
-    )
-
-    @g.step
-    async def draft(ctx: Ctx[OutlineParams]) -> OutlineParams:
-        """Have the story editor turn the notes into a first outline."""
-        ctx.state.draft = await consult(
-            ctx,
-            "draft",
-            "story_editor",
-            "Turn the writer's notes into a logline and a causal beat outline for a feature (three acts, "
-            f"roughly 12-24 beats). Keep the writer's intentions; invent only connective tissue.\n\nNotes:\n{ctx.inputs.notes}",
-            Outline,
-            tools=False,
-        )
-        return ctx.inputs
-
-    @g.step
-    async def critique(ctx: Ctx[OutlineParams]) -> OutlineParams:
-        """Have the script doctor grade the current outline."""
-        ctx.state.critique = await consult(
-            ctx,
-            f"critique_{ctx.state.rounds + 1}",
-            "script_doctor",
-            "Grade this outline against the writer's notes: causality, escalation, a clear midpoint and climax, "
-            f"and whether it honours the notes.\n\nNotes:\n{ctx.inputs.notes}\n\nOutline:\n{_outline_text(ctx.state.draft)}",
-            Critique,
-            tools=False,
-        )
-        return ctx.inputs
-
-    @g.step
-    async def revise(ctx: Ctx[OutlineParams]) -> OutlineParams:
-        """Have the story editor revise the outline against the critique."""
-        ctx.state.rounds += 1
-        assert ctx.state.critique is not None
-        ctx.state.draft = await consult(
-            ctx,
-            f"revise_{ctx.state.rounds}",
-            "story_editor",
-            f"Revise this outline to address the critique. Keep what works.\n\nNotes:\n{ctx.inputs.notes}\n\n"
-            f"Outline:\n{_outline_text(ctx.state.draft)}\n\nCritique:\n{_critique_text(ctx.state.critique)}",
-            Outline,
-            tools=False,
-        )
-        return ctx.inputs
-
-    @g.step
-    async def gate(ctx: Ctx[OutlineParams]) -> dict:
-        """Propose the logline into the brief and the beats into the outline for the writer to review."""
-        outline: Outline = ctx.state.draft
-        project_id = ctx.deps.room.project_id
-        async with session_scope() as session:
-            brief = await _artifact(session, project_id, "brief", "Brief")
-            outline_artifact = await _artifact(session, project_id, "outline", "Outline")
-            proposals = [
-                await _propose_artifact(session, ctx.deps, brief, {"content": outline.logline}, "Logline from your notes"),
-                await _propose_artifact(
-                    session,
-                    ctx.deps,
-                    outline_artifact,
-                    {
-                        "content": _markdown_outline(outline),
-                        "artifact_metadata": {
-                            **outline_artifact.artifact_metadata,
-                            "beats": [
-                                {**beat.model_dump(), "sequence": index} for index, beat in enumerate(outline.beats, 1)
-                            ],
-                        },
-                    },
-                    f"{len(outline.beats)}-beat outline",
-                ),
-            ]
-        return {
-            "outline": outline.model_dump(),
-            "critique": ctx.state.critique.model_dump() if ctx.state.critique else None,
-            "rounds": ctx.state.rounds,
-            "proposal_ids": proposals,
-        }
-
-    def good_enough(ctx_inputs: OutlineParams, state: WorkflowState) -> bool:
-        """Return whether the loop should stop: the target is met or the rounds are used up."""
-        assert state.critique is not None
-        return state.critique.score >= ctx_inputs.target_score or state.rounds >= ctx_inputs.max_rounds
-
-    decide = _loop_decision(g, good_enough, gate, revise)
-    g.add(
-        g.edge_from(g.start_node).to(draft),
-        g.edge_from(draft).to(critique),
-        g.edge_from(critique).to(decide),
-        g.edge_from(revise).to(critique),
-        g.edge_from(gate).to(g.end_node),
-    )
-    return g.build()
-
-
-@dataclass
-class _Checked[InputT]:
-    """Carry step inputs plus whether the evaluator-optimizer loop is done."""
-
-    inputs: InputT
-    done: bool
-
-
-def _loop_decision(g: Any, done: Callable[[Any, WorkflowState], bool], finish: Any, again: Any) -> Any:
-    """Build the decision that ends a draft-critique loop or sends it round again."""
-
-    @g.step
-    async def check(ctx: Ctx[Any]) -> _Checked[Any]:
-        """Decide from the latest critique whether another round is needed."""
-        return _Checked(ctx.inputs, done(ctx.inputs, ctx.state))
-
-    @g.step
-    async def unwrap_finish(ctx: Ctx[_Checked[Any]]) -> Any:
-        """Pass the original inputs on to the gate."""
-        return ctx.inputs.inputs
-
-    @g.step
-    async def unwrap_again(ctx: Ctx[_Checked[Any]]) -> Any:
-        """Pass the original inputs on to another revision."""
-        return ctx.inputs.inputs
-
-    g.add(
-        g.edge_from(check).to(
-            g.decision()
-            .branch(g.match(_Checked, matches=lambda item: item.done).label("good enough").to(unwrap_finish))
-            .branch(g.match(_Checked).label("revise").to(unwrap_again))
-        ),
-        g.edge_from(unwrap_finish).to(finish),
-        g.edge_from(unwrap_again).to(again),
-    )
-    return check
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# brainstorm: parallel lenses, then a shortlist
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def _brainstorm_graph() -> Any:
-    """Build the fan-out graph: one brainstormer per lens in parallel, then a ranked shortlist."""
-    g = GraphBuilder(
-        name="brainstorm", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=BrainstormParams, output_type=dict
-    )
-
-    @g.step
-    async def lenses(ctx: Ctx[BrainstormParams]) -> list[str]:
-        """Fan the topic out, one branch per lens."""
-        ctx.state.context = ctx.inputs.topic
-        return ctx.inputs.lenses
-
-    @g.step
-    async def ideate(ctx: Ctx[str]) -> dict[str, Any]:
-        """Have a brainstormer pitch ideas through one lens."""
-        ideas = await consult(
-            ctx,
-            f"ideas: {ctx.inputs}",
-            "brainstormer",
-            f"Brainstorm through the lens '{ctx.inputs}'. Pitch 3 distinct ideas that fit this project.\n\n"
-            f"Question:\n{ctx.state.context}",
-            IdeaSet,
-        )
-        return {"lens": ctx.inputs, "ideas": [idea.model_dump() for idea in ideas.ideas]}
-
-    collect = g.join(reduce_list_append, initial_factory=list[dict[str, Any]])
-
-    @g.step
-    async def shortlist(ctx: Ctx[list[dict[str, Any]]]) -> dict:
-        """Have the story architect rank the room's ideas."""
-        pitches = "\n".join(
-            f"- ({group['lens']}) {idea['title']}: {idea['pitch']}" for group in ctx.inputs for idea in group["ideas"]
-        )
-        picks = await consult(
-            ctx,
-            "shortlist",
-            "story_architect",
-            f"The room pitched these ideas for: {ctx.state.context}\n\n{pitches}\n\n"
-            "Shortlist the best 3 for this project and writer, say why, and synthesise a recommendation.",
-            Shortlist,
-            tools=False,
-        )
-        return {"lenses": ctx.inputs, "shortlist": picks.model_dump()}
-
-    g.add(
-        g.edge_from(g.start_node).to(lenses),
-        g.edge_from(lenses).map().to(ideate),
-        g.edge_from(ideate).to(collect),
-        g.edge_from(collect).to(shortlist),
-        g.edge_from(shortlist).to(g.end_node),
-    )
-    return g.build()
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# character arcs: one specialist per character in parallel, then propose
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-async def lead_characters(session: AsyncSession, project_id: int, top: int) -> list[str]:
-    """Return the Story twin's leads: characters with the most dialogue."""
-    nodes = [node for node in await graph_crud.list_nodes(session, project_id) if node.kind == "character"]
-    nodes.sort(key=lambda node: int(node.node_metadata.get("dialogue_lines") or 0), reverse=True)
-    return [node.label for node in nodes[:top]]
-
-
-def _arcs_graph() -> Any:
-    """Build the fan-out graph that develops each character's arc and proposes them together."""
-    g = GraphBuilder(name="character_arcs", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=ArcParams, output_type=dict)
-
-    @g.step
-    async def cast(ctx: Ctx[ArcParams]) -> list[str]:
-        """Fan out over the named characters, or the Story twin's leads."""
-        if ctx.inputs.characters:
-            return ctx.inputs.characters
-        async with session_scope() as session:
-            leads = await lead_characters(session, ctx.deps.room.project_id, ctx.inputs.top)
-        if not leads:
-            raise ValueError("No characters named and the Story twin has none yet")
-        return leads
-
-    @g.step
-    async def arc(ctx: Ctx[str]) -> dict[str, Any]:
-        """Have the character specialist develop one character's arc from the script."""
-        result = await consult(
-            ctx,
-            f"arc: {ctx.inputs}",
-            "character_specialist",
-            f"Develop {ctx.inputs}'s arc in this project: want, need, flaw, the turning points in order "
-            "(cite scenes), and a short arc summary. Ground it in what the script actually shows.",
-            CharacterArc,
-        )
-        return result.model_dump()
-
-    collect = g.join(reduce_list_append, initial_factory=list[dict[str, Any]])
-
-    @g.step
-    async def gate(ctx: Ctx[list[dict[str, Any]]]) -> dict:
-        """Propose every arc into the characters artifact for the writer to review."""
-        async with session_scope() as session:
-            artifact = await _artifact(session, ctx.deps.room.project_id, "character", "Characters")
-            arcs = [
-                {"character": item["character"], "want": item["want"], "need": item["need"], "turning_points": item["turning_points"]}
-                for item in ctx.inputs
-            ]
-            proposal = await _propose_artifact(
-                session,
-                ctx.deps,
-                artifact,
-                {
-                    "content": "\n\n".join(f"**{item['character']}** — {item['arc_summary']}" for item in ctx.inputs),
-                    "artifact_metadata": {**artifact.artifact_metadata, "character_arcs": arcs},
-                },
-                f"Arcs for {', '.join(item['character'] for item in ctx.inputs)}",
-            )
-        return {"arcs": ctx.inputs, "proposal_ids": [proposal]}
-
-    g.add(
-        g.edge_from(g.start_node).to(cast),
-        g.edge_from(cast).map().to(arc),
-        g.edge_from(arc).to(collect),
-        g.edge_from(collect).to(gate),
-        g.edge_from(gate).to(g.end_node),
-    )
-    return g.build()
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# rewrite a scene: draft, critique, revise, then propose the rewrite
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-async def _project_scene(session: AsyncSession, project_id: int, scene_id: int) -> Scene:
-    """Return a scene of the project's working draft or raise."""
-    screenplay = await working_screenplay(session, project_id)
-    scenes = await scenes_crud.list_for_screenplay(session, screenplay.id or 0) if screenplay else []
-    scene = next((item for item in scenes if item.id == scene_id), None)
-    if scene is None:
-        raise ValueError("Scene is not in the project's working draft")
-    return scene
-
-
-async def scene_fountain(session: AsyncSession, scene: Scene) -> str:
-    """Render one persisted scene as Fountain."""
-    doc = await scene_to_doc(session, scene)
-    return render_fountain(ScreenplayDoc(acts=[ActDoc(scenes=[doc])])).strip()
 
 
 REWRITE_RULES = (
@@ -724,190 +334,7 @@ def rewrite_facts(original: str, rewrite: str) -> str:
     )
 
 
-def _rewrite_graph() -> Any:
-    """Build the evaluator-optimizer graph that rewrites a scene to a brief."""
-    g = GraphBuilder(name="rewrite_scene", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=RewriteParams, output_type=dict)
-
-    @g.step
-    async def load(ctx: Ctx[RewriteParams]) -> RewriteParams:
-        """Load the scene as Fountain."""
-        async with session_scope() as session:
-            scene = await _project_scene(session, ctx.deps.room.project_id, ctx.inputs.scene_id)
-            ctx.state.context = await scene_fountain(session, scene)
-        return ctx.inputs
-
-    @g.step
-    async def draft(ctx: Ctx[RewriteParams]) -> RewriteParams:
-        """Have the scene writer rewrite the scene to the brief."""
-        ctx.state.draft = await consult(
-            ctx,
-            "draft",
-            "scene_writer",
-            f"Rewrite this scene to the brief, in the writer's voice. Return the whole scene in Fountain, "
-            f"heading first. {REWRITE_RULES}\n\nBrief: {ctx.inputs.brief}\n\nCurrent scene:\n{ctx.state.context}",
-            SceneDraft,
-            tools=False,
-        )
-        return ctx.inputs
-
-    @g.step
-    async def critique(ctx: Ctx[RewriteParams]) -> RewriteParams:
-        """Have the script doctor grade the rewrite against the brief."""
-        ctx.state.critique = await consult(
-            ctx,
-            f"critique_{ctx.state.rounds + 1}",
-            "script_doctor",
-            f"Grade this rewrite against the brief and the original. Does it deliver the brief without losing what "
-            f"worked? Score below 8 if it breaks the brief (for example, not shorter when asked) or adds speaking "
-            f"characters the brief did not ask for.\n\nMeasured: {rewrite_facts(ctx.state.context, ctx.state.draft.fountain)}"
-            f"\n\nBrief: {ctx.inputs.brief}\n\nOriginal:\n{ctx.state.context}\n\nRewrite:\n{ctx.state.draft.fountain}",
-            Critique,
-            tools=False,
-        )
-        return ctx.inputs
-
-    @g.step
-    async def revise(ctx: Ctx[RewriteParams]) -> RewriteParams:
-        """Have the scene writer revise against the critique."""
-        ctx.state.rounds += 1
-        assert ctx.state.critique is not None
-        ctx.state.draft = await consult(
-            ctx,
-            f"revise_{ctx.state.rounds}",
-            "scene_writer",
-            f"Revise your rewrite to address the critique. Return the whole scene in Fountain. {REWRITE_RULES}\n\n"
-            f"Measured: {rewrite_facts(ctx.state.context, ctx.state.draft.fountain)}\n\nBrief: {ctx.inputs.brief}\n\n"
-            f"Your rewrite:\n{ctx.state.draft.fountain}\n\nCritique:\n{_critique_text(ctx.state.critique)}",
-            SceneDraft,
-            tools=False,
-        )
-        return ctx.inputs
-
-    @g.step
-    async def gate(ctx: Ctx[RewriteParams]) -> dict:
-        """Propose the rewrite as one reversible scene change."""
-        draft: SceneDraft = ctx.state.draft
-        async with session_scope() as session:
-            scene = await _project_scene(session, ctx.deps.room.project_id, ctx.inputs.scene_id)
-            proposal = await proposals_crud.create(
-                session,
-                AgentProposal(
-                    project_id=ctx.deps.room.project_id,
-                    run_id=ctx.deps.run_id,
-                    target_kind="scene",
-                    target_id=scene.id or 0,
-                    operation=rewrite_operation(parse_scene_fountain(draft.fountain)),
-                    diff={"summary": f"Rewrite: {ctx.inputs.brief[:200]}", "rationale": draft.rationale},
-                    before=await rewrite_snapshot(session, scene),
-                    base_version=scene.version,
-                ),
-            )
-        return {
-            "fountain": draft.fountain,
-            "rationale": draft.rationale,
-            "critique": ctx.state.critique.model_dump() if ctx.state.critique else None,
-            "rounds": ctx.state.rounds,
-            "proposal_ids": [proposal.id],
-        }
-
-    def good_enough(inputs: RewriteParams, state: WorkflowState) -> bool:
-        """Return whether the rewrite loop should stop."""
-        assert state.critique is not None
-        return state.critique.score >= inputs.target_score or state.rounds >= inputs.max_rounds
-
-    decide = _loop_decision(g, good_enough, gate, revise)
-    g.add(
-        g.edge_from(g.start_node).to(load),
-        g.edge_from(load).to(draft),
-        g.edge_from(draft).to(critique),
-        g.edge_from(critique).to(decide),
-        g.edge_from(revise).to(critique),
-        g.edge_from(gate).to(g.end_node),
-    )
-    return g.build()
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# outline → script: draft new scenes from beats in parallel, propose them appended
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def _draft_scenes_graph() -> Any:
-    """Build the fan-out graph that dramatises beats as new scenes and proposes appending them."""
-    g = GraphBuilder(
-        name="draft_scenes", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=DraftScenesParams, output_type=dict
-    )
-
-    @g.step
-    async def beats(ctx: Ctx[DraftScenesParams]) -> list[dict[str, Any]]:
-        """Fan out over the given beats, or the outline artifact's beats."""
-        chosen = [beat.model_dump() for beat in ctx.inputs.beats]
-        if not chosen:
-            async with session_scope() as session:
-                artifacts = await artifacts_crud.list_for_project(session, ctx.deps.room.project_id)
-            outline = next(
-                (item for item in artifacts if item.id == ctx.inputs.outline_artifact_id or (ctx.inputs.outline_artifact_id is None and item.kind == "outline")),
-                None,
-            )
-            chosen = list((outline.artifact_metadata.get("beats") if outline else None) or [])
-        if not chosen:
-            raise ValueError("No beats given and the outline has none yet")
-        return [{"index": index, **beat} for index, beat in enumerate(chosen[: ctx.inputs.limit])]
-
-    @g.step
-    async def write(ctx: Ctx[dict[str, Any]]) -> dict[str, Any]:
-        """Have the scene writer dramatise one beat."""
-        draft = await consult(
-            ctx,
-            f"scene: {ctx.inputs['title']}",
-            "scene_writer",
-            f"Write this beat as one new screenplay scene in Fountain, heading first, in the writer's voice and "
-            f"consistent with the project.\n\nBeat: {ctx.inputs['title']} — {ctx.inputs['summary']}",
-            SceneDraft,
-        )
-        return {"index": ctx.inputs["index"], "title": ctx.inputs["title"], **draft.model_dump()}
-
-    collect = g.join(reduce_list_append, initial_factory=list[dict[str, Any]])
-
-    @g.step
-    async def gate(ctx: Ctx[list[dict[str, Any]]]) -> dict:
-        """Propose every drafted scene, in beat order, appended to the working draft."""
-        drafts = sorted(ctx.inputs, key=lambda item: item["index"])
-        async with session_scope() as session:
-            screenplay = await working_screenplay(session, ctx.deps.room.project_id)
-            if screenplay is None:
-                raise ValueError("The project has no screenplay to draft into")
-            proposal = await proposals_crud.create(
-                session,
-                AgentProposal(
-                    project_id=ctx.deps.room.project_id,
-                    run_id=ctx.deps.run_id,
-                    target_kind="screenplay",
-                    target_id=screenplay.id or 0,
-                    operation=append_operation([parse_scene_fountain(item["fountain"]) for item in drafts]),
-                    diff={"summary": f"{len(drafts)} new scenes: " + "; ".join(item["title"] for item in drafts)},
-                    before={},
-                    base_version=1,
-                ),
-            )
-        return {"scenes": drafts, "proposal_ids": [proposal.id]}
-
-    g.add(
-        g.edge_from(g.start_node).to(beats),
-        g.edge_from(beats).map().to(write),
-        g.edge_from(write).to(collect),
-        g.edge_from(collect).to(gate),
-        g.edge_from(gate).to(g.end_node),
-    )
-    return g.build()
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# audience panel: parallel personas, then a scored summary
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def _scope_text(scene_ids: list[int], focus: str) -> str:
+def scope_text(scene_ids: list[int], focus: str) -> str:
     """Describe which part of the script a read covers."""
     scope = f"Read scenes {scene_ids} (use read_screenplay_scenes with scene_ids)." if scene_ids else "Read the script economically."
     return scope + (f" Focus: {focus}" if focus else "")
@@ -926,99 +353,240 @@ def summarize_panel(reactions: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _panel_graph() -> Any:
-    """Build the fan-out graph that runs one audience evaluator per persona in parallel."""
-    g = GraphBuilder(name="audience_panel", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=PanelParams, output_type=dict)
+# ---------------------------------------------------------------------------------------------------------------------
+# Activities: every database read and write a workflow makes
+# ---------------------------------------------------------------------------------------------------------------------
 
-    @g.step
-    async def personas(ctx: Ctx[PanelParams]) -> list[str]:
-        """Fan out, one branch per persona."""
-        ctx.state.context = _scope_text(ctx.inputs.scene_ids, ctx.inputs.focus)
-        return ctx.inputs.personas
 
-    @g.step
-    async def react(ctx: Ctx[str]) -> dict[str, Any]:
-        """Have an audience evaluator react as one persona."""
-        reaction = await consult(
-            ctx,
-            f"persona: {ctx.inputs}",
-            "audience_evaluator",
-            f"React to this script as this viewer: {ctx.inputs}. Be honest and specific; cite scenes. "
-            f"{ctx.state.context}",
-            Reaction,
-        )
-        return {**reaction.model_dump(), "persona": ctx.inputs}
+async def _artifact(session: AsyncSession, project_id: int, kind: str, title: str) -> StoryArtifact:
+    """Return the project's artifact of a kind, creating an empty one to propose into."""
+    for artifact in await artifacts_crud.list_for_project(session, project_id):
+        if artifact.kind == kind:
+            return artifact
+    artifact = StoryArtifact(project_id=project_id, kind=kind, title=title)
+    session.add(artifact)
+    await session.commit()
+    await session.refresh(artifact)
+    return artifact
 
-    collect = g.join(reduce_list_append, initial_factory=list[dict[str, Any]])
 
-    @g.step
-    async def summarize(ctx: Ctx[list[dict[str, Any]]]) -> dict:
-        """Score the panel."""
-        return {"reactions": ctx.inputs, "summary": summarize_panel(ctx.inputs)}
-
-    g.add(
-        g.edge_from(g.start_node).to(personas),
-        g.edge_from(personas).map().to(react),
-        g.edge_from(react).to(collect),
-        g.edge_from(collect).to(summarize),
-        g.edge_from(summarize).to(g.end_node),
+async def _propose_artifact(
+    session: AsyncSession, project_id: int, run_id: int | None, artifact: StoryArtifact, operation: dict[str, Any], summary: str
+) -> int:
+    """Create a reviewable artifact proposal and return its id."""
+    proposal = await proposals_crud.create(
+        session,
+        AgentProposal(
+            project_id=project_id,
+            run_id=run_id,
+            target_kind="artifact",
+            target_id=artifact.id or 0,
+            operation=operation,
+            diff={"summary": summary},
+            before={key: getattr(artifact, key) for key in operation},
+            base_version=artifact.version,
+        ),
     )
-    return g.build()
+    return proposal.id or 0
 
 
-# ---------------------------------------------------------------------------------------------------------------------
-# coverage and continuity: single-role reports
-# ---------------------------------------------------------------------------------------------------------------------
+async def lead_characters(session: AsyncSession, project_id: int, top: int) -> list[str]:
+    """Return the Story twin's leads: characters with the most dialogue."""
+    nodes = [node for node in await graph_crud.list_nodes(session, project_id) if node.kind == "character"]
+    nodes.sort(key=lambda node: int(node.node_metadata.get("dialogue_lines") or 0), reverse=True)
+    return [node.label for node in nodes[:top]]
 
 
-def _coverage_graph() -> Any:
-    """Build the one-step coverage graph."""
-    g = GraphBuilder(name="coverage", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=CoverageParams, output_type=dict)
+async def _project_scene(session: AsyncSession, project_id: int, scene_id: int) -> Scene:
+    """Return a scene of the project's working draft or raise."""
+    screenplay = await working_screenplay(session, project_id)
+    scenes = await scenes_crud.list_for_screenplay(session, screenplay.id or 0) if screenplay else []
+    scene = next((item for item in scenes if item.id == scene_id), None)
+    if scene is None:
+        raise ValueError("Scene is not in the project's working draft")
+    return scene
 
-    @g.step
-    async def cover(ctx: Ctx[CoverageParams]) -> dict:
-        """Have the coverage reader write coverage."""
-        report = await consult(
-            ctx,
-            "coverage",
-            "coverage_reader",
-            "Write studio coverage of the working draft: logline, synopsis, 1-10 grades for premise, structure, "
-            "character, dialogue and pacing, strengths, weaknesses and a verdict." + (f" Focus: {ctx.inputs.focus}" if ctx.inputs.focus else ""),
-            Coverage,
+
+async def scene_fountain(session: AsyncSession, scene: Scene) -> str:
+    """Render one persisted scene as Fountain."""
+    doc = await scene_to_doc(session, scene)
+    return render_fountain(ScreenplayDoc(acts=[ActDoc(scenes=[doc])])).strip()
+
+
+@activity.defn(name="room_record_progress")
+async def record_progress(update: ProgressUpdate) -> bool:
+    """Persist the trail so far on the run and publish it; return whether the writer cancelled the run."""
+    if update.run_id is None:
+        return False
+    async with session_scope() as session:
+        current = await runs_crud.get(session, update.run_id)
+        if current is None or current.status == "cancelled":
+            return True
+        current.result = {"workflow": update.workflow, "stage": "running", "trail": update.trail}
+        session.add(current)
+        await session.commit()
+    await events.publish(
+        update.project_id, "workflow.progress", {"run_id": update.run_id, "steps": len(update.trail), "last": update.trail[-1]["step"]}
+    )
+    return False
+
+
+@activity.defn(name="room_record_agent_run")
+async def record_agent_run(fields: dict[str, Any]) -> int:
+    """Persist one step's AgentRun and return its id."""
+    from draftpilot.agents.runtime import save_agent_run
+
+    record = await save_agent_run(AgentRun.model_validate(fields))
+    return record.id or 0
+
+
+@activity.defn(name="room_lead_characters")
+async def find_leads(project_id: int, top: int) -> list[str]:
+    """Return the Story twin's leads, failing when there are none to develop."""
+    async with session_scope() as session:
+        leads = await lead_characters(session, project_id, top)
+    if not leads:
+        raise ValueError("No characters named and the Story twin has none yet")
+    return leads
+
+
+@activity.defn(name="room_load_scene")
+async def load_scene(project_id: int, scene_id: int) -> str:
+    """Return one working-draft scene as Fountain."""
+    async with session_scope() as session:
+        scene = await _project_scene(session, project_id, scene_id)
+        return await scene_fountain(session, scene)
+
+
+@activity.defn(name="room_outline_beats")
+async def outline_beats(project_id: int, outline_artifact_id: int | None) -> list[dict[str, Any]]:
+    """Return the beats stored on the project's outline artifact (or the one named)."""
+    async with session_scope() as session:
+        artifacts = await artifacts_crud.list_for_project(session, project_id)
+    outline = next(
+        (item for item in artifacts if item.id == outline_artifact_id or (outline_artifact_id is None and item.kind == "outline")),
+        None,
+    )
+    return list((outline.artifact_metadata.get("beats") if outline else None) or [])
+
+
+@activity.defn(name="room_known_scenes")
+async def known_scene_ids(project_id: int) -> list[int]:
+    """Return the ids of every scene in the project's working draft."""
+    async with session_scope() as session:
+        screenplay = await working_screenplay(session, project_id)
+        scenes = await scenes_crud.list_for_screenplay(session, screenplay.id or 0) if screenplay else []
+    return [scene.id for scene in scenes if scene.id is not None]
+
+
+@activity.defn(name="room_propose_outline")
+async def propose_outline(project_id: int, run_id: int | None, outline: Outline) -> list[int]:
+    """Propose the logline into the brief and the beats into the outline artifact."""
+    async with session_scope() as session:
+        brief = await _artifact(session, project_id, "brief", "Brief")
+        outline_artifact = await _artifact(session, project_id, "outline", "Outline")
+        return [
+            await _propose_artifact(session, project_id, run_id, brief, {"content": outline.logline}, "Logline from your notes"),
+            await _propose_artifact(
+                session,
+                project_id,
+                run_id,
+                outline_artifact,
+                {
+                    "content": markdown_outline(outline),
+                    "artifact_metadata": {
+                        **outline_artifact.artifact_metadata,
+                        "beats": [{**beat.model_dump(), "sequence": index} for index, beat in enumerate(outline.beats, 1)],
+                    },
+                },
+                f"{len(outline.beats)}-beat outline",
+            ),
+        ]
+
+
+@activity.defn(name="room_propose_arcs")
+async def propose_arcs(project_id: int, run_id: int | None, arcs: list[dict[str, Any]]) -> list[int]:
+    """Propose every arc into the characters artifact."""
+    async with session_scope() as session:
+        artifact = await _artifact(session, project_id, "character", "Characters")
+        summary = [
+            {"character": item["character"], "want": item["want"], "need": item["need"], "turning_points": item["turning_points"]}
+            for item in arcs
+        ]
+        proposal = await _propose_artifact(
+            session,
+            project_id,
+            run_id,
+            artifact,
+            {
+                "content": "\n\n".join(f"**{item['character']}** — {item['arc_summary']}" for item in arcs),
+                "artifact_metadata": {**artifact.artifact_metadata, "character_arcs": summary},
+            },
+            f"Arcs for {', '.join(item['character'] for item in arcs)}",
         )
-        return {"coverage": report.model_dump()}
-
-    g.add(g.edge_from(g.start_node).to(cover), g.edge_from(cover).to(g.end_node))
-    return g.build()
+    return [proposal]
 
 
-def _continuity_graph() -> Any:
-    """Build the continuity graph: one pass, then drop issues citing scenes outside the draft."""
-    g = GraphBuilder(name="continuity", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=ContinuityParams, output_type=dict)
-
-    @g.step
-    async def check(ctx: Ctx[ContinuityParams]) -> dict:
-        """Have the continuity supervisor find problems, then keep only issues about real scenes."""
-        report = await consult(
-            ctx,
-            "continuity",
-            "continuity_supervisor",
-            "Find continuity problems (timeline, character, props, locations, established facts). Cite scene ids. "
-            + _scope_text(ctx.inputs.scene_ids, ctx.inputs.focus),
-            ContinuityReport,
+@activity.defn(name="room_propose_rewrite")
+async def propose_rewrite(project_id: int, run_id: int | None, scene_id: int, brief: str, draft: SceneDraft) -> list[int]:
+    """Propose the rewrite as one reversible scene change."""
+    async with session_scope() as session:
+        scene = await _project_scene(session, project_id, scene_id)
+        proposal = await proposals_crud.create(
+            session,
+            AgentProposal(
+                project_id=project_id,
+                run_id=run_id,
+                target_kind="scene",
+                target_id=scene.id or 0,
+                operation=rewrite_operation(parse_scene_fountain(draft.fountain)),
+                diff={"summary": f"Rewrite: {brief[:200]}", "rationale": draft.rationale},
+                before=await rewrite_snapshot(session, scene),
+                base_version=scene.version,
+            ),
         )
-        async with session_scope() as session:
-            screenplay = await working_screenplay(session, ctx.deps.room.project_id)
-            known = {scene.id for scene in await scenes_crud.list_for_screenplay(session, screenplay.id or 0)} if screenplay else set()
-        issues = [issue.model_dump() for issue in report.issues if all(scene_id in known for scene_id in issue.scene_ids)]
-        return {"issues": issues, "dropped": len(report.issues) - len(issues)}
+    return [proposal.id or 0]
 
-    g.add(g.edge_from(g.start_node).to(check), g.edge_from(check).to(g.end_node))
-    return g.build()
+
+@activity.defn(name="room_propose_scenes")
+async def propose_scenes(project_id: int, run_id: int | None, drafts: list[dict[str, Any]]) -> list[int]:
+    """Propose every drafted scene, in beat order, appended to the working draft."""
+    async with session_scope() as session:
+        screenplay = await working_screenplay(session, project_id)
+        if screenplay is None:
+            raise ValueError("The project has no screenplay to draft into")
+        proposal = await proposals_crud.create(
+            session,
+            AgentProposal(
+                project_id=project_id,
+                run_id=run_id,
+                target_kind="screenplay",
+                target_id=screenplay.id or 0,
+                operation=append_operation([parse_scene_fountain(item["fountain"]) for item in drafts]),
+                diff={"summary": f"{len(drafts)} new scenes: " + "; ".join(item["title"] for item in drafts)},
+                before={},
+                base_version=1,
+            ),
+        )
+    return [proposal.id or 0]
+
+
+ROOM_ACTIVITIES: list[Callable[..., Any]] = [
+    record_progress,
+    record_agent_run,
+    find_leads,
+    load_scene,
+    outline_beats,
+    known_scene_ids,
+    propose_outline,
+    propose_arcs,
+    propose_rewrite,
+    propose_scenes,
+]
 
 
 # ---------------------------------------------------------------------------------------------------------------------
-# Catalogue and entry point
+# Catalogue and entry points
 # ---------------------------------------------------------------------------------------------------------------------
 
 
@@ -1032,20 +600,24 @@ class RoomWorkflow:
     params: type[BaseModel]
     roles: tuple[str, ...]
     proposes: bool
-    build: Callable[[], Any]
+
+    @property
+    def type_name(self) -> str:
+        """Return the Temporal workflow type that runs it."""
+        return f"room:{self.key}"
 
 
 ROOM_WORKFLOWS: dict[str, RoomWorkflow] = {
     workflow.key: workflow
     for workflow in (
-        RoomWorkflow("notes_to_outline", "Notes → outline", "Turn your notes into a logline and beat outline, critiqued and revised.", OutlineParams, ("story_editor", "script_doctor"), True, _outline_graph),
-        RoomWorkflow("draft_scenes", "Outline → scenes", "Draft new scenes from outline beats, in parallel.", DraftScenesParams, ("scene_writer",), True, _draft_scenes_graph),
-        RoomWorkflow("rewrite_scene", "Rewrite a scene", "Rewrite one scene to your brief through a draft-critique loop.", RewriteParams, ("scene_writer", "script_doctor"), True, _rewrite_graph),
-        RoomWorkflow("character_arcs", "Character arcs", "Develop want, need, flaw and turning points for your leads.", ArcParams, ("character_specialist",), True, _arcs_graph),
-        RoomWorkflow("brainstorm", "Brainstorm", "Pitch ideas through several lenses in parallel, then shortlist.", BrainstormParams, ("brainstormer", "story_architect"), False, _brainstorm_graph),
-        RoomWorkflow("audience_panel", "Audience panel", "Test the script on a panel of viewer personas.", PanelParams, ("audience_evaluator",), False, _panel_graph),
-        RoomWorkflow("coverage", "Coverage", "Studio-style coverage with graded craft and a verdict.", CoverageParams, ("coverage_reader",), False, _coverage_graph),
-        RoomWorkflow("continuity", "Continuity pass", "Find timeline, character, prop and fact inconsistencies.", ContinuityParams, ("continuity_supervisor",), False, _continuity_graph),
+        RoomWorkflow("notes_to_outline", "Notes → outline", "Turn your notes into a logline and beat outline, critiqued and revised.", OutlineParams, ("story_editor", "script_doctor"), True),
+        RoomWorkflow("draft_scenes", "Outline → scenes", "Draft new scenes from outline beats, in parallel.", DraftScenesParams, ("scene_writer",), True),
+        RoomWorkflow("rewrite_scene", "Rewrite a scene", "Rewrite one scene to your brief through a draft-critique loop.", RewriteParams, ("scene_writer", "script_doctor"), True),
+        RoomWorkflow("character_arcs", "Character arcs", "Develop want, need, flaw and turning points for your leads.", ArcParams, ("character_specialist",), True),
+        RoomWorkflow("brainstorm", "Brainstorm", "Pitch ideas through several lenses in parallel, then shortlist.", BrainstormParams, ("brainstormer", "story_architect"), False),
+        RoomWorkflow("audience_panel", "Audience panel", "Test the script on a panel of viewer personas.", PanelParams, ("audience_evaluator",), False),
+        RoomWorkflow("coverage", "Coverage", "Studio-style coverage with graded craft and a verdict.", CoverageParams, ("coverage_reader",), False),
+        RoomWorkflow("continuity", "Continuity pass", "Find timeline, character, prop and fact inconsistencies.", ContinuityParams, ("continuity_supervisor",), False),
     )
 }
 
@@ -1055,9 +627,76 @@ def validate_params(key: str, params: dict[str, Any]) -> BaseModel:
     return ROOM_WORKFLOWS[key].params.model_validate(params)
 
 
+ProgressHook = Callable[[list[dict[str, Any]]], Awaitable[None]]
+
+
+@dataclass
+class WorkflowDeps:
+    """Run a room workflow outside the worker: a model instance or ref, the room context, and a progress hook."""
+
+    model: Any
+    provider: str
+    model_name: str
+    room: RoomDeps
+    run_id: int | None = None
+    progress: ProgressHook | None = None
+
+
+def _raised(error: BaseException) -> BaseException:
+    """Return the application error a Temporal failure wraps, as the builtin type it was raised as."""
+    from temporalio.exceptions import ApplicationError
+
+    current: BaseException | None = error
+    found: ApplicationError | None = None
+    while current is not None:
+        if isinstance(current, ApplicationError):
+            found = current
+        current = getattr(current, "cause", None) or current.__cause__
+    if found is None:
+        return error
+    kind = {"ValueError": ValueError, "KeyError": KeyError, "RuntimeError": RuntimeError}.get(found.type or "", RuntimeError)
+    return kind(found.message)
+
+
 async def run_room_workflow(key: str, params: dict[str, Any], deps: WorkflowDeps) -> dict[str, Any]:
-    """Run one room workflow to its gate and return its result plus the consultation trail."""
-    workflow = ROOM_WORKFLOWS[key]
-    state = WorkflowState()
-    result = await workflow.build().run(state=state, deps=deps, inputs=validate_params(key, params))
-    return {"workflow": key, "proposes": workflow.proposes, **result, "trail": state.trail}
+    """Run one room workflow to its gate on an embedded Temporal test server (evals, tests and scripts).
+
+    It is the same durable workflow the worker runs, with the same activities. Only the progress
+    activity is replaced, so ``deps.progress`` sees the trail.
+    """
+    from pydantic_ai.durable_exec.temporal import PydanticAIPlugin
+    from temporalio.client import Client, WorkflowFailureError
+    from temporalio.testing import WorkflowEnvironment
+    from temporalio.worker import Worker
+
+    from draftpilot.agents.room_workflows import ROOM_WORKFLOW_CLASSES
+    from draftpilot.agents.runtime import room_agent_activities, run_model
+
+    validate_params(key, params)
+    room = replace(deps.room, model_ref=run_model(deps.model, deps.room), workflow_run_id=deps.run_id)
+
+    @activity.defn(name="room_record_progress")
+    async def report(update: ProgressUpdate) -> bool:
+        """Hand the trail to the caller's hook instead of a run row."""
+        if deps.progress is not None:
+            await deps.progress(update.trail)
+        return False
+
+    activities = [report if item is record_progress else item for item in ROOM_ACTIVITIES] + room_agent_activities()
+    async with await WorkflowEnvironment.start_time_skipping() as env:
+        config = env.client.config()
+        config["plugins"] = [PydanticAIPlugin()]
+        client = Client(**config)
+        queue = f"room-{uuid.uuid4().hex}"
+        async with Worker(client, task_queue=queue, workflows=ROOM_WORKFLOW_CLASSES, activities=activities):
+            try:
+                result: dict[str, Any] = await client.execute_workflow(
+                    ROOM_WORKFLOWS[key].type_name,
+                    RoomRunInput(workflow=key, params=params, room=room),
+                    id=f"room-{key}-{uuid.uuid4().hex}",
+                    task_queue=queue,
+                    result_type=dict,
+                )
+            except WorkflowFailureError as exc:
+                raise _raised(exc) from exc
+    return result

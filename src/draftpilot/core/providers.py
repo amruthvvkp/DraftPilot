@@ -7,6 +7,7 @@ enforce, and ``model="auto"`` resolves to the first model LM Studio reports as l
 """
 
 import ipaddress
+import json
 import socket
 from typing import Any
 from urllib.parse import urlsplit
@@ -182,6 +183,55 @@ def create_chat_model(config: LLMSettings, model_name: str | None = None) -> Any
     )
     profile = _lm_studio_profile(name) if provider_name == "lm_studio" else None
     return OpenAIChatModel(name, provider=provider, profile=profile)
+
+
+def planning_model(provider: str, model_name: str) -> Any:
+    """Build a model that only plans requests (profile, tools, output mode) and never sends one.
+
+    Durable workflows prepare each request in workflow code, where I/O is forbidden, and the
+    activity builds the real model to send it. So this touches no network, DNS or secrets, and
+    uses the same class and profile as ``create_chat_model``.
+    """
+    provider_name = normalize_provider(provider)
+    if provider_name == "anthropic":
+        from pydantic_ai.models.anthropic import AnthropicModel
+        from pydantic_ai.providers.anthropic import AnthropicProvider
+
+        return AnthropicModel(model_name, provider=AnthropicProvider(api_key="planning-only"))
+    if provider_name == "google":
+        from pydantic_ai.models.google import GoogleModel
+        from pydantic_ai.providers.google import GoogleProvider
+
+        return GoogleModel(model_name, provider=GoogleProvider(api_key="planning-only"))
+    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai.providers.openai import OpenAIProvider
+
+    profile = _lm_studio_profile(model_name) if provider_name == "lm_studio" else None
+    return OpenAIChatModel(
+        model_name, provider=OpenAIProvider(base_url="http://planning.invalid/v1", api_key="planning-only"), profile=profile
+    )
+
+
+MODEL_REF_PREFIX = "draftpilot:"
+
+
+def model_ref(source: str, provider: str, model_name: str) -> str:
+    """Encode a resolved model as the id durable agents carry: where its settings live, its provider and its name.
+
+    ``source`` is ``default`` (``settings.llm``) or ``profile:<id>`` (a stored provider profile).
+    """
+    return MODEL_REF_PREFIX + json.dumps([source, provider, model_name], separators=(",", ":"))
+
+
+def parse_model_ref(ref: str) -> tuple[str, str, str] | None:
+    """Decode a model ref into ``(source, provider, model_name)``, or ``None`` if it is not one."""
+    if not ref.startswith(MODEL_REF_PREFIX):
+        return None
+    try:
+        source, provider, model_name = json.loads(ref.removeprefix(MODEL_REF_PREFIX))
+    except (ValueError, TypeError):
+        return None
+    return str(source), str(provider), str(model_name)
 
 
 async def build_chat_model(config: LLMSettings) -> tuple[Any, str]:

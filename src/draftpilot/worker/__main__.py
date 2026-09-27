@@ -10,13 +10,15 @@ from temporalio.worker import Worker
 from draftpilot.core import telemetry, temporal
 from draftpilot.core.config import settings
 from draftpilot.core.db import dispose_engine
-from draftpilot.worker.activities import ACTIVITIES
-from draftpilot.worker.workflows import WORKFLOWS
+from draftpilot.worker.activities import all_activities
+from draftpilot.worker.workflows import all_workflows
 
 
-def build_worker(client: Client) -> Worker:
-    """Build the worker that serves every DraftPilot workflow and activity on the task queue."""
-    return Worker(client, task_queue=settings.temporal.task_queue, workflows=WORKFLOWS, activities=ACTIVITIES)
+def build_worker(client: Client, task_queue: str | None = None) -> Worker:
+    """Build the worker that serves every DraftPilot workflow and activity (the room agents' included)."""
+    return Worker(
+        client, task_queue=task_queue or settings.temporal.task_queue, workflows=all_workflows(), activities=all_activities()
+    )
 
 
 async def main() -> None:

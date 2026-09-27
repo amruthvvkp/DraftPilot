@@ -10,11 +10,7 @@ deterministic metrics even when no model is reachable.
 import httpx
 import logfire
 
-from draftpilot.agents.workflow_runner import (
-    ROOM_WORKFLOW_KIND,
-    WorkflowCancelled,
-    execute_room_workflow,
-)
+from draftpilot.agents.workflow_runner import ROOM_WORKFLOW_KIND
 from draftpilot.core import events, twins
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.cache import cache_set
@@ -197,8 +193,6 @@ async def run_job(run_id: int, attempt: int) -> dict:
             await session.commit()
             await session.refresh(run)
         try:
-            if run.kind == ROOM_WORKFLOW_KIND:
-                return await execute_room_workflow(run)
             if run.kind == "context_generation":
                 return await _execute_context_generation(run)
             if run.kind == "copilot_response":
@@ -208,8 +202,6 @@ async def run_job(run_id: int, attempt: int) -> dict:
             if run.kind == "evaluation":
                 return await evaluate_screenplay(run)
             return await analyze_screenplay(screenplay_id, run.agent_role)
-        except WorkflowCancelled:
-            return {"status": "cancelled"}
         except Exception as exc:
             if attempt < run.max_attempts:
                 async with session_scope() as session:
@@ -221,13 +213,16 @@ async def run_job(run_id: int, attempt: int) -> dict:
             raise
 
 
-async def finish_run(run_id: int, status: str, result: dict | None = None, error: str | None = None) -> None:
-    """Record a run's terminal state unless the run already reached one (cancelled, or set by its job)."""
+async def finish_run(run_id: int, status: str, result: dict | None = None, error: str | None = None) -> str:
+    """Record a run's terminal state unless it already reached one (cancelled, or set by its job); return the final status."""
     async with session_scope() as session:
         run = await workflow_runs_crud.get(session, run_id)
-        if run is None or run.status in {"succeeded", "failed", "cancelled"}:
-            return
+        if run is None:
+            return "not_found"
+        if run.status in {"succeeded", "failed", "cancelled"}:
+            return run.status
         await workflow_runs_crud.update_status(session, run, status, result=result, error=error[:900] if error else None)
+        return status
 
 
 async def _execute_context_generation(run: WorkflowRun) -> dict[str, object]:

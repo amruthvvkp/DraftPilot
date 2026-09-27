@@ -17,7 +17,9 @@ async def temporal_worker(
 ) -> AsyncIterator[tuple[Client, str]]:
     """Yield a Pydantic AI-configured client and the task queue a worker is serving on."""
     async with await WorkflowEnvironment.start_time_skipping() as env:
-        client = Client(**{**env.client.config(), "plugins": [PydanticAIPlugin()]})
+        config = env.client.config()
+        config["plugins"] = [PydanticAIPlugin()]
+        client = Client(**config)
         task_queue = f"test-{uuid.uuid4().hex}"
         async with Worker(client, task_queue=task_queue, workflows=list(workflows), activities=list(activities)):
             yield client, task_queue

@@ -9,6 +9,9 @@ import logfire
 from fastmcp import Context, FastMCP
 from fastmcp.server.auth import AccessToken, TokenVerifier
 from fastmcp.server.dependencies import get_access_token
+from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
+from fastmcp.tools.base import ToolResult
+from mcp_types import CallToolRequestParams
 from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -27,7 +30,11 @@ from draftpilot.api.timeline import (
     rollback_timeline_proposal,
 )
 from draftpilot.core import events, rag_client, telemetry, temporal
-from draftpilot.core.agent_identity import current_internal_agent
+from draftpilot.core.agent_identity import (
+    acting_as,
+    agent_from_meta,
+    current_internal_agent,
+)
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
@@ -111,9 +118,22 @@ class StaticTokenVerifier(TokenVerifier):
         return AccessToken(token=token, client_id=client_id, scopes=["draftpilot"])
 
 
+class InternalAgentIdentity(Middleware):
+    """Bind the in-app agent a tool call's signed ``_meta`` names for that call, and nobody otherwise."""
+
+    async def on_call_tool(
+        self, context: MiddlewareContext[CallToolRequestParams], call_next: CallNext[CallToolRequestParams, ToolResult]
+    ) -> ToolResult:
+        """Verify the call's identity stamp and run the tool under it."""
+        request = context.fastmcp_context.request_context if context.fastmcp_context is not None else None
+        with acting_as(agent_from_meta(request.meta if request is not None else None)):
+            return await call_next(context)
+
+
 mcp = FastMCP(
     f"{settings.metadata.name.title()} MCP Server",
     auth=StaticTokenVerifier(required_scopes=["draftpilot"]),
+    middleware=[InternalAgentIdentity()],
 )
 
 

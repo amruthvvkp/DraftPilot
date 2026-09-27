@@ -370,21 +370,17 @@ def test_params_are_validated_and_the_catalogue_is_complete() -> None:
 def _durable(project: AsyncSession, monkeypatch: pytest.MonkeyPatch, responders: dict[str, Responder]) -> int:
     """Route the worker to the scripted room and persist a queued notes→outline run."""
     from draftpilot.agents import workflow_runner
-    from draftpilot.core.config import LLMSettings
+    from draftpilot.agents.models import register_model
 
     for target in ("draftpilot.worker.functions", "draftpilot.agents.workflow_runner"):
         monkeypatch.setattr(f"{target}.session_scope", _scope_for(project))
+    ref = register_model(_room(responders))
 
-    async def llm(_profile: object) -> LLMSettings:
-        """Enable a provider for the run."""
-        return LLMSettings(enabled=True)
+    async def describe(_profile_id: int | None = None) -> str:
+        """Hand the worker the scripted room instead of resolving a provider."""
+        return ref
 
-    async def build(_config: object) -> tuple[FunctionModel, str]:
-        """Hand the worker the scripted room."""
-        return _room(responders), "scripted"
-
-    monkeypatch.setattr(workflow_runner, "_llm_settings", llm)
-    monkeypatch.setattr(workflow_runner, "build_chat_model", build)
+    monkeypatch.setattr(workflow_runner, "describe_model", describe)
 
     async def create() -> int:
         """Persist the queued run."""
@@ -400,10 +396,10 @@ async def _execute_run(run_id: int) -> Any:
     from _temporal import temporal_worker
 
     from draftpilot.core import temporal
-    from draftpilot.worker.activities import ACTIVITIES
-    from draftpilot.worker.workflows import WORKFLOWS
+    from draftpilot.worker.activities import all_activities
+    from draftpilot.worker.workflows import all_workflows
 
-    async with temporal_worker(WORKFLOWS, ACTIVITIES) as (client, queue):
+    async with temporal_worker(all_workflows(), all_activities()) as (client, queue):
         return await client.execute_workflow(temporal.RUN_WORKFLOW, run_id, id=temporal.run_workflow_id(run_id), task_queue=queue)
 
 

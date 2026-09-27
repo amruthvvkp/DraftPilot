@@ -43,9 +43,10 @@ class _Ledger:
             return {"score": 0.9}
 
         @activity.defn(name="finish_run")
-        async def finish_run(run_id: int, status: str, result: dict[str, Any] | None, error: str | None) -> None:
+        async def finish_run(run_id: int, status: str, result: dict[str, Any] | None, error: str | None) -> str:
             """Record the terminal state."""
             self.finished.append((status, result, error))
+            return status
 
         return [begin_run, run_job, finish_run]
 
