@@ -185,3 +185,125 @@ Each step ends with the suite green, is committed referencing #15, and is pushed
 8. **G7 · Evals and measurement:** `pydantic_evals` suites and baselines on LM Studio, online evals, feedback, usefulness metrics, Langfuse scores, insights UI.
 9. **G8 · Frontend modernisation:** pinned deps, router plus data layer, component library and design tokens, theming, ProseMirror/TipTap editor with smart typing, beat board, story twin views, diff review, room activity, Vitest, e2e against the real backend.
 10. **G9 · Docs and verification:** Zensical user guide (basic and advanced) and developer guide (architecture, standards, API and MCP reference, agents, evals), docs CI, browser smoke test on Big Fish, manual test checklist.
+
+## Plan changes (2026-09-27)
+
+Four changes arrived after G0–G9 had shipped. They were written against the superseded milestone list
+(M0–M11), so each is re-targeted below as a follow-up step on the code that exists. The milestones
+map to steps as follows: M0→G0, M1→G2/G8, M2→G3, M3–M4→G8, M5→G6a, M6→G1/G4, M7→G4/G5,
+M8→G6b, M9→G6c, M10→G7, M11→G9. Every step keeps the suite green, references #15 and is pushed with
+`gh`. After each push, `gh run watch` checks the run (CI exists: `ci.yml`, `docs.yml`).
+
+| Step | Status | From | Scope |
+|---|---|---|---|
+| G10 · SPA hosting | ⏳ planned | change 4 | `app.frontend()`, cache headers, auth scoped to `/api` |
+| G11 · Temporal, Langfuse out | ⏳ planned | change 1 | Durable execution on Temporal; ARQ, `pydantic_graph` workflows and Langfuse removed |
+| G12 · Frontend telemetry | ⏳ planned | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy |
+| G13 · Monty code mode | ⏳ planned | change 2 (M8b) | CodeMode roles, `analyze_script`, continuity rules as code, DynamicWorkflow |
+
+Order: G10 (small and independent), then G11 (the largest; G12's workflow spans and G13's durable
+execution depend on it), then G12 and G13.
+
+### G10 · SPA hosting (change 4)
+
+- FastAPI is already pinned `>=0.141.1`, and `FastAPI.frontend()` is available. In `api/app.py`,
+  replace `_spa_file` and the catch-all route with
+  `app.frontend("/", directory=settings.web.frontend_dist, fallback="index.html", check_dir=settings.web.require_frontend)`,
+  registered after the routers. Keep the existing `WEB__FRONTEND_DIST` name (the plan's `static_dir`)
+  rather than renaming it. Add `WEB__REQUIRE_FRONTEND` (default `false`; `true` in `Dockerfile.ui`).
+- Auth goes on the `/api` router only, never on the app, so the SPA shell and token prompt still load.
+  MCP runs as its own service (:9001) with its own bearer auth. If it is ever mounted at `/mcp`, the
+  auth dependency goes on that mount.
+- Middleware: `Cache-Control: public, max-age=31536000, immutable` for `/assets/*`, and `no-cache`
+  for `index.html`.
+- Tests: `/api/*`, SSE and the telemetry proxy are not shadowed. A deep link with `Accept: text/html`
+  returns `index.html`. A missing asset returns 404, and so does a POST to an unknown path.
+- `Dockerfile.ui` already copies `frontend/dist` (the plan's `web/dist`). Document it in the developer
+  guide (`docs/dev/architecture.md`).
+
+### G11 · Temporal replaces ARQ; Langfuse removed (change 1)
+
+- **Deps:** add `pydantic-ai-slim[temporal]` (`temporalio>=1.27`), remove `arq`, and don't add
+  `langfuse`.
+- **Settings:** add `TEMPORAL__HOST=localhost:7233`, `TEMPORAL__NAMESPACE=default` and
+  `TEMPORAL__TASK_QUEUE=draftpilot`. `core/queue/` becomes `core/temporal.py` (a lazy client getter
+  plus close, wired into the lifespan). Drop the `QUEUE__` group and the
+  `OTEL__LANGFUSE_*` fields; `OTEL__ENABLED` defaults to `false`.
+- **Compose:** drop the six Langfuse containers (langfuse, langfuse-worker, clickhouse, minio, the
+  Langfuse redis and postgres), the `LANGFUSE_*` env and the OTLP basic-auth header. Add a
+  `temporal` service (`temporalio/temporal server start-dev`, SQLite on a volume, UI :8233; check the
+  image and flags locally). Add `grafana/otel-lgtm` under the `observability` profile. Update
+  CLAUDE.md/AGENTS.md (telemetry, queue), `.env.example`, the `run-stack` skill, and
+  `src/draftpilot/worker/CLAUDE.md`. Rebuild the images before `up -d`, because the settings change.
+- **Worker:** `python -m draftpilot.worker` runs a Temporal worker with
+  `plugins=[PydanticAIPlugin(), LogfirePlugin()]`, replacing `worker/settings.py`'s `WorkerSettings`.
+- **Agents** (`agents/runtime.py`): `Agent(name=<role>, capabilities=[TemporalDurability(...)])` for
+  all 13 role specs. Toolsets are fixed when the agent is built, and the internal MCP toolset gets an
+  `id`. Deps (`agents/deps.py`) become serializable: pass ids, and let activities open their own DB
+  sessions.
+- **Workflows:** port the eight `pydantic_graph` workflows in `agents/workflows.py` to
+  `PydanticAIWorkflow` classes that declare `__pydantic_ai_agents__`. Human gates use
+  `@workflow.update`/`@workflow.signal`, progress (the live trail) uses `@workflow.query`, and the
+  audience-panel and brainstorm fan-outs use `asyncio.gather`. Drop `pydantic_graph` from durable
+  orchestration. The non-LLM ARQ jobs become workflows too: PDF import, `reindex_project`/RAG
+  index and delete, `refresh_story_twin` and `purge_rag_project`. `push_langfuse_scores` is deleted.
+- **Chat:** each room thread is a long-running workflow. Tokens stream via `event_stream_topic` +
+  `stream_agent_events` → the Vercel adapter encoder → SSE. Verify that this matches today's
+  `useChat` stream (the old M7, now `agents/chat.py`).
+- **Data:** `WorkflowRun` (and any job rows) become thin read-only copy tables keyed by Temporal
+  workflow id; the retry/resume/cancel logic in `worker/functions.py` goes to Temporal. Metrics,
+  feedback and online-eval results stay in Postgres only (`core/usefulness.py` drops the Langfuse
+  push). This needs a reviewed migration.
+- **Tests:** Tier 0 uses `WorkflowEnvironment.start_time_skipping()`. Replayer tests run over
+  `tests/temporal_histories/` to catch determinism breaks. **SDLC rule:** any workflow edit must pass
+  the replay tests. Add the rule to CLAUDE.md/AGENTS.md when G11 lands. Re-run every room eval
+  suite on LM Studio against `evals/baselines/` (agents and workflows change).
+
+### G12 · Frontend telemetry (change 3)
+
+- `@pydantic/logfire-browser` with `logfire.configure()` (not `configureFrontend`); check it against
+  <https://pydantic.dev/docs/logfire/instrument/typescript/get-started/>. `serviceName`
+  `draftpilot-web`, `serviceVersion` from the build, and the environment and enabled flag from
+  `/api/system/info`. The SDK is not loaded when telemetry is disabled.
+- `traceUrl` `/api/telemetry/v1/traces` (plus metrics) is a same-origin FastAPI proxy. It forwards
+  OTLP to `OTEL__EXPORTER_OTLP_ENDPOINT` (optionally otel-lgtm), applies auth and size/rate limits,
+  and returns a 204 no-op when telemetry is off.
+- Auto-instrumentations on: document load, fetch/XHR with `traceparent` to `/api` and `/mcp`, and
+  user interaction. Also resourceTiming summary, Web Vitals, `rum.session`, errorFingerprinting and
+  a React ErrorBoundary.
+- Manual spans: editor load, autosave, conflicts (409), SSE reconnect, chat time to first token and
+  total, suggestion accept/reject, workflow start and human-gate resolve, command palette, theme
+  switch.
+- Privacy: scrubbing on, URL query and fragment stripped, never script or prompt text (ids and
+  lengths only), replay off, and a "Send diagnostics" toggle in settings.
+- Tests: Vitest with an in-memory span processor (spans present, no text); Playwright checks that a
+  UI action and its `/api` call share a trace id; pytest for the proxy.
+- Because M1–M10 have already shipped, the bootstrap, proxy, ErrorBoundary, Web Vitals and all the
+  manual spans above land together in G12. The old M11 part follows: the docs, plus a "slowest
+  interactions" panel on `/insights`.
+
+### G13 · Monty code mode (change 2, M8b)
+
+- **Deps:** `pydantic-monty>=1,<2` (1.0.0 is installed) and
+  `pydantic-ai-harness[code-mode,dynamic-workflow,temporal]`. Check the `CodeMode` and
+  `DynamicWorkflow` signatures locally. Reconcile with the existing `core/monty.py` sandbox
+  rather than keeping two.
+- **CodeMode** for the Showrunner, Researcher, Continuity Supervisor, Story Editor and Twin Keeper:
+  one snippet over the read-only MCP tools instead of many tool calls. Twin Keeper is currently
+  deterministic extraction (`core/twins.py`), not a role spec, so it needs a spec first.
+- **`analyze_script(code)`** is a read-only sandbox tool, available in-app and via MCP (gated by
+  `MCP__ENABLE_CODE_TOOLS`). It runs over `ScreenplayDoc` and the Story twin, exposed as allow-listed
+  `ClassInstance` host objects. It returns exact stats: dialogue share, pacing curves, and
+  scene/character matrices.
+- **Continuity rules as code** over story facts and timeline events. There are no `StoryFact` or
+  `TimelineEvent` tables; the Story twin lives in the knowledge graph, so the rules run over typed
+  `KnowledgeNode` views, per the G6 decision not to add parallel tables.
+- **DynamicWorkflow** for ad-hoc interactive plans. Inside a durable run it executes inside an
+  activity, never in workflow code.
+- **Guardrails:** no writes (edits still go through `propose_*` → proposals). Limits come from
+  `MONTY__TIMEOUT_S`, `MONTY__MAX_MEMORY_MB` and `MONTY__POOL_SIZE`. Every run gets a Logfire span
+  and an `AgentRun` row.
+- **Tests:** sandbox escape and limit tests, plus known Big Fish stats (Tier 0). A CodeMode vs plain
+  tool-calling eval on LM Studio compares accuracy, tool calls and duration (Tier 2).
+- **Docs:** user guide "Temporal UI & traces" and "Code mode"; developer guide "Durable workflows
+  (Temporal)" (determinism and replay) and "Monty sandbox" (extends `docs/monty.md`).
