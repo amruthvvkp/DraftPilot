@@ -64,6 +64,8 @@ For each workflow, start it, leave the page, come back, and check that the trail
       restores your text exactly.
 - [ ] **Notes → outline:** paste a paragraph of notes. You get a logline and beats with a critique
       score. Approve both proposals, and the Brief and Outline artifacts update.
+- [ ] **Beat board:** the approved outline's beats appear by act. Move one to Act 2, reorder, rewrite a
+      summary and **Save outline**; the Outline artifact's version goes up.
 - [ ] **Outline → scenes** (after the outline): new scenes are proposed. Approve, and they're
       appended to the draft; **Roll back** removes them unless you've edited one.
 - [ ] **Character arcs** with no names: arcs for the leads land in the Characters artifact.

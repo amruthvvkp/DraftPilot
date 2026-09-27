@@ -45,7 +45,7 @@ platform on MCP, hybrid RAG, both twins, the room team, eight room workflows, ev
 measurement). G8 is mostly done: themes, vault lifecycle, streaming room chat, the Story twin page
 and editor fixes. G9 docs are in place. What's left for v1:
 
-- a rich-text editor (TipTap) with smart typing, and a beat board;
+- a rich-text editor (TipTap) with smart typing;
 - a client router and data layer;
 - eval baselines for every suite, plus a second local judge model.
 

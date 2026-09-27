@@ -458,7 +458,7 @@ export function createArtifact(projectId: number, kind: string, title: string, d
   return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts`, { method: 'POST', body: JSON.stringify({ kind, title, depends_on: dependsOn }) })
 }
 
-export function updateArtifact(projectId: number, artifactId: number, version: number, changes: { title?: string; content?: string }): Promise<StoryArtifact> {
+export function updateArtifact(projectId: number, artifactId: number, version: number, changes: { title?: string; content?: string; metadata?: Record<string, unknown> }): Promise<StoryArtifact> {
   return request<StoryArtifact>(`/api/v1/projects/${projectId}/artifacts/${artifactId}`, { method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes) })
 }
 

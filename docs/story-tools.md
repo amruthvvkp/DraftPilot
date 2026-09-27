@@ -39,6 +39,16 @@ timeline and more. Room workflows propose changes to these artifacts. For exampl
 outline** proposes a logline for the Brief and beats for the Outline. When an artifact another one
 depends on changes, the dependent artifact is marked stale.
 
+## Beat board
+
+**Beat board** (in the workspace header) lays the Outline's beats out in three acts:
+
+- move a beat to an earlier or later act with ← and →, and reorder beats within an act with ↑ and ↓;
+- rewrite a beat's title or summary, add beats, or remove them;
+- click **Save outline** to write a new version of the Outline artifact.
+
+**Outline → scenes** drafts from exactly these beats.
+
 ## Creative context
 
 Context workflows generate cited, review-only suggestions: reference scenes, visual language, camera,
