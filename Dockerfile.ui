@@ -26,6 +26,8 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 COPY . /app
 COPY --from=frontend-build /frontend/dist /app/frontend/dist
+# The web process refuses to start without the studio build (compose.dev.yml relaxes this).
+ENV WEB__REQUIRE_FRONTEND=true
 
 # Set INSTALL_DEBUGPY=true (compose.dev.yml does this) to add the debugpy group.
 ARG INSTALL_DEBUGPY=false

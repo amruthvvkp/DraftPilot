@@ -10,8 +10,10 @@ from pathlib import Path
 
 import logfire
 from fastapi import FastAPI, HTTPException, status
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from draftpilot.api import router as api_router
 from draftpilot.core import telemetry
@@ -37,17 +39,38 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await dispose_engine()
 
 
-def _spa_file(dist: Path, path: str) -> Path:
-    """Resolve a request path to a built asset, or to ``index.html`` for client routes."""
-    root = dist.resolve()
-    candidate = (root / path).resolve()
-    if candidate.is_relative_to(root) and candidate.is_file():
-        return candidate
-    return root / "index.html"
+IMMUTABLE = "public, max-age=31536000, immutable"
+
+
+class StaticCacheMiddleware:
+    """Cache hashed Vite assets forever and make browsers revalidate the SPA shell."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        """Wrap the ASGI application."""
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Set ``Cache-Control`` on successful asset and HTML-shell responses."""
+        path = scope.get("path", "")
+        if scope["type"] != "http" or path.startswith("/api/"):
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_cache(message: Message) -> None:
+            """Add the cache header to the response start when it applies."""
+            if message["type"] == "http.response.start" and message["status"] == 200:
+                headers = MutableHeaders(scope=message)
+                if path.startswith("/assets/"):
+                    headers["Cache-Control"] = IMMUTABLE
+                elif headers.get("content-type", "").startswith("text/html"):
+                    headers["Cache-Control"] = "no-cache"
+            await send(message)
+
+        await self.app(scope, receive, send_with_cache)
 
 
 def create_app(frontend_dist: Path | None = None) -> FastAPI:
-    """Build the web application: API routes, health, artwork, and the SPA fallback."""
+    """Build the web application: API routes, health, artwork, and the React studio."""
     dist = frontend_dist if frontend_dist is not None else settings.web.frontend_dist
     telemetry.setup(web=True)
     app = FastAPI(title=settings.web.title, version=settings.metadata.version, lifespan=lifespan)
@@ -63,20 +86,21 @@ def create_app(frontend_dist: Path | None = None) -> FastAPI:
     artwork.mkdir(parents=True, exist_ok=True)
     app.mount("/artwork", StaticFiles(directory=artwork), name="project-artwork")
 
-    if (dist / "index.html").is_file():
-        if (dist / "assets").is_dir():
-            app.mount("/assets", StaticFiles(directory=dist / "assets"), name="frontend-assets")
+    @app.api_route("/api/{path:path}", methods=["GET", "HEAD"], include_in_schema=False)
+    async def api_not_found(path: str) -> None:
+        """Answer unmatched API paths with 404 so the SPA fallback never shadows them."""
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
 
-        @app.get("/{path:path}", include_in_schema=False)
-        async def frontend(path: str) -> FileResponse:
-            """Serve a built file, or the SPA shell for client-side routes."""
-            if path.startswith("api/"):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
-            return FileResponse(_spa_file(dist, path))
+    # FastAPI routes win; the build is checked only when nothing else matched.
+    if settings.web.require_frontend or (dist / "index.html").is_file():
+        app.frontend(
+            "/", directory=dist, fallback="index.html", check_dir=settings.web.require_frontend
+        )
     else:
         logfire.warning(
             "React studio build not found at {dist}; run `npm --prefix frontend run build`",
             dist=str(dist),
         )
+    app.add_middleware(StaticCacheMiddleware)
 
     return app

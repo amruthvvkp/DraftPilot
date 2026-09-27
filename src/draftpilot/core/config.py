@@ -262,6 +262,8 @@ class WebSettings(BaseSettings):
     reload: bool = False
     # Built React studio served by the web process (``npm --prefix frontend run build``).
     frontend_dist: Path = _ROOT / "frontend" / "dist"
+    # Fail at startup when the build is missing (the production image); dev and tests tolerate it.
+    require_frontend: bool = False
 
 
 class Settings(BaseSettings):

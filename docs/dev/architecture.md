@@ -25,6 +25,23 @@ graph LR
 | mcp | `fastmcp run src/draftpilot/mcp/server.py:mcp --transport http` (stdio: `python -m draftpilot.mcp`) | The one tool surface, shared by external agents and the in-app room |
 | rag | `uvicorn draftpilot.rag_service:app` | A replaceable hybrid-retrieval service: pgvector HNSW and tsvector GIN, fused with RRF |
 
+### Serving the studio
+
+The web process serves the React build with FastAPI's `app.frontend("/", fallback="index.html")`.
+Frontend routes have low priority, so every API route, the SSE stream and `/health` match first.
+A browser deep link (`Accept: text/html`) gets `index.html`, while a missing asset, a POST to an
+unknown path, and any unmatched `/api/*` GET return 404. Hashed files under `/assets/` are sent
+with `Cache-Control: immutable`, and the HTML shell with `no-cache`, so a new build takes effect on
+the next load.
+
+Auth is on the `/api/v1` router, not the app, so the shell and its token prompt load without
+credentials. MCP runs as its own service with its own bearer auth.
+
+`Dockerfile.ui` builds `frontend/` in a Node stage and copies `frontend/dist` into the image at
+`WEB__FRONTEND_DIST` (default `/app/frontend/dist`). The image sets `WEB__REQUIRE_FRONTEND=true`,
+so the web process refuses to start without a build. Local runs, tests and `compose.dev.yml` (which
+bind-mounts the host's `frontend/dist`) leave it `false`, and the API serves without a build.
+
 ## Data
 
 The screenplay hierarchy is Project → Screenplay (a draft) → Act → Scene → Block. A block is one typed

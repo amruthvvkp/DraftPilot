@@ -196,7 +196,7 @@ M8→G6b, M9→G6c, M10→G7, M11→G9. Every step keeps the suite green, refere
 
 | Step | Status | From | Scope |
 |---|---|---|---|
-| G10 · SPA hosting | ⏳ planned | change 4 | `app.frontend()`, cache headers, auth scoped to `/api` |
+| G10 · SPA hosting | ✅ done | change 4 | `app.frontend()` replaces the custom fallback; unmatched `/api/*` GETs stay JSON 404s (the frontend fallback would otherwise return the shell to `Accept: text/html`); immutable `/assets/*`, `no-cache` shell; `WEB__REQUIRE_FRONTEND` (true in `Dockerfile.ui`, false in `compose.dev.yml`). Auth was already on the API router only. Verified live on :9000 |
 | G11 · Temporal, Langfuse out | ⏳ planned | change 1 | Durable execution on Temporal; ARQ, `pydantic_graph` workflows and Langfuse removed |
 | G12 · Frontend telemetry | ⏳ planned | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy |
 | G13 · Monty code mode | ⏳ planned | change 2 (M8b) | CodeMode roles, `analyze_script`, continuity rules as code, DynamicWorkflow |

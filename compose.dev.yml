@@ -20,6 +20,8 @@ services:
       - "${DRAFTPILOT_UI_DEBUGPY_PORT:-5678}:5678"
     environment:
       WEB__RELOAD: "true"
+      # The host dist mount may be empty until `npm --prefix frontend run build`.
+      WEB__REQUIRE_FRONTEND: "false"
     command:
       [
         "uv",
