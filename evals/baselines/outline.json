@@ -1,0 +1,29 @@
+{
+  "assertion_rate": 1.0,
+  "cases": 1,
+  "failures": [],
+  "judge": "qwen/qwen3.8-27b",
+  "model": "qwen/qwen3.8-27b",
+  "per_case": {
+    "lighthouse": {
+      "assertions": {
+        "LLMJudge": true,
+        "MentionsAny": true,
+        "OutlineShape": true
+      },
+      "duration_s": 1879.8,
+      "failures": {},
+      "metrics": {
+        "steps": 4
+      },
+      "scores": {
+        "CritiqueImproved": 0.8
+      }
+    }
+  },
+  "recorded_at": "2026-09-27T19:23:48+00:00",
+  "scores": {
+    "CritiqueImproved": 0.8
+  },
+  "suite": "outline"
+}

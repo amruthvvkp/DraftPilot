@@ -47,7 +47,7 @@ and editor fixes. G9 docs are in place. What's left for v1:
 
 - rich-text editing in the page (inline bold and italics, via TipTap); smart typing is done;
 - a client router and data layer;
-- eval baselines for every suite, plus a second local judge model.
+- a second local judge model for the evals (baselines for every suite are recorded).
 
 ## Ground-test screenplay benchmark
 
