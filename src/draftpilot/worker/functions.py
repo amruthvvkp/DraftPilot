@@ -145,6 +145,16 @@ async def refresh_story_twin(ctx: dict, project_id: int) -> dict[str, int]:
         return counts
 
 
+async def purge_rag_project(ctx: dict, project_id: int) -> dict[str, object]:
+    """Remove a deleted project's documents from the RAG service."""
+    url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}"
+    headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.delete(url, headers=headers)
+        response.raise_for_status()
+    return {"project_id": project_id, "purged": True}
+
+
 async def push_langfuse_scores(ctx: dict, scores: list[dict[str, object]]) -> dict[str, int]:
     """Send queued usefulness scores to Langfuse."""
     return {"accepted": await usefulness.push_scores(scores)}

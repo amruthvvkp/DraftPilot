@@ -100,6 +100,13 @@ async def delete_document(project_id: int, source_id: str, authorization: str | 
     await index.delete(project_id, source_id)
 
 
+@app.delete("/projects/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def purge_project(project_id: int, authorization: str | None = Header(default=None)) -> None:
+    """Delete every indexed document of a deleted project."""
+    _authorize(authorization)
+    await index.purge(project_id)
+
+
 @app.post("/projects/{project_id}/search", response_model=SearchResponse)
 async def search_project(
     project_id: int, query: SearchRequest, authorization: str | None = Header(default=None)

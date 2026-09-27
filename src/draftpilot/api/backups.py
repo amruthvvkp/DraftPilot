@@ -215,4 +215,7 @@ async def restore_backup(
     if project.id is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Restored project has no identifier")
     await _enqueue_restored_artifacts(session, project.id)
+    if await projects_crud.get(session, project_id) is None:
+        # A deleted project was recovered: stop offering it under "recently deleted".
+        (Path(settings.backup.root) / f"{filename}.restored").write_text(str(project.id))
     return {"project_id": project.id}

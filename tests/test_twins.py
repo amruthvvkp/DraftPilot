@@ -124,7 +124,7 @@ def test_writer_brief_carries_profile_memories_and_learned_decisions() -> None:
         """Build a profile, memories, and decided proposals, then brief."""
         async with memory_session() as session:
             project_id = await _big_fish(session)
-            session.add(WriterProfile(pen_name="J. A.", style_notes="Lean action, wry dialogue.", preferences={"avoid": ["flashback voice-over"]}))
+            session.add(WriterProfile(pen_name="J. A.", style_notes="Lean action, wry dialogue.", preferences={"avoid": ["flashback voice-over"], "appearance": {"theme": "night"}}))
             session.add(WriterMemory(kind="taboo", text="Never kill the dog.", pinned=True))
             other = Project(title="Another film")
             session.add(other)
@@ -136,6 +136,7 @@ def test_writer_brief_carries_profile_memories_and_learned_decisions() -> None:
             brief = await writer_twin_brief(session, project_id)
             assert "J. A." in brief and "Lean action" in brief and "flashback voice-over" in brief
             assert "Never kill the dog." in brief and "Other project only." not in brief
+            assert "night" not in brief.casefold()
             assert "2 approved, 1 rejected" in brief
 
     run_async(scenario())

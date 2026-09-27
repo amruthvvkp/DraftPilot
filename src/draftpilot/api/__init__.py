@@ -16,6 +16,7 @@ from draftpilot.api.events import router as events_router
 from draftpilot.api.exports import router as exports_router
 from draftpilot.api.insights import router as insights_router
 from draftpilot.api.knowledge_graph import router as knowledge_graph_router
+from draftpilot.api.lifecycle import router as lifecycle_router
 from draftpilot.api.mcp_access import router as mcp_access_router
 from draftpilot.api.mcp_approvals import router as mcp_approvals_router
 from draftpilot.api.monty import router as monty_router
@@ -41,6 +42,7 @@ async def bind_request_client(request: Request) -> None:
 
 # Everything except the auth endpoints requires the configured API token or session.
 protected = APIRouter(dependencies=[Depends(require_api_auth), Depends(bind_request_client)])
+protected.include_router(lifecycle_router)  # before projects_router: /projects/deleted must win over /{project_id}
 protected.include_router(projects_router)
 protected.include_router(runs_router)
 protected.include_router(timeline_router)

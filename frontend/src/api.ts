@@ -628,3 +628,17 @@ export function getInsights(projectId: number): Promise<Insights> {
 export function giveFeedback(projectId: number, target: { workflow_run_id?: number; agent_run_id?: number }, rating: 1 | -1, comment = ''): Promise<unknown> {
   return request<unknown>(`/api/v1/projects/${projectId}/feedback`, { method: 'POST', body: JSON.stringify({ ...target, rating, comment }) })
 }
+
+export type DeletedProject = { project_id: number; title: string; filename: string; deleted_at: string }
+
+export function deleteProject(projectId: number): Promise<{ project_id: number; title: string; backup: string; removed: Record<string, number> }> {
+  return request(`/api/v1/projects/${projectId}`, { method: 'DELETE' })
+}
+
+export function duplicateProject(projectId: number, title?: string): Promise<Project> {
+  return request<Project>(`/api/v1/projects/${projectId}/duplicate`, { method: 'POST', body: JSON.stringify(title ? { title } : {}) })
+}
+
+export function listDeletedProjects(): Promise<DeletedProject[]> {
+  return request<DeletedProject[]>('/api/v1/projects/deleted')
+}

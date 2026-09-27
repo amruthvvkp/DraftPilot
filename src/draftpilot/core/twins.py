@@ -281,6 +281,9 @@ async def learned_decisions(session: AsyncSession, project_id: int | None = None
     return counts
 
 
+UI_PREFERENCES = frozenset({"appearance"})  # studio presentation, not something agents should act on
+
+
 async def writer_twin_brief(session: AsyncSession, project_id: int | None = None, memory_limit: int = 12) -> str:
     """Summarise the Writer twin for agent instructions: identity, style, preferences, memories, learned."""
     profile = await get_writer_profile(session)
@@ -297,7 +300,7 @@ async def writer_twin_brief(session: AsyncSession, project_id: int | None = None
     if profile.style_notes:
         lines.append(f"Their style: {profile.style_notes}")
     for key, value in profile.preferences.items():
-        if value:
+        if value and key not in UI_PREFERENCES:
             lines.append(f"{key.replace('_', ' ').capitalize()}: {', '.join(value) if isinstance(value, list) else value}")
     if memories:
         lines.append("Remember: " + " | ".join(f"[{memory.kind}] {memory.text}" for memory in memories))

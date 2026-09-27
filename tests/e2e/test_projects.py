@@ -151,3 +151,64 @@ def test_wizard_ai_assist_populates_story_structure(page: Page) -> None:
     expect(page.get_by_label("Logline")).to_have_value("A solitary keeper intercepts future broadcasts.")
     expect(page.get_by_role("button", name="Sci-Fi", exact=True)).to_have_class("choice on")
 
+
+
+def test_vault_duplicates_deletes_with_confirmation_and_restores(page: Page) -> None:
+    """Duplicate from the card menu; delete only after typing the title; restore from Recently deleted."""
+    projects = [{"id": 11, "title": "Big Fish", "logline": "Tall tales.", "description": "", "genres": [], "languages": ["English"], "artwork_url": None}]
+    deleted: list[dict[str, object]] = []
+    calls: list[str] = []
+
+    def listing(route: Route) -> None:
+        """Serve the current project list."""
+        route.fulfill(status=200, content_type="application/json", body=json.dumps(projects))
+
+    def duplicate(route: Route) -> None:
+        """Copy the project."""
+        calls.append("duplicate")
+        copy = {**projects[0], "id": 12, "title": "Big Fish (copy)"}
+        projects.append(copy)
+        route.fulfill(status=201, content_type="application/json", body=json.dumps(copy))
+
+    def remove(route: Route) -> None:
+        """Delete the copy, keeping a backup."""
+        calls.append(f"{route.request.method} {route.request.url.rsplit('/', 1)[-1]}")
+        projects.pop()
+        deleted.append({"project_id": 12, "title": "Big Fish (copy)", "filename": "Big-Fish-copy-deleted-12.json.gz", "deleted_at": "2026-09-27T12:00:00+00:00"})
+        route.fulfill(status=200, content_type="application/json", body=json.dumps({"project_id": 12, "title": "Big Fish (copy)", "backup": "x", "removed": {}}))
+
+    def restore(route: Route) -> None:
+        """Restore the deleted copy."""
+        calls.append("restore")
+        deleted.clear()
+        projects.append({**projects[0], "id": 13, "title": "Big Fish (copy)"})
+        route.fulfill(status=201, content_type="application/json", body=json.dumps({"project_id": 13}))
+
+    page.route("**/api/v1/projects", listing)
+    page.route("**/api/v1/projects/deleted", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(deleted)))
+    page.route("**/api/v1/projects/11/duplicate", duplicate)
+    page.route("**/api/v1/projects/12", remove)
+    page.route("**/api/v1/projects/12/backups/*/restore", restore)
+    page.route("**/api/v1/writer/profile", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"name": "", "pen_name": "", "preferences": {}})))
+
+    page.goto("/projects")
+    page.get_by_role("button", name="Actions for Big Fish").click()
+    page.get_by_role("menuitem", name="Duplicate").click()
+    expect(page.get_by_text("Duplicated as “Big Fish (copy)”.")).to_be_visible()
+
+    page.get_by_role("button", name="Actions for Big Fish (copy)").click()
+    page.get_by_role("menuitem", name="Delete…").click()
+    dialog = page.get_by_role("dialog", name="Delete Big Fish (copy)")
+    confirm = dialog.get_by_role("button", name="Delete project")
+    expect(confirm).to_be_disabled()
+    dialog.get_by_label("Project title to confirm").fill("Big Fish")
+    expect(confirm).to_be_disabled()
+    dialog.get_by_label("Project title to confirm").fill("Big Fish (copy)")
+    confirm.click()
+    expect(page.get_by_text("A backup was kept")).to_be_visible()
+    recovery = page.get_by_role("region", name="Recently deleted")
+    expect(recovery.get_by_text("Big Fish (copy)")).to_be_visible()
+    recovery.get_by_role("button", name="Restore").click()
+    expect(page.get_by_text("Restored “Big Fish (copy)”.")).to_be_visible()
+    expect(page.get_by_role("region", name="Recently deleted")).to_have_count(0)
+    assert calls == ["duplicate", "DELETE 12", "restore"]

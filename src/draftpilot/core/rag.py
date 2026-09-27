@@ -210,6 +210,9 @@ class HybridIndex(Protocol):
     async def delete(self, project_id: int, source_id: str) -> None:
         """Remove a document's chunks."""
 
+    async def purge(self, project_id: int) -> None:
+        """Remove every chunk of a project."""
+
     async def search(self, project_id: int, query: str, limit: int = 8) -> list[RetrievalResult]:
         """Return fused hybrid results from one project."""
 
@@ -321,6 +324,12 @@ class SQLiteHybridIndex:
         """Remove a document's chunks."""
         with self._connect() as connection:
             self._delete(connection, project_id, source_id)
+
+    async def purge(self, project_id: int) -> None:
+        """Remove every chunk of a project."""
+        with self._connect() as connection:
+            connection.execute("DELETE FROM rag_chunk WHERE project_id = ?", (project_id,))
+            connection.execute("DELETE FROM rag_chunk_fts WHERE project_id = ?", (project_id,))
 
     async def search(self, project_id: int, query: str, limit: int = 8) -> list[RetrievalResult]:
         """Fuse the FTS5 BM25 ranking with the cosine ranking over this project's chunks."""
@@ -474,6 +483,12 @@ class PostgresHybridIndex:
         pool = await self._connection_pool()
         async with pool.acquire() as connection:
             await connection.execute(f"DELETE FROM {self.schema}.chunk WHERE project_id = $1 AND source_id = $2", project_id, source_id)
+
+    async def purge(self, project_id: int) -> None:
+        """Remove every chunk of a project."""
+        pool = await self._connection_pool()
+        async with pool.acquire() as connection:
+            await connection.execute(f"DELETE FROM {self.schema}.chunk WHERE project_id = $1", project_id)
 
     async def search(self, project_id: int, query: str, limit: int = 8) -> list[RetrievalResult]:
         """Fuse a full-text ranking (ts_rank_cd) with an HNSW cosine ranking, both project-scoped."""

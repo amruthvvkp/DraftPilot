@@ -14,6 +14,7 @@ from draftpilot.worker.functions import (
     delete_rag_document,
     execute_workflow,
     index_rag_document,
+    purge_rag_project,
     push_langfuse_scores,
     refresh_story_twin,
     reindex_project,
@@ -47,7 +48,7 @@ async def shutdown(ctx: dict) -> None:
 class WorkerSettings:
     """ARQ worker configuration: tasks, Redis target, and lifecycle hooks."""
 
-    functions: ClassVar[list[Any]] = [analyze_screenplay, delete_rag_document, execute_workflow, index_rag_document, push_langfuse_scores, refresh_story_twin, reindex_project]
+    functions: ClassVar[list[Any]] = [analyze_screenplay, delete_rag_document, execute_workflow, index_rag_document, purge_rag_project, push_langfuse_scores, refresh_story_twin, reindex_project]
     redis_settings = redis_settings()
     on_startup = startup
     on_shutdown = shutdown
