@@ -197,7 +197,7 @@ M8→G6b, M9→G6c, M10→G7, M11→G9. Every step keeps the suite green, refere
 | Step | Status | From | Scope |
 |---|---|---|---|
 | G10 · SPA hosting | ✅ done | change 4 | `app.frontend()` replaces the custom fallback; unmatched `/api/*` GETs stay JSON 404s (the frontend fallback would otherwise return the shell to `Accept: text/html`); immutable `/assets/*`, `no-cache` shell; `WEB__REQUIRE_FRONTEND` (true in `Dockerfile.ui`, false in `compose.dev.yml`). Auth was already on the API router only. Verified live on :9000 |
-| G11 · Temporal, Langfuse out | ⏳ planned | change 1 | Durable execution on Temporal; ARQ, `pydantic_graph` workflows and Langfuse removed |
+| G11 · Temporal, Langfuse out | 🚧 in progress (#32) | change 1 | Durable execution on Temporal; ARQ, `pydantic_graph` workflows and Langfuse removed |
 | G12 · Frontend telemetry | ⏳ planned | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy |
 | G13 · Monty code mode | ⏳ planned | change 2 (M8b) | CodeMode roles, `analyze_script`, continuity rules as code, DynamicWorkflow |
 
@@ -258,6 +258,44 @@ execution depend on it), then G12 and G13.
   `tests/temporal_histories/` to catch determinism breaks. **SDLC rule:** any workflow edit must pass
   the replay tests. Add the rule to CLAUDE.md/AGENTS.md when G11 lands. Re-run every room eval
   suite on LM Studio against `evals/baselines/` (agents and workflows change).
+
+#### G11 implementation design (#32)
+
+Decisions made against pydantic-ai 2.51 / temporalio 1.33, landed as G11a–G11e (each keeps the suite green):
+
+- **G11a · Infra.** `core/temporal.py`: a lazy `Client` with `PydanticAIPlugin`, plus
+  `start_job(name, *args, id=...)`, `start_best_effort(...)` (the old `enqueue_best_effort`) and
+  `start_run(run_id)`. Workflow types are started by name, so call sites barely change. Compose:
+  Temporal dev server and `otel-lgtm` (`observability` profile); the six Langfuse containers go.
+- **G11b · Worker and jobs.** `python -m draftpilot.worker` runs one Temporal worker. The RAG index,
+  delete, reindex and purge jobs, the Story-twin refresh and screenplay analysis become one-activity
+  workflows. `execute_workflow` becomes `WorkflowRunWorkflow`: copilot, context and evaluation runs
+  execute as an activity whose `RetryPolicy` takes the run's `max_attempts`. `WorkflowRun` gains
+  `temporal_workflow_id`. Cancelling a run cancels the workflow as well. The startup requeue and
+  `_retry_or_fail` are deleted, because retrying and resuming are now Temporal's job.
+- **G11c · Durable room.** There is one module-level `Agent` per role (13) with
+  `TemporalDurability`, plus a `ResolveModelId` capability. It resolves the model ref carried on
+  `RoomDeps` (`default` or `profile:<id>`) to a model on the worker, so the provider profile and
+  LM Studio `auto` still resolve per run. The MCP toolset (`id="draftpilot"`) is fixed and filtered
+  per run from `deps.permission_mode`/`deps.tools`. The worker shares toolset sessions across runs,
+  so the internal-agent identity can no longer travel in a contextvar. `process_tool_call` sends it
+  as HMAC-signed request `_meta` instead. The MCP server verifies the signature and binds
+  `acting_as` for that call only. External clients cannot forge it, and project isolation holds
+  under concurrency. `RunMeter.finish` becomes an activity, and model and provider are read from the
+  response. The eight room workflows become `@workflow.defn` classes. Loops are plain Python, fan-outs
+  use `asyncio.gather`, the trail is exposed as `@workflow.query` `progress` and mirrored to the
+  `WorkflowRun` copy by an activity, and the reasoning-runaway fallback is kept. **Gate:** workflows
+  still end by creating proposals, and the writer decides them through the proposals API. Proposals
+  are already durable in Postgres, so a workflow parked on a signal for days would duplicate that
+  state.
+- **G11d · Chat.** Each chat turn is a short `RoomChatWorkflow` started by the API. The API relays
+  `stream_agent_events` through `VercelAIAdapter`'s encoder as the same SSE `useChat` consumes
+  today. It is per turn rather than one long workflow per thread, because `useChat` resends the
+  history each turn and the transcript table already persists it.
+- **G11e · Tests and rules.** Tier 0 uses `WorkflowEnvironment.start_time_skipping()` with
+  `TestModel`/`FunctionModel`. Recorded histories live in `tests/temporal_histories/`, and a
+  `Replayer` test replays them. The replay rule goes into CLAUDE.md/AGENTS.md. Room evals are re-run
+  on LM Studio against the baselines.
 
 ### G12 · Frontend telemetry (change 3)
 
