@@ -126,6 +126,14 @@ from draftpilot.models.workflow_run import (
     WorkflowRunCreate,
     WorkflowRunRead,
 )
+from draftpilot.models.writer import (
+    WriterMemory,
+    WriterMemoryBase,
+    WriterMemoryRead,
+    WriterProfile,
+    WriterProfileBase,
+    WriterProfileRead,
+)
 
 __all__ = [
     "Act",
@@ -216,5 +224,11 @@ __all__ = [
     "WorkflowRunBase",
     "WorkflowRunCreate",
     "WorkflowRunRead",
+    "WriterMemory",
+    "WriterMemoryBase",
+    "WriterMemoryRead",
+    "WriterProfile",
+    "WriterProfileBase",
+    "WriterProfileRead",
     "validate_language_separation",
 ]

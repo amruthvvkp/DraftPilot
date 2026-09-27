@@ -502,6 +502,29 @@ export function updateProviderProfile(profileId: number, payload: { provider?: s
   return request<ProviderProfile>(`/api/v1/settings/providers/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
+export type WriterProfile = { name: string; pen_name: string; bio: string; default_format: string; default_language: string; style_notes: string; preferences: Record<string, unknown>; updated_at?: string | null }
+export type WriterMemory = { id: number; kind: string; text: string; source: string; pinned: boolean; project_id: number | null; created_at: string }
+
+export function getWriterProfile(): Promise<WriterProfile> {
+  return request<WriterProfile>('/api/v1/writer/profile')
+}
+
+export function saveWriterProfile(profile: WriterProfile): Promise<WriterProfile> {
+  return request<WriterProfile>('/api/v1/writer/profile', { method: 'PUT', body: JSON.stringify(profile) })
+}
+
+export function listWriterMemories(projectId?: number): Promise<WriterMemory[]> {
+  return request<WriterMemory[]>(`/api/v1/writer/memories${projectId ? `?project_id=${projectId}` : ''}`)
+}
+
+export function addWriterMemory(memory: { kind: string; text: string; pinned?: boolean; project_id?: number | null }): Promise<WriterMemory> {
+  return request<WriterMemory>('/api/v1/writer/memories', { method: 'POST', body: JSON.stringify({ source: 'writer', pinned: false, ...memory }) })
+}
+
+export function forgetWriterMemory(memoryId: number): Promise<void> {
+  return request<void>(`/api/v1/writer/memories/${memoryId}`, { method: 'DELETE' })
+}
+
 export type ModelOption = { id: string; loaded: boolean; kind: string }
 
 export function listDefaultModels(): Promise<ModelOption[]> {

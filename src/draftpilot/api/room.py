@@ -6,6 +6,7 @@ from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.agents.chat import stream_room_chat
+from draftpilot.agents.context import load_room_context
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.specs import role_spec
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
@@ -59,6 +60,7 @@ async def room_chat(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Model provider unavailable: {exc}"
         ) from exc
+    context = await load_room_context(session, project_id)
     deps = RoomDeps(
         project_id=project_id,
         page=page,
@@ -66,7 +68,9 @@ async def room_chat(
         selection=selection,
         scene_id=scene_id,
         permission_mode=normalize_permission_mode(permission_mode),
-        project_instruction=project.project_instruction,
+        project_instruction=context.project_instruction,
+        writer_brief=context.writer_brief,
+        story_brief=context.story_brief,
     )
     await session.close()
     return await stream_room_chat(

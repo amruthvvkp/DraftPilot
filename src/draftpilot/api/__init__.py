@@ -24,6 +24,8 @@ from draftpilot.api.retrieval import router as retrieval_router
 from draftpilot.api.room import router as room_router
 from draftpilot.api.runs import router as runs_router
 from draftpilot.api.timeline import router as timeline_router
+from draftpilot.api.twins import project_router as twin_router
+from draftpilot.api.twins import writer_router
 from draftpilot.core import events
 
 router = APIRouter(prefix="/api/v1")
@@ -58,6 +60,8 @@ protected.include_router(mcp_approvals_router)
 protected.include_router(events_router)
 protected.include_router(room_router)
 protected.include_router(retrieval_router)
+protected.include_router(twin_router)
+protected.include_router(writer_router)
 router.include_router(protected)
 
 __all__ = ["router"]

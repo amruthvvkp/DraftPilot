@@ -10,7 +10,7 @@ deterministic metrics even when no model is reachable.
 import httpx
 import logfire
 
-from draftpilot.core import events
+from draftpilot.core import events, twins
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
@@ -126,7 +126,18 @@ async def reindex_project(ctx: dict, project_id: int) -> dict[str, object]:
                     failures += 1
                     logfire.warning("Reindex skipped {source}: {exc}", source=document["source_id"], exc=str(exc))
         await events.publish(project_id, "rag.reindexed", {"documents": len(documents), "chunks": chunks, "failures": failures})
+        async with session_scope() as session:
+            await twins.refresh_story_twin(session, project_id)
         return {"documents": len(documents), "chunks": chunks, "failures": failures}
+
+
+async def refresh_story_twin(ctx: dict, project_id: int) -> dict[str, int]:
+    """Run the Twin Keeper: re-derive characters and locations from the working draft."""
+    with logfire.span("refresh_story_twin", project_id=project_id):
+        async with session_scope() as session:
+            counts = await twins.refresh_story_twin(session, project_id)
+        await events.publish(project_id, "twin.changed", counts)
+        return counts
 
 
 async def delete_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:

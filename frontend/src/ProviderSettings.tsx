@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react'
-import { createProviderProfile, listDefaultModels, listProfileModels, listProviderProfiles, ModelOption, ProviderProfile, testProviderProfile, updateProviderProfile } from './api'
+import { addWriterMemory, createProviderProfile, forgetWriterMemory, getWriterProfile, listDefaultModels, listProfileModels, listProviderProfiles, listWriterMemories, ModelOption, ProviderProfile, saveWriterProfile, testProviderProfile, updateProviderProfile, WriterMemory, WriterProfile } from './api'
 import CopilotPanel from './CopilotPanel'
 import './provider-settings.css'
 
@@ -49,25 +49,42 @@ export default function ProviderSettings() {
     finally { setTesting(null) }
   }
 
-  const [writerProfile, setWriterProfile] = useState<{ name: string; pen_name: string; default_format: string; default_language: string; bio: string }>(() => {
-    try {
-      const saved = localStorage.getItem('draftpilot_writer_profile')
-      return saved ? JSON.parse(saved) : { name: 'Screenwriter', pen_name: '', default_format: 'feature', default_language: 'English', bio: '' }
-    } catch {
-      return { name: 'Screenwriter', pen_name: '', default_format: 'feature', default_language: 'English', bio: '' }
-    }
-  })
+  const emptyProfile: WriterProfile = { name: '', pen_name: '', bio: '', default_format: 'feature', default_language: 'English', style_notes: '', preferences: {} }
+  const [writerProfile, setWriterProfile] = useState<WriterProfile>(emptyProfile)
   const [profileSaved, setProfileSaved] = useState(false)
+  const [memories, setMemories] = useState<WriterMemory[]>([])
+  const [memoryDraft, setMemoryDraft] = useState({ kind: 'preference', text: '' })
 
-  function saveProfile(event: FormEvent): void {
+  useEffect(() => {
+    getWriterProfile().then(setWriterProfile).catch(() => undefined)
+    listWriterMemories().then(setMemories).catch(() => undefined)
+  }, [])
+
+  async function saveProfile(event: FormEvent): Promise<void> {
     event.preventDefault()
     try {
-      localStorage.setItem('draftpilot_writer_profile', JSON.stringify(writerProfile))
+      setWriterProfile(await saveWriterProfile(writerProfile))
       setProfileSaved(true)
       setTimeout(() => setProfileSaved(false), 3000)
-    } catch {
-      setError('Unable to save writer profile to local storage')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save writer profile')
     }
+  }
+
+  async function remember(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    if (!memoryDraft.text.trim()) return
+    try {
+      const memory = await addWriterMemory({ kind: memoryDraft.kind, text: memoryDraft.text.trim() })
+      setMemories(current => [memory, ...current])
+      setMemoryDraft(current => ({ ...current, text: '' }))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to save memory')
+    }
+  }
+
+  async function forget(memoryId: number): Promise<void> {
+    try { await forgetWriterMemory(memoryId); setMemories(current => current.filter(item => item.id !== memoryId)) } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to forget memory') }
   }
 
   return <div className="settings-shell">
@@ -83,7 +100,8 @@ export default function ProviderSettings() {
       </div>
       <section className="settings-card writer-profile-card" aria-label="Writer Profile">
         <p className="eyebrow warm">WRITER PROFILE & PREFERENCES</p>
-        <form onSubmit={saveProfile}>
+        <p className="helper">The writers' room reads this before every task: who you are, how you write, and what to avoid.</p>
+        <form onSubmit={event => void saveProfile(event)}>
           <div className="two-up">
             <label>Full name
               <input
@@ -131,11 +149,32 @@ export default function ProviderSettings() {
               rows={3}
             />
           </label>
+          <label>Your style
+            <textarea
+              aria-label="Writer style notes"
+              value={writerProfile.style_notes}
+              onChange={event => setWriterProfile(p => ({ ...p, style_notes: event.target.value }))}
+              placeholder="Voice, rhythm, dialogue habits, what you are going for — e.g. lean present-tense action, wry understatement, no speeches."
+              rows={3}
+            />
+          </label>
           <div>
             <button className="button primary" type="submit">Save writer profile</button>
-            {profileSaved && <span className="profile-saved-notice">Profile saved locally.</span>}
+            {profileSaved && <span className="profile-saved-notice">Writer profile saved.</span>}
           </div>
         </form>
+      </section>
+      <section className="settings-card writer-memory-card" aria-label="Writer memories">
+        <p className="eyebrow warm">WHAT THE ROOM REMEMBERS / {memories.length}</p>
+        <form className="memory-form" onSubmit={event => void remember(event)}>
+          <select aria-label="Memory kind" value={memoryDraft.kind} onChange={event => setMemoryDraft(current => ({ ...current, kind: event.target.value }))}>
+            <option value="preference">Preference</option><option value="style">Style</option><option value="taboo">Never do</option><option value="fact">Fact</option>
+          </select>
+          <input aria-label="New memory" value={memoryDraft.text} onChange={event => setMemoryDraft(current => ({ ...current, text: event.target.value }))} placeholder="e.g. Never kill the dog." />
+          <button className="button primary" type="submit">Remember</button>
+        </form>
+        {memories.length === 0 && <p className="settings-empty">Nothing yet. Add preferences the room should always respect.</p>}
+        <ul className="memory-list">{memories.map(memory => <li key={memory.id}><span className={`memory-kind ${memory.kind}`}>{memory.kind}</span><span>{memory.text}</span><small>{memory.source}{memory.project_id ? ' · this project' : ''}</small><button className="mini-button" aria-label={`Forget ${memory.text}`} onClick={() => void forget(memory.id)}>Forget</button></li>)}</ul>
       </section>
     </main><aside className="settings-copilot"><CopilotPanel page="/settings" artifact="provider_settings" /></aside>
   </div>

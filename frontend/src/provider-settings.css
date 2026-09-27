@@ -9,3 +9,8 @@
 .model-list li.loaded{background:#fdf1df;border:1px solid #e0a458}
 .model-list small{color:#6b6b6b}
 .settings-error{color:#b3261e}
+.memory-form{display:grid;grid-template-columns:auto 1fr auto;gap:8px;margin:8px 0 12px}
+.memory-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.memory-list li{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;background:#f6f5f2}
+.memory-kind{font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px;background:#fdf1df;color:#8a5a14}
+.memory-kind.taboo{background:#fbe4e2;color:#9b2c24}

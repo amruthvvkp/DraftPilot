@@ -43,10 +43,13 @@ async def close_arq_pool() -> None:
         _pool = None
 
 
-async def enqueue_best_effort(function: str, *args: Any, description: str) -> bool:
-    """Enqueue an optional background job, logging instead of failing when the queue is down."""
+async def enqueue_best_effort(function: str, *args: Any, description: str, **job_options: Any) -> bool:
+    """Enqueue an optional background job, logging instead of failing when the queue is down.
+
+    ``job_options`` pass through to ARQ (e.g. ``_job_id`` to collapse duplicates, ``_defer_by``).
+    """
     try:
-        await (await get_arq_pool()).enqueue_job(function, *args)
+        await (await get_arq_pool()).enqueue_job(function, *args, **job_options)
     except Exception as exc:  # noqa: BLE001 - queue availability varies by deployment
         logfire.warning(description + " skipped: {exc}", exc=str(exc))
         return False

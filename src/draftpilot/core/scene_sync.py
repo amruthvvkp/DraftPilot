@@ -35,3 +35,15 @@ async def scene_changed(session: AsyncSession, project_id: int, scene: SceneLike
     await events.publish(
         project_id, "scene.changed", {"scene_id": scene.id, "version": scene.version, "reason": reason}
     )
+    await request_twin_refresh(project_id)
+
+
+async def request_twin_refresh(project_id: int) -> None:
+    """Ask the Twin Keeper to re-derive the Story twin; bursts of edits collapse into one run."""
+    await enqueue_best_effort(
+        "refresh_story_twin",
+        project_id,
+        description="Story twin refresh enqueue",
+        _job_id=f"story-twin:{project_id}",
+        _defer_by=5,
+    )

@@ -10,11 +10,13 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 
+from draftpilot.agents.context import load_room_context
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.runtime import run_room_agent
 from draftpilot.agents.specs import role_spec
 from draftpilot.core.agent_roles import AgentRoleKey
 from draftpilot.core.config import LLMSettings, settings
+from draftpilot.core.db import session_scope
 from draftpilot.core.providers import build_chat_model
 
 
@@ -77,12 +79,17 @@ async def generate_reply(
     if not config.enabled:
         raise RuntimeError("LLM provider is disabled")
     model, model_name = await build_chat_model(config)
+    async with session_scope() as session:
+        context = await load_room_context(session, project_id)
     deps = RoomDeps(
         project_id=project_id,
         page=page,
         artifact=artifact,
         selection=selection,
         permission_mode=permission_mode,
+        project_instruction=context.project_instruction,
+        writer_brief=context.writer_brief,
+        story_brief=context.story_brief,
         retrieved_context=retrieved_context or [],
     )
     reply, _record = await run_room_agent(

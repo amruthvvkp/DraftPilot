@@ -129,6 +129,8 @@ async def update_node(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Graph node has changed")
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(node, key, value)
+    # A writer edit makes the node writer-owned: the Twin Keeper stops rewriting it.
+    node.node_metadata = {**node.node_metadata, "writer_edited": True}
     node.version += 1
     session.add(node)
     await session.commit()

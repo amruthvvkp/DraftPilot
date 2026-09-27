@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listProjects, Project } from './api'
+import { getWriterProfile, listProjects, Project } from './api'
 import ArtifactStudio from './ArtifactStudio'
 import KnowledgeGraphPage from './KnowledgeGraph'
 import ProjectWizard from './ProjectWizard'
@@ -30,16 +30,7 @@ function ProjectVault() {
 
   useEffect(() => {
     void refresh()
-    try {
-      const raw = localStorage.getItem('draftpilot_writer_profile')
-      if (raw) {
-        const parsed = JSON.parse(raw)
-        const name = parsed.pen_name || parsed.name || parsed.displayName
-        if (name) setProfileName(name)
-      }
-    } catch {
-      // ignore
-    }
+    getWriterProfile().then(profile => { if (profile.pen_name || profile.name) setProfileName(profile.pen_name || profile.name) }).catch(() => undefined)
   }, [])
 
   function handleCreated(project: Project): void {

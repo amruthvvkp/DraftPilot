@@ -47,6 +47,7 @@ from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
 from draftpilot.core.story_operations import validate_story_operation
+from draftpilot.core.twins import story_twin_brief, writer_twin_brief
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -507,6 +508,47 @@ async def read_screenplay_scenes(
     }
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Screenplay response exceeds MCP output limit; request fewer scenes")
+    return result
+
+
+@mcp.tool(annotations={"read_only_hint": True})
+async def read_story_twin(project_id: int, ctx: Context) -> dict[str, object]:
+    """Return the Story twin (characters, locations, canon, with scene links) and the Writer twin brief."""
+    client_id = _client_id(ctx)
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "knowledge_graph.read", "read", {})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        nodes = await graph_crud.list_nodes(session, project_id)
+        story = await story_twin_brief(session, project_id)
+        writer = await writer_twin_brief(session, project_id)
+
+    def summary(node: Any) -> dict[str, object]:
+        """Keep the fields an agent needs to reason and cite."""
+        meta = node.node_metadata
+        return {
+            "node_id": node.id,
+            "label": node.label,
+            "description": node.description,
+            "dialogue_lines": meta.get("dialogue_lines"),
+            "scene_ids": (meta.get("scene_ids") or [])[:60],
+            "first_scene_id": meta.get("first_scene_id"),
+            "writer_owned": meta.get("source") != "twin_keeper" or bool(meta.get("writer_edited")),
+        }
+
+    characters = sorted((n for n in nodes if n.kind == "character"), key=lambda n: -int(n.node_metadata.get("dialogue_lines", 0)))
+    locations = sorted((n for n in nodes if n.kind == "location"), key=lambda n: -len(n.node_metadata.get("scene_ids", [])))
+    result: dict[str, object] = {
+        "project_id": project_id,
+        "characters": [summary(node) for node in characters[:60]],
+        "locations": [summary(node) for node in locations[:60]],
+        "canon": [summary(node) for node in nodes if node.kind not in {"character", "location"}][:60],
+        "story_brief": story,
+        "writer_brief": writer,
+    }
+    if len(json.dumps(result, default=str)) > settings.mcp.max_output_chars:
+        raise ValueError("Story twin exceeds MCP output limit")
     return result
 
 

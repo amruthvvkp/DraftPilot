@@ -27,6 +27,7 @@ from draftpilot.models import AgentRun
 READ_TOOLS = frozenset(
     {
         "read_project_overview",
+        "read_story_twin",
         "read_project_artifacts",
         "read_screenplay_scenes",
         "retrieve_project_context",
@@ -83,6 +84,10 @@ def _context_instructions(ctx: RunContext[RoomDeps]) -> str:
         lines.append(f"Project instruction from the writer: {deps.project_instruction}")
     if deps.scene_instruction:
         lines.append(f"Scene instruction from the writer: {deps.scene_instruction}")
+    if deps.writer_brief:
+        lines.append(f"Writer twin (who you are writing for):\n{deps.writer_brief}")
+    if deps.story_brief:
+        lines.append(f"Story twin (the project as it stands):\n{deps.story_brief}")
     if deps.retrieved_context:
         lines.append(
             "Retrieved project context (cite it when used): "

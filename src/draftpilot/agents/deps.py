@@ -15,4 +15,6 @@ class RoomDeps:
     permission_mode: str = "chat_only"
     project_instruction: str = ""
     scene_instruction: str = ""
+    writer_brief: str = ""
+    story_brief: str = ""
     retrieved_context: list[dict[str, object]] = field(default_factory=list)
