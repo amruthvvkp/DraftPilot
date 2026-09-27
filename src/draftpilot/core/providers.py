@@ -177,6 +177,8 @@ def create_chat_model(config: LLMSettings, model_name: str | None = None) -> Any
     provider = OpenAIProvider(
         base_url=validate_provider_url(provider_base_url(config)),
         api_key=api_key or "not-needed",
+        # Local reasoning models can think for many minutes before the first token.
+        http_client=httpx.AsyncClient(timeout=httpx.Timeout(config.request_timeout_seconds, connect=10.0)),
     )
     profile = _lm_studio_profile(name) if provider_name == "lm_studio" else None
     return OpenAIChatModel(name, provider=provider, profile=profile)

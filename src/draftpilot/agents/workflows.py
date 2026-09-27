@@ -28,8 +28,8 @@ from draftpilot.core.scene_proposals import (
 )
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.hydrate import scene_to_doc
-from draftpilot.core.screenplay.schema import ActDoc, ScreenplayDoc
-from draftpilot.core.twins import working_screenplay
+from draftpilot.core.screenplay.schema import ActDoc, BlockType, ScreenplayDoc
+from draftpilot.core.twins import normalize_cue, working_screenplay
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import scenes as scenes_crud
@@ -703,6 +703,27 @@ async def scene_fountain(session: AsyncSession, scene: Scene) -> str:
     return render_fountain(ScreenplayDoc(acts=[ActDoc(scenes=[doc])])).strip()
 
 
+REWRITE_RULES = (
+    "Keep the same speaking characters unless the brief asks for new ones. Honour every length instruction "
+    "in the brief: 'shorter' means fewer words than the current scene."
+)
+
+
+def _speakers(fountain: str) -> set[str]:
+    """Return the normalised character cues of a Fountain scene."""
+    doc = parse_scene_fountain(fountain)
+    return {normalize_cue(block.text) for block in doc.blocks if block.element_type == BlockType.CHARACTER}
+
+
+def rewrite_facts(original: str, rewrite: str) -> str:
+    """Measure what a grader should not have to guess: relative length and any added speakers."""
+    ratio = round(100 * len(rewrite.split()) / max(1, len(original.split())))
+    added = sorted(_speakers(rewrite) - _speakers(original))
+    return f"the rewrite is {ratio}% of the original's length in words; " + (
+        f"new speaking characters: {', '.join(added)}." if added else "no new speaking characters."
+    )
+
+
 def _rewrite_graph() -> Any:
     """Build the evaluator-optimizer graph that rewrites a scene to a brief."""
     g = GraphBuilder(name="rewrite_scene", state_type=WorkflowState, deps_type=WorkflowDeps, input_type=RewriteParams, output_type=dict)
@@ -723,7 +744,7 @@ def _rewrite_graph() -> Any:
             "draft",
             "scene_writer",
             f"Rewrite this scene to the brief, in the writer's voice. Return the whole scene in Fountain, "
-            f"heading first.\n\nBrief: {ctx.inputs.brief}\n\nCurrent scene:\n{ctx.state.context}",
+            f"heading first. {REWRITE_RULES}\n\nBrief: {ctx.inputs.brief}\n\nCurrent scene:\n{ctx.state.context}",
             SceneDraft,
             tools=False,
         )
@@ -737,7 +758,9 @@ def _rewrite_graph() -> Any:
             f"critique_{ctx.state.rounds + 1}",
             "script_doctor",
             f"Grade this rewrite against the brief and the original. Does it deliver the brief without losing what "
-            f"worked?\n\nBrief: {ctx.inputs.brief}\n\nOriginal:\n{ctx.state.context}\n\nRewrite:\n{ctx.state.draft.fountain}",
+            f"worked? Score below 8 if it breaks the brief (for example, not shorter when asked) or adds speaking "
+            f"characters the brief did not ask for.\n\nMeasured: {rewrite_facts(ctx.state.context, ctx.state.draft.fountain)}"
+            f"\n\nBrief: {ctx.inputs.brief}\n\nOriginal:\n{ctx.state.context}\n\nRewrite:\n{ctx.state.draft.fountain}",
             Critique,
             tools=False,
         )
@@ -752,7 +775,8 @@ def _rewrite_graph() -> Any:
             ctx,
             f"revise_{ctx.state.rounds}",
             "scene_writer",
-            f"Revise your rewrite to address the critique. Return the whole scene in Fountain.\n\nBrief: {ctx.inputs.brief}\n\n"
+            f"Revise your rewrite to address the critique. Return the whole scene in Fountain. {REWRITE_RULES}\n\n"
+            f"Measured: {rewrite_facts(ctx.state.context, ctx.state.draft.fountain)}\n\nBrief: {ctx.inputs.brief}\n\n"
             f"Your rewrite:\n{ctx.state.draft.fountain}\n\nCritique:\n{_critique_text(ctx.state.critique)}",
             SceneDraft,
             tools=False,

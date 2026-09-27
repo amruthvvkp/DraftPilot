@@ -147,7 +147,8 @@ class LLMSettings(BaseSettings):
     # Private hosts trusted for model servers (local LM Studio/Ollama reached from containers).
     # Other private or link-local provider targets stay blocked to prevent SSRF.
     trusted_model_hosts: list[str] = Field(default_factory=lambda: ["host.docker.internal"])
-    request_timeout_seconds: float = Field(default=120.0, gt=0)
+    # Per model request; generous because local reasoning models can think for many minutes.
+    request_timeout_seconds: float = Field(default=1200.0, gt=0)
     # Model reasoning: "auto" follows each role's spec, "on"/"off" force it for every role. Off is
     # several times faster on local reasoning models (e.g. Qwen in LM Studio).
     thinking: Literal["auto", "on", "off"] = "auto"

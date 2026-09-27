@@ -517,3 +517,14 @@ def test_self_contained_steps_get_no_tools_but_reading_steps_do(project: AsyncSe
     run_async(run_room_workflow("character_arcs", {"characters": ["Will"]}, deps))
     assert offered[0] == ("Outline", 0) and offered[1] == ("Critique", 0)
     assert offered[2][0] == "CharacterArc" and offered[2][1] > 0
+
+
+def test_rewrite_facts_measure_length_and_added_speakers() -> None:
+    """The grader is told the measured length ratio and any speaker the rewrite added."""
+    from draftpilot.agents.workflows import rewrite_facts
+
+    original = "INT. HALL - NIGHT\n\nWill waits by the door for a long time.\n\nWILL\nWhere is he?\n"
+    assert rewrite_facts(original, original).endswith("no new speaking characters.")
+    shorter = "INT. HALL - NIGHT\n\nWill waits.\n\nSANDRA\nHe'll come.\n"
+    facts = rewrite_facts(original, shorter)
+    assert facts.startswith("the rewrite is 5") and "new speaking characters: SANDRA." in facts
