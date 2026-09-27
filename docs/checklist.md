@@ -32,7 +32,7 @@ models, so this checklist is the one place where the real model, real data and y
 - [ ] Switch drafts with the **Draft** picker.
 - [ ] Edit an action line and blur it; it saves ("All changes local"). Open the same project in a
       second tab: your edit appears there within a second.
-- [ ] Press ++tab++ through heading, action, character and dialogue. Character names autocomplete.
+- [ ] ++tab++ moves from block to block, and character names autocomplete.
 - [ ] Smart typing: type `CUT TO:` into an action line and leave it, and it becomes a transition. `EDWARD`
       becomes a character cue, and `(beat)` a parenthetical. Ordinary action is never retyped.
 - [ ] Change a block's type and **Review format**; approve the proposal in Copilot.

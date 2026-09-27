@@ -43,8 +43,8 @@ If `API__TOKEN` is set, the studio asks for it once and then remembers you with 
    - *Import:* in the workspace, click **Import** and pick a `.fountain`, `.fdx` or `.pdf`. The Big
      Fish files in `tests/test_screenplays` are a good first test.
    - *From notes:* open **Writers' room** and run **Notes → outline**, then **Outline → scenes**.
-   - *From scratch:* add a scene, type a heading and press ++tab++ to move through action,
-     character and dialogue.
+   - *From scratch:* add a scene, type a heading, and write action, character and dialogue blocks.
+     ++tab++ moves between blocks, and smart typing picks the element for you.
 3. **Look at the Story twin.** Open **Story twin** to see what the room now knows: your cast, ranked
    by how much each character speaks, and your locations.
 4. **Ask the room.** In **Writers' room**, ask the showrunner something only your script can answer,

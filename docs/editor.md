@@ -13,7 +13,7 @@ The workspace has three columns:
 Every line of a scene is a typed block: action, character, dialogue, parenthetical, transition,
 shot, page break, and so on. The type sits to the left of each block.
 
-- ++tab++ moves to the next sensible element, for example from character to dialogue to action.
+- ++tab++ moves to the next block.
 - Character names autocomplete from the cast you've already written, and character cues upper-case as
   you type.
 - **Smart typing** retypes an action block when you leave it, but only when it's unambiguous:
