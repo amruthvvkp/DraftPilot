@@ -359,3 +359,24 @@ def test_reasoning_follows_the_role_unless_overridden(monkeypatch: pytest.Monkey
     assert "thinking" not in runtime.role_model_settings(critic)
     monkeypatch.setattr(runtime.settings.llm, "thinking", "off")
     assert runtime.role_model_settings(writer)["thinking"] is False
+
+
+def test_a_role_that_reasons_past_its_token_budget_answers_again_without_reasoning(room: AsyncSession) -> None:
+    """A truncated, empty first response triggers one retry with reasoning off; both runs are recorded."""
+    seen: list[object] = []
+
+    def respond(_messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        """Run out of tokens while 'reasoning' the first time, then answer."""
+        seen.append((info.model_settings or {}).get("openai_reasoning_effort"))
+        if len(seen) == 1:
+            return ModelResponse(parts=[], finish_reason="length")
+        return ModelResponse(parts=[TextPart(content="Short answer.")])
+
+    reply, record = run_async(
+        runtime.run_role(role_spec("scene_writer"), FunctionModel(respond), RoomDeps(project_id=1, permission_mode="chat_only"),
+                         "Draft it.", str, provider="test", model_name="scripted", tools=False)
+    )
+    assert reply == "Short answer." and record.status == "succeeded"
+    assert seen == [None, "none"]
+    runs = run_async(room.exec(select(AgentRun))).all()
+    assert [run.status for run in runs] == ["failed", "succeeded"]

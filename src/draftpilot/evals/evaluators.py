@@ -71,7 +71,8 @@ class KeepsCast(Evaluator[Any, Any, Any]):
     def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
         """Compare speaking casts."""
         before, after = speakers(ctx.output["original"]), speakers(ctx.output["fountain"])
-        added = sorted(after - before)
+        brief = str(ctx.output.get("brief", "")).upper()
+        added = sorted(name for name in after - before if name not in brief)  # characters the brief names may speak
         return EvaluationReason(not added, f"added speakers: {added}" if added else f"cast kept: {sorted(after)}")
 
 

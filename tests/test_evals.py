@@ -39,6 +39,7 @@ def test_evaluators_check_what_they_claim() -> None:
     assert speakers(ORIGINAL) == {"WILL", "SANDRA"}
     assert KeepsCast().evaluate(_ctx({"original": ORIGINAL, "fountain": "INT. HALL - NIGHT\n\nWILL\nWell?\n"})).value
     assert not KeepsCast().evaluate(_ctx({"original": ORIGINAL, "fountain": "INT. HALL - NIGHT\n\nKARL\nHello.\n"})).value
+    assert KeepsCast().evaluate(_ctx({"original": ORIGINAL, "fountain": "INT. HALL - NIGHT\n\nKARL\nHello.\n", "brief": "Let Karl speak."})).value
     assert Shorter(target=0.5).evaluate(_ctx({"original": "x" * 100, "fountain": "x" * 50})) == 1.0
     assert Shorter(target=0.5).evaluate(_ctx({"original": "x" * 100, "fountain": "x" * 120})) == 0.0
     beats = [{"act": act, "title": "t", "summary": "s"} for act in (1, 1, 2, 2, 2, 3, 3, 3)]

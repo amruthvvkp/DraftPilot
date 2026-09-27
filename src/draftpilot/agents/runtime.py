@@ -14,6 +14,7 @@ from typing import Any
 
 import logfire
 from pydantic_ai import Agent, ModelRetry, ModelSettings, RunContext, UsageLimits
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.messages import ModelMessage, ToolCallPart
 from pydantic_ai.run import AgentRunResult
@@ -115,10 +116,11 @@ BASE_INSTRUCTIONS = (
 )
 
 
-def role_model_settings(spec: RoleSpec) -> ModelSettings:
-    """Return a role's sampling settings, with reasoning off when the role or ``LLM__THINKING`` says so."""
+def role_model_settings(spec: RoleSpec, thinking: bool | None = None) -> ModelSettings:
+    """Return a role's sampling settings, with reasoning off when asked, or when the role or ``LLM__THINKING`` says so."""
     model_settings = ModelSettings(temperature=spec.temperature, max_tokens=spec.max_tokens)
-    thinking = {"on": True, "off": False}.get(settings.llm.thinking, spec.thinking)
+    if thinking is None:
+        thinking = {"on": True, "off": False}.get(settings.llm.thinking, spec.thinking)
     if not thinking:
         # The unified flag covers Anthropic/Google; OpenAI-compatible servers (LM Studio) need the effort.
         model_settings["thinking"] = False
@@ -127,7 +129,7 @@ def role_model_settings(spec: RoleSpec) -> ModelSettings:
 
 
 def build_room_agent(
-    spec: RoleSpec, model: Any, permission_mode: str, output_type: Any = str, *, tools: bool = True
+    spec: RoleSpec, model: Any, permission_mode: str, output_type: Any = str, *, tools: bool = True, thinking: bool | None = None
 ) -> Agent[RoomDeps, Any]:
     """Build a role agent with its spec, the writer's context, and (unless ``tools=False``) permission-filtered MCP tools."""
     agent: Agent[RoomDeps, Any] = Agent(
@@ -136,7 +138,7 @@ def build_room_agent(
         name=spec.key,
         output_type=output_type,
         toolsets=[room_toolset(permission_mode)] if tools else [],
-        model_settings=role_model_settings(spec),
+        model_settings=role_model_settings(spec, thinking),
         retries=2,
     )
 
@@ -320,13 +322,24 @@ async def run_role[OutputT](
     tools: bool = True,
 ) -> tuple[OutputT, AgentRun]:
     """Run one room role to a typed output and record its AgentRun."""
-    agent = build_room_agent(spec, model, deps.permission_mode, output_type, tools=tools)
-    meter = RunMeter(deps.project_id, spec.key, kind, provider, model_name, workflow_run_id)
-    async with measured_run(meter, workflow_run_id):
-        try:
-            result = await agent.run(prompt, deps=deps, message_history=history, usage_limits=usage_limits(spec))
-        except Exception as exc:
-            await meter.finish(None, exc)
-            raise
-    record = await meter.finish(result)
-    return result.output, record
+    thinking: bool | None = None
+    for attempt in (1, 2):
+        agent = build_room_agent(spec, model, deps.permission_mode, output_type, tools=tools, thinking=thinking)
+        meter = RunMeter(deps.project_id, spec.key, kind, provider, model_name, workflow_run_id)
+        async with measured_run(meter, workflow_run_id):
+            try:
+                result = await agent.run(prompt, deps=deps, message_history=history, usage_limits=usage_limits(spec))
+            except UnexpectedModelBehavior as exc:
+                await meter.finish(None, exc)
+                if attempt == 1 and "token limit" in str(exc).casefold():
+                    # The model reasoned past its token budget before answering: answer again without reasoning.
+                    logfire.warning("{role} ran out of tokens while reasoning; retrying without reasoning", role=spec.key)
+                    thinking = False
+                    continue
+                raise
+            except Exception as exc:
+                await meter.finish(None, exc)
+                raise
+        record = await meter.finish(result)
+        return result.output, record
+    raise AssertionError("unreachable")
