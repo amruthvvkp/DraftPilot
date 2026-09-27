@@ -1,0 +1,8 @@
+.timeline-lanes { max-width: 960px; margin: 18px auto 8px; display: grid; gap: 10px; }
+.lane-group { padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; }
+.lane-group > .eyebrow { margin: 0 0 8px; }
+.timeline-lane-row { display: grid; grid-template-columns: 150px 1fr; align-items: center; gap: 12px; min-height: 28px; }
+.timeline-lane-row strong { color: var(--ink-muted); font-size: 11px; }
+.lane-scene { display: inline-grid; place-items: center; width: 28px; height: 20px; margin-right: 4px; border-radius: 3px; background: var(--accent-soft); color: var(--ink-soft); font: 9px 'DM Mono', monospace; }
+.lane-scene.character { background: var(--success-soft); color: var(--success); }
+@media(max-width:620px){.timeline-lane-row{grid-template-columns:1fr}.timeline-lane-row strong{margin-bottom:2px}}

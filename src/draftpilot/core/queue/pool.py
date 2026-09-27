@@ -5,8 +5,12 @@ The web process uses ``get_arq_pool`` to enqueue jobs; the worker process
 ``redis_settings`` so they target the same Redis/queue.
 """
 
+from typing import Any
+
+import logfire
 from arq import create_pool
-from arq.connections import ArqRedis, RedisSettings as ArqRedisSettings
+from arq.connections import ArqRedis
+from arq.connections import RedisSettings as ArqRedisSettings
 
 from draftpilot.core.config import settings
 
@@ -37,3 +41,16 @@ async def close_arq_pool() -> None:
     if _pool is not None:
         await _pool.aclose()
         _pool = None
+
+
+async def enqueue_best_effort(function: str, *args: Any, description: str, **job_options: Any) -> bool:
+    """Enqueue an optional background job, logging instead of failing when the queue is down.
+
+    ``job_options`` pass through to ARQ (e.g. ``_job_id`` to collapse duplicates, ``_defer_by``).
+    """
+    try:
+        await (await get_arq_pool()).enqueue_job(function, *args, **job_options)
+    except Exception as exc:  # noqa: BLE001 - queue availability varies by deployment
+        logfire.warning(description + " skipped: {exc}", exc=str(exc))
+        return False
+    return True

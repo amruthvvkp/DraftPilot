@@ -10,15 +10,21 @@ with this project's MIT license (e.g. GPL).
 - **Final Draft** — the web interface (project vault, navigator + script + panels editor
   layout) inspires DraftPilot's shell and screenplay workspace. Inspiration only; no Final
   Draft code or assets are used. <https://www.finaldraft.com/>
-- **NiceGUI** Trello-cards example — reference for the planned beat-board drag-and-drop.
-  MIT. <https://github.com/zauberzeug/nicegui>
+- **Beat board drag-and-drop** — the planned beat board will use a React drag-and-drop
+  library; it will be recorded here (name, license, link) once chosen.
 
 ## Reused libraries
+
+- **Pydantic Monty** — runtime for short-lived, model-generated Python that composes
+  explicitly granted DraftPilot host functions. Experimental; its security model and supported
+  Python subset are subject to change. No unrestricted machine access or third-party packages
+  are assumed. <https://pydantic.dev/docs/monty/get-started/>
 
 - **screenplay-tools** — Fountain ⇄ Final Draft (FDX) parsing/writing; the foundation of
   DraftPilot's import/export adapters. MIT, © Ian Thomas.
   <https://github.com/wildwinter/screenplay-tools>
-- **screenplain** — planned PDF/HTML export backend (deferred). MIT, © Martin Vilcans.
+- **screenplain** — evaluated as a possible PDF/HTML export backend; DraftPilot currently uses
+  its own ReportLab PDF and safe self-contained HTML renderers. MIT, © Martin Vilcans.
   <https://github.com/vilcans/screenplain>
 
 ## Inspiration only — not used as code

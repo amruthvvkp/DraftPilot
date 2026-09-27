@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "track": "import_compare",
+  "label": "draftpilot_candidate_match",
+  "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "screenplay_title": "The Last Horizon",
+  "primary_language": "English",
+  "translation_languages": [
+    "Spanish",
+    "French"
+  ],
+  "scene_count": 3,
+  "block_count": 9,
+  "dialogue_count": 3,
+  "dual_dialogue_count": 0,
+  "element_counts": {
+    "action": 3,
+    "character": 3,
+    "dialogue": 3
+  },
+  "scene_headings": [
+    "EXT. DESERT OUTPOST - DAWN",
+    "INT. BUNKER COMMAND - CONTINUOUS",
+    "EXT. CANYON RUNWAY - DAY"
+  ],
+  "runtime_seconds": 180
+}

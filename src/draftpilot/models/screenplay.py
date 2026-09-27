@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from sqlalchemy import JSON
 from sqlmodel import Field, Relationship, SQLModel
 
 from draftpilot.models.base import TimestampMixin
@@ -17,6 +18,9 @@ class ScreenplayBase(SQLModel):
     title: str = Field(index=True, min_length=1, max_length=200)
     format: str = Field(default="feature", max_length=50)  # feature, short, pilot...
     status: str = Field(default="draft", max_length=50)  # draft, revision, final...
+    source_sha256: str | None = Field(default=None, max_length=64)
+    # Fountain title-page entries (Title, Credit, Author, Draft date, Contact, ...).
+    title_page: dict[str, str] = Field(default_factory=dict, sa_type=JSON)
 
 
 class Screenplay(ScreenplayBase, TimestampMixin, table=True):  # type: ignore[call-arg]

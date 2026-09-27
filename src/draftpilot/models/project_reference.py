@@ -27,6 +27,7 @@ class ProjectReference(ProjectReferenceBase, TimestampMixin, table=True):  # typ
 
     id: int | None = Field(default=None, primary_key=True)
     project_id: int = Field(foreign_key="project.id", index=True)
+    version: int = Field(default=1, ge=1)
 
     project: "Project" = Relationship(back_populates="references")
 
@@ -51,3 +52,4 @@ class ProjectReferenceRead(ProjectReferenceBase):
 
     id: int
     project_id: int
+    version: int

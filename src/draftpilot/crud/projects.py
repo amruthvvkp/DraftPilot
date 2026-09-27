@@ -1,15 +1,49 @@
 """CRUD operations for Project."""
 
+from collections.abc import Sequence
+
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.models import Project, ProjectCreate, ProjectUpdate
+from draftpilot.models import (
+    Act,
+    Project,
+    ProjectCreate,
+    ProjectReference,
+    ProjectReferenceBase,
+    ProjectUpdate,
+    Screenplay,
+)
 
 
 async def create(session: AsyncSession, data: ProjectCreate) -> Project:
     """Create and persist a new project."""
     project = Project.model_validate(data)
     session.add(project)
+    await session.commit()
+    await session.refresh(project)
+    return project
+
+
+async def create_with_references(
+    session: AsyncSession,
+    data: ProjectCreate,
+    references: Sequence[ProjectReferenceBase],
+) -> Project:
+    """Create a project and its references in one transaction."""
+    project = Project.model_validate(data)
+    session.add(project)
+    await session.flush()
+    assert project.id is not None
+    for reference_data in references:
+        session.add(
+            ProjectReference(project_id=project.id, **reference_data.model_dump())
+        )
+    screenplay = Screenplay(project_id=project.id, title=project.title, format="feature", status="draft")
+    session.add(screenplay)
+    await session.flush()
+    assert screenplay.id is not None
+    session.add(Act(screenplay_id=screenplay.id, title="Act One", position=0))
     await session.commit()
     await session.refresh(project)
     return project
@@ -32,6 +66,7 @@ async def update(
     """Apply the given changes to a project and persist them."""
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(project, key, value)
+    project.version += 1
     session.add(project)
     await session.commit()
     await session.refresh(project)

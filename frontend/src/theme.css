@@ -1,0 +1,41 @@
+/* Theme tokens. Every colour in the studio is one of these; themes and the writer's accent redefine them. */
+:root, [data-theme="paper"] {
+  color-scheme: light;
+  --accent: #d69a55;
+  --surface: #fffdf9; --surface-2: #f3f0e9; --surface-3: #eee9e2;
+  --line: #ded8cf; --line-strong: #cfc6b9;
+  --ink-faint: #9a9187; --ink-muted: #777168; --ink-soft: #5e574e; --ink: #403b35;
+  --danger: #a65043; --danger-soft: #f3d9d4; --success: #527756; --success-soft: #dcebdc;
+  --shadow: #514a3c;
+  --accent-soft: color-mix(in srgb, var(--accent) 78%, white);
+  --accent-strong: color-mix(in srgb, var(--accent) 62%, black);
+  --accent-wash: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  --on-accent: #2b241b;
+  --hero: #dfe2da; --art-ink: #f3f0e9;
+  /* Chrome (sidebar, dark launch buttons) stays dark in every theme. */
+  --chrome: #24231f; --chrome-raised: #34312c; --chrome-ink: #e8e3da;
+}
+[data-theme="slate"] {
+  color-scheme: light;
+  --surface: #fbfcfd; --surface-2: #eff2f5; --surface-3: #e7ebef;
+  --line: #d6dce3; --line-strong: #c3cbd4;
+  --ink-faint: #8a94a0; --ink-muted: #66707c; --ink-soft: #4a525c; --ink: #2c323a;
+  --danger: #b0443a; --danger-soft: #f5dcd9; --success: #3f7a52; --success-soft: #d9ecdf;
+  --shadow: #2f3a48;
+  --hero: #e1e7ee; --art-ink: #f4f6f8;
+  --chrome: #1f242b; --chrome-raised: #2d333b; --chrome-ink: #e3e8ee;
+}
+[data-theme="night"] {
+  color-scheme: dark;
+  --surface: #221f1b; --surface-2: #1a1815; --surface-3: #2a2621;
+  --line: #3b3630; --line-strong: #4b453d;
+  --ink-faint: #8a8378; --ink-muted: #a9a296; --ink-soft: #c9c2b6; --ink: #ede7dc;
+  --danger: #e2806e; --danger-soft: #3f2420; --success: #86bb8d; --success-soft: #21352a;
+  --shadow: #000000;
+  --accent-soft: color-mix(in srgb, var(--accent) 80%, black);
+  --accent-strong: color-mix(in srgb, var(--accent) 72%, white);
+  --accent-wash: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  --on-accent: #1d1812;
+  --hero: #2a2823; --art-ink: #d9d2c6;
+  --chrome: #141210; --chrome-raised: #2a2621; --chrome-ink: #e8e3da;
+}

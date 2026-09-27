@@ -103,6 +103,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+frontend/node_modules/
 env/
 venv/
 ENV/

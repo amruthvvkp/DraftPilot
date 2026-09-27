@@ -1,5 +1,28 @@
 """Screenplay domain layer — nested ground-truth schema and format adapters.
 
 Pure domain code: depends only on Pydantic, the model enums, and the
-``screenplay-tools`` library. No NiceGUI/FastAPI imports belong here.
+``screenplay-tools`` library. No FastAPI imports belong here.
+Expose document, adapter, and timeline services.
 """
+
+from draftpilot.core.screenplay.editor import (
+    autocomplete_characters,
+    autocomplete_elements,
+    dual_dialogue_group,
+    next_element,
+)
+from draftpilot.core.screenplay.timeline import (
+    SceneTiming,
+    TimelineProposal,
+    propose_reorder,
+)
+
+__all__ = [
+    "SceneTiming",
+    "TimelineProposal",
+    "autocomplete_characters",
+    "autocomplete_elements",
+    "dual_dialogue_group",
+    "next_element",
+    "propose_reorder",
+]

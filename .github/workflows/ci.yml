@@ -1,0 +1,64 @@
+name: DraftPilot CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: latest
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: uv sync --all-groups
+      - run: uv run pytest -q tests --ignore=tests/e2e
+      - run: uv run ruff check src migrations tests
+      - run: uv run mypy src
+      - run: uv run interrogate src migrations
+      - name: Build the docs (strict)
+        run: uv run --group docs zensical build --strict
+
+  browser:
+    name: Containerized Playwright
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application and browser images
+        run: docker compose --profile test build ui e2e
+      - name: Run isolated Compose browser suite
+        run: docker compose --profile test run --rm -T e2e
+      - name: Collect service logs on failure
+        if: failure()
+        run: docker compose logs --no-color ui postgres redis migrate
+      - name: Stop Compose services
+        if: always()
+        run: docker compose --profile test down --volumes --remove-orphans
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:run
+      - run: npm run build

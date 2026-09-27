@@ -1,6 +1,6 @@
 ---
 name: run-stack
-description: Bring up or run the DraftPilot stack (NiceGUI UI, ARQ worker, Postgres, Redis, MCP). Use when asked to run, start, or boot the app or any of its services, locally or via Docker.
+description: Bring up or run the DraftPilot stack (FastAPI web + React studio, ARQ worker, MCP server, RAG service, Postgres, Redis, Langfuse). Use when asked to run, start, or boot the app or any of its services, locally or via Docker.
 ---
 
 # Run the DraftPilot stack
@@ -10,10 +10,11 @@ description: Bring up or run the DraftPilot stack (NiceGUI UI, ARQ worker, Postg
 ```bash
 docker compose up --build        # all services
 docker compose up postgres redis # just the backing stores
-docker compose run --rm migrate  # apply migrations once
+docker compose run --rm migrate  # apply migrations once (alembic upgrade head)
 ```
 
-Endpoints: UI `http://localhost:9000`, MCP `http://localhost:9001`, Langfuse `http://localhost:3300`.
+Endpoints: studio + API (`ui` service) `http://localhost:9000`, MCP (FastMCP HTTP)
+`http://localhost:9001`, RAG `http://localhost:9010`, Langfuse `http://localhost:3300`.
 
 `docker compose up` brings up the whole stack including a self-hosted **Langfuse**
 (web/worker/clickhouse/minio/postgres/redis). Telemetry is **ON by default** and ships to that
@@ -22,27 +23,43 @@ flow with no setup (allow ~1 min for Langfuse migrations on first boot). Disable
 `OTEL__ENABLED=false`; point at external Grafana LGTM via `OTEL__EXPORTER_OTLP_ENDPOINT`. Replace the
 `# CHANGEME` secrets before non-local use. See `.env.example`.
 
+Debug overlay: `docker compose -f compose.yml -f compose.dev.yml up --build` mounts `./src` into
+ui/worker/mcp and `./frontend/dist` into ui, sets `WEB__RELOAD=true`, and exposes debugpy
+(ui :5678, worker :5679). Rebuild the frontend locally to update the served bundle.
+
 ## Local (no Docker)
 
 Requires a local Postgres + Redis (or `docker compose up postgres redis`).
 
 ```bash
-uv sync --group ui
+uv sync --all-groups                                   # or --group web for just the app
 uv run alembic upgrade head
-uv run python -m draftpilot.ui.main                              # UI
-uv run arq draftpilot.worker.settings.WorkerSettings            # worker (separate shell)
+npm --prefix frontend install && npm --prefix frontend run build   # React build -> frontend/dist
+uv run python -m draftpilot.api                        # API + studio on :8000
+npm --prefix frontend run dev                          # optional Vite HMR on :5173 (proxies /api)
+uv run arq draftpilot.worker.settings.WorkerSettings   # worker (separate shell)
+uv run python -m draftpilot.mcp                        # MCP over stdio
 ```
 
-Override connection settings with prefixed env vars, e.g. `POSTGRES__HOST`, `REDIS__HOST`,
-`QUEUE__DB`, `UI__PORT`, `OTEL__ENABLED`.
+Override settings with prefixed env vars, e.g. `POSTGRES__HOST`, `REDIS__HOST`, `QUEUE__DB`,
+`WEB__PORT`, `WEB__RELOAD`, `API__TOKEN`, `OTEL__ENABLED`.
 
-Published host ports are env-configurable to avoid clashes with a local Postgres/Redis or a shared
-stack (defaults in parentheses): `DRAFTPILOT_POSTGRES_PORT` (55432), `DRAFTPILOT_REDIS_PORT` (56379),
-`DRAFTPILOT_UI_PORT` (9000), `DRAFTPILOT_MCP_PORT` (9001), `DRAFTPILOT_UI_DEBUGPY_PORT` (5678),
+Published host ports are env-configurable (defaults in parentheses): `DRAFTPILOT_POSTGRES_PORT`
+(55432), `DRAFTPILOT_REDIS_PORT` (56379), `DRAFTPILOT_UI_PORT` (9000), `DRAFTPILOT_MCP_PORT` (9001),
+`DRAFTPILOT_RAG_PORT` (9010), `DRAFTPILOT_LANGFUSE_PORT` (3300), `DRAFTPILOT_UI_DEBUGPY_PORT` (5678),
 `DRAFTPILOT_WORKER_DEBUGPY_PORT` (5679). Set them in `.env`. Container-internal ports never change.
 
-## Verify the vertical slice
+## Tests
 
-Open the UI → create a Project → add a Screenplay → add Scenes → click **Run analysis**. The worker
-processes the job; click **Refresh result** to see cached metrics. The PydanticAI agent's traces
-appear in Langfuse (`:3300`) since telemetry is on by default.
+```bash
+uv run pytest                        # Tier 0: deterministic suite (default)
+uv run pytest -m lmstudio            # Tier 1: needs a local LM Studio server
+uv run playwright install chromium   # once
+uv run pytest tests/e2e              # browser journeys against :9000
+docker compose --profile test run --rm e2e   # same, in the pinned Playwright container
+```
+
+## Verify
+
+Open `http://localhost:9000` → create a Project in the wizard → open its workspace. `GET /health`
+should respond, and agent traces appear in Langfuse (`:3300`).

@@ -1,4 +1,4 @@
-# DraftPilot stack: UI (NiceGUI/FastAPI), ARQ worker, MCP server, Postgres, Redis.
+# DraftPilot stack: web (FastAPI API + React studio), ARQ worker, MCP server, RAG, Postgres, Redis.
 #
 # `docker compose up` brings up the WHOLE stack — app (ui/worker/mcp), Postgres,
 # Redis, AND a self-hosted Langfuse (web/worker/clickhouse/minio/postgres/redis).
@@ -19,11 +19,22 @@ x-app-env: &app-env
   QUEUE__HOST: redis
   QUEUE__PORT: "6379"
   QUEUE__DB: "1"
+  RAG__SERVICE_URL: http://rag:8000
+  RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
+  BACKUP__ROOT: /data/backups
+  # Default model provider: LM Studio on the host (host.docker.internal is a trusted model host).
+  LLM__PROVIDER: ${LLM__PROVIDER:-lm_studio}
+  LLM__BASE_URL: ${LLM__BASE_URL:-http://host.docker.internal:1234/v1}
+  LLM__MODEL: ${LLM__MODEL:-auto}
+  LLM__ENABLED: ${LLM__ENABLED:-true}
   OTEL__ENABLED: ${OTEL__ENABLED:-true}
   OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
   # Basic base64("pk-lf-draftpilot-dev:sk-lf-draftpilot-dev") — matches the
   # LANGFUSE_INIT_* bootstrap keys on langfuse-web. # CHANGEME for non-local use.
   OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
+  # Langfuse score API keys (feedback, proposal decisions, online checks). # CHANGEME for non-local use.
+  OTEL__LANGFUSE_PUBLIC_KEY: ${OTEL__LANGFUSE_PUBLIC_KEY:-pk-lf-draftpilot-dev}
+  OTEL__LANGFUSE_SECRET_KEY: ${OTEL__LANGFUSE_SECRET_KEY:-sk-lf-draftpilot-dev}
 
 # Lets containers reach a collector running on the host (works on Linux too).
 x-extra-hosts: &extra-hosts
@@ -31,7 +42,12 @@ x-extra-hosts: &extra-hosts
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # postgres:16-alpine + pgvector (see Dockerfile.postgres) for hybrid retrieval.
+    image: draftpilot-postgres
+    build:
+      context: .
+      dockerfile: ./Dockerfile.postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: draftpilot
       POSTGRES_PASSWORD: draftpilot
@@ -48,6 +64,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "${DRAFTPILOT_REDIS_PORT:-56379}:6379"
     healthcheck:
@@ -70,16 +87,20 @@ services:
 
   ui:
     image: draftpilot-ui
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./Dockerfile.ui
     ports:
       - "${DRAFTPILOT_UI_PORT:-9000}:8000"
-    command: ["uv", "run", "python", "-m", "draftpilot.ui.main"]
+    command: ["uv", "run", "python", "-m", "draftpilot.api"]
     environment:
       <<: *app-env
-      UI__STORAGE_SECRET: change-me-in-production
+      # Empty = open API (the UI logs a warning because :9000 is published). Set for any shared use.
+      API__TOKEN: ${API__TOKEN:-}
     extra_hosts: *extra-hosts
+    volumes:
+      - backup_data:/data/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,9 +108,25 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  e2e:
+    profiles: [test]
+    build:
+      context: .
+      dockerfile: ./Dockerfile.e2e
+    command: ["pytest", "-q", "tests/e2e", "--browser", "chromium", "--base-url", "http://ui:8000"]
+    depends_on:
+      ui:
+        condition: service_healthy
 
   worker:
     image: draftpilot-worker
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./Dockerfile.worker
@@ -106,6 +143,7 @@ services:
 
   mcp:
     image: draftpilot-mcp
+    restart: unless-stopped
     build:
       context: .
       dockerfile: ./Dockerfile.mcp
@@ -126,10 +164,51 @@ services:
         "8000",
       ]
     environment:
+      <<: *app-env
+      MCP__AUTH_TOKEN: ${MCP__AUTH_TOKEN:-draftpilot-local-token}
+      MCP__ADMIN_TOKEN: ${MCP__ADMIN_TOKEN:-draftpilot-local-admin-token}
+      MCP__STDIO_CLIENT_ID: ${MCP__STDIO_CLIENT_ID:-mcp-stdio}
       OTEL__ENABLED: ${OTEL__ENABLED:-true}
       OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
       OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
     extra_hosts: *extra-hosts
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rag:
+    image: draftpilot-rag
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: ./Dockerfile.rag
+    ports:
+      - "${DRAFTPILOT_RAG_PORT:-9010}:8000"
+    environment:
+      RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
+      # Hybrid store in Postgres (pgvector HNSW + tsvector GIN, schema "rag").
+      RAG__BACKEND: ${RAG__BACKEND:-postgres}
+      RAG__DATABASE_URL: ${RAG__DATABASE_URL:-postgresql://draftpilot:draftpilot@postgres:5432/draftpilot}
+      RAG__DATABASE_PATH: /data/draftpilot-rag.sqlite3
+      # Embeddings from LM Studio on the host; retrieval falls back to full-text if it is down.
+      RAG__EMBEDDING_PROVIDER: ${RAG__EMBEDDING_PROVIDER:-lm_studio}
+      RAG__EMBEDDING_BASE_URL: ${RAG__EMBEDDING_BASE_URL:-http://host.docker.internal:1234/v1}
+      RAG__EMBEDDING_MODEL: ${RAG__EMBEDDING_MODEL:-text-embedding-nomic-embed-text-v1.5}
+      RAG__EMBEDDING_DIMENSIONS: ${RAG__EMBEDDING_DIMENSIONS:-768}
+      OTEL__ENABLED: "false"
+    extra_hosts: *extra-hosts
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - rag_data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
 
   # --- Langfuse (self-hosted LLM observability, part of the default stack) -----
   # Comes up with `docker compose up`. UI at http://localhost:3300. On first boot
@@ -279,3 +358,5 @@ volumes:
   langfuse_clickhouse_logs:
   langfuse_minio_data:
   langfuse_redis_data:
+  rag_data:
+  backup_data:

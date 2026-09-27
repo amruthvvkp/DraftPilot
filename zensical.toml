@@ -45,9 +45,40 @@ Copyright &copy; 2026 Amruth Vithala
 # Read more: https://zensical.org/docs/setup/navigation/
 nav = [
   { "Get started" = "index.md" },
+  { "User guide" = [
+    { "Writing in the studio" = "editor.md" },
+    { "Story tools" = "story-tools.md" },
+    { "Writers' room" = "writers-room.md" },
+    { "Settings & appearance" = "settings.md" },
+    { "Backups & recovery" = "backups.md" },
+    { "Manual test checklist" = "checklist.md" },
+  ] },
+  { "Advanced" = [
+    { "Provider setup" = "providers.md" },
+    { "MCP integration" = "mcp.md" },
+    { "Context workflows" = "context-workflows.md" },
+    { "Evals & usefulness" = "evals.md" },
+    { "Monty sandbox" = "monty.md" },
+    { "Deployment" = "deployment.md" },
+  ] },
+  { "Developer guide" = [
+    { "Architecture" = "dev/architecture.md" },
+    { "Standards" = "dev/standards.md" },
+    { "Extending the room" = "dev/extending-the-room.md" },
+    { "Testing" = "testing.md" },
+    { "HTTP API reference" = "dev/http-api.md" },
+    { "Python reference" = [
+      { "Writers' room" = "dev/reference/agents.md" },
+      { "Twins & usefulness" = "dev/reference/twins.md" },
+      { "Screenplay data" = "dev/reference/screenplay.md" },
+      { "Retrieval" = "dev/reference/retrieval.md" },
+      { "Evals" = "dev/reference/evals.md" },
+      { "Configuration" = "dev/reference/config.md" },
+    ] },
+    { "v1 gap analysis" = "dev/v1-gap-analysis.md" },
+  ] },
   { "Roadmap" = "roadmap.md" },
   { "References & credits" = "references.md" },
-  { "Markdown in 5min" = "markdown.md" },
 ]
 
 # With the "extra_css" option you can add your own CSS styling to customize
@@ -71,6 +102,18 @@ nav = [
 # ----------------------------------------------------------------------------
 # Section for configuring theme options
 # ----------------------------------------------------------------------------
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "sphinx"
+show_source = false
+show_root_heading = true
+show_signature_annotations = true
+separate_signature = true
+members_order = "source"
+filters = ["!^_"]
+
 [project.theme]
 # change this to "classic" to use the traditional Material for MkDocs look.
 # variant = "classic"

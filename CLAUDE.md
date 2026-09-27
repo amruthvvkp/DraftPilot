@@ -1,12 +1,14 @@
 # DraftPilot
 
-Open-source, agentic screenplay & story-development studio. A NiceGUI web app where writers build,
-research, co-write, and evaluate screenplays alongside AI agents.
+Open-source, agentic screenplay & story-development studio. A local-first React/Vite web app where
+writers build, research, co-write, and evaluate screenplays alongside AI agents.
 
 ## Stack
 
-- **UI**: NiceGUI (`from nicegui import app` IS the FastAPI app — one web process)
-- **Agents**: PydanticAI (provider-agnostic: self-hosted or cloud LLMs)
+- **Web**: FastAPI app factory (`api/app.py:create_app`, `python -m draftpilot.api`) serving `/api/v1`
+  and the React 19 + Vite + TypeScript studio build (`frontend/dist`)
+- **Agents**: PydanticAI (provider-agnostic). **All LLM-backed tests/evals run on local LM Studio**
+- **MCP**: FastMCP 4 / MCP SDK 2 — the one tool surface for in-app and external agents
 - **Data**: Postgres via SQLModel + asyncpg; Alembic migrations
 - **Cache / queue**: Redis; ARQ background worker (separate process)
 - **Telemetry**: Logfire → OTLP → a **self-hosted Langfuse bundled in `compose.yml`** (part of the
@@ -21,26 +23,33 @@ research, co-write, and evaluate screenplays alongside AI agents.
 
 ```
 src/draftpilot/
-  core/        config (pydantic-settings), telemetry, db/, cache/, queue/
-  models/      SQLModel domain: Project → Screenplay → Scene
+  api/         app.py (create_app), __main__.py (uvicorn), routers under /api/v1, auth
+  core/        config (pydantic-settings), telemetry, db/, cache/, queue/, screenplay/, domain services
+  models/      SQLModel domain: Project → Screenplay → Act → Scene → Block (+ story, agents, MCP access)
   crud/        thin async CRUD per model
-  ui/          theme/ (design tokens + layout), components/ (reusable library), pages/, main.py
+  agents/      writers' room: role specs (specs/*.yaml), runtime, room workflows (pydantic_graph)
+  evals/       pydantic_evals suites on LM Studio (`python -m draftpilot.evals`) + online checks
   worker/      ARQ WorkerSettings + task functions
-  mcp/         FastMCP server
+  mcp/         FastMCP server (HTTP + stdio)
+frontend/      React/Vite studio (src/, public/ assets; build → dist/)
 migrations/    Alembic (env.py reads settings sync DSN; SQLModel.metadata is the target)
 ```
 
 ## Run
 
 ```bash
-# Full stack (Postgres, Redis, migrate, ui, worker, mcp + self-hosted Langfuse)
-docker compose up --build         # UI :9000 · MCP :9001 · Langfuse :3300
+# Full stack (Postgres, Redis, migrate, ui(web), worker, mcp, rag + self-hosted Langfuse)
+docker compose up --build         # Studio :9000 · MCP :9001 · RAG :9010 · Langfuse :3300
 
 # Local dev (needs local Postgres + Redis)
-uv sync --group ui
+uv sync --all-groups
 uv run alembic upgrade head
-uv run python -m draftpilot.ui.main
+uv run python -m draftpilot.api       # API + built studio on :8000
+npm --prefix frontend run dev         # React studio with Vite hot reload
 uv run arq draftpilot.worker.settings.WorkerSettings
+
+# Tests: Tier 0 (CI) · browser e2e (stack on :9000) · Tier 1 local LM Studio
+uv run pytest tests --ignore=tests/e2e && uv run pytest tests/e2e && uv run pytest -m lmstudio
 
 # Debug stack (debugpy + live source mount + hot reload)
 docker compose -f compose.yml -f compose.dev.yml up --build
@@ -58,17 +67,23 @@ docker compose -f compose.yml -f compose.dev.yml up --build
   `# type: ignore[call-arg]` (pydantic mypy-plugin false positive); `@computed_field` properties
   carry `# type: ignore[prop-decorator]`.
 - Config: every settings group has an `env_prefix` (`POSTGRES__`, `REDIS__`, `QUEUE__`, `LLM__`,
-  `UI__`, `OTEL__`). Nested env uses the `__` delimiter. Never read bare env names — they collide
-  with system vars (e.g. `$USER`).
-- Add UI building blocks to `ui/components/` and showcase them in `ui/components/design_system.py`.
-- Pages are `content()` builders wrapped by `ui.theme.with_layout`; register routes in `ui/main.py`.
-- After model changes: `uv run alembic revision --autogenerate -m "..."` then `upgrade head`.
+  `WEB__`, `API__`, `MCP__`, `RAG__`, `EVAL__`, `OTEL__`, ...). Nested env uses the `__` delimiter.
+  Never read bare env names — they collide with system vars (e.g. `$USER`).
+- React pages and components live in `frontend/src`; register API routers in `api/__init__.py`
+  (the `protected` router, so `API__TOKEN` applies). See `frontend/CLAUDE.md`.
+- Agents never write silently: they create proposals the writer approves; MCP approval-required calls
+  need a writer-decided `approval_id` (see `docs/mcp.md`).
+- Any change to an agent, prompt, spec or tool must run that agent's evals on LM Studio
+  (`uv run python -m draftpilot.evals <suite>`; baselines in `evals/baselines/`, see `docs/evals.md`).
+- After model changes: `uv run alembic revision --autogenerate -m "..."`, then **review it** — the
+  existing schema has known TEXT/AutoString drift that autogenerate re-detects; keep only your
+  change (hand-write it if needed), check `downgrade`, then `upgrade head`.
 - Branches follow the repo's GitHub-issue convention (e.g. `amruthvvkp/issueN`). Reference the issue
   in commits. (This repo is not on Jira; the global Jira branch rule does not apply here.)
-- **Roadmap**: the phased modernization plan lives in `docs/roadmap.md` — consult it on demand when
-  planning or picking up feature work for phase scope/ordering/status, and keep it updated.
+- **Roadmap**: `docs/roadmap.md`; v1 status and execution order (G0–G9) in
+  `docs/dev/v1-gap-analysis.md` — consult when planning, and keep both updated.
 - **Attribution**: when drawing on external tools/UIs for inspiration or code, record it in
   `docs/references.md`; never vendor incompatibly-licensed code (e.g. GPL) into this MIT project.
 
-Detailed local guidance lives in nested `CLAUDE.md` files under `src/draftpilot/{ui,worker,core}/`.
+Detailed local guidance lives in `frontend/CLAUDE.md` and `src/draftpilot/{worker,core}/CLAUDE.md`.
 `AGENTS.md` mirrors this file for Codex compatibility.
