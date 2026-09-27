@@ -642,3 +642,14 @@ export function duplicateProject(projectId: number, title?: string): Promise<Pro
 export function listDeletedProjects(): Promise<DeletedProject[]> {
   return request<DeletedProject[]>('/api/v1/projects/deleted')
 }
+
+export type TwinNode = KnowledgeGraph['nodes'][number] & { node_metadata: Record<string, unknown> }
+export type StoryTwin = { screenplay_id: number | null; characters: TwinNode[]; locations: TwinNode[]; canon: TwinNode[]; brief: string }
+
+export function getStoryTwin(projectId: number): Promise<StoryTwin> {
+  return request<StoryTwin>(`/api/v1/projects/${projectId}/twin`)
+}
+
+export function refreshStoryTwin(projectId: number): Promise<Record<string, number>> {
+  return request<Record<string, number>>(`/api/v1/projects/${projectId}/twin/refresh`, { method: 'POST' })
+}

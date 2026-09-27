@@ -129,3 +129,12 @@ nav { display: grid; gap: 7px; } nav a { color: var(--ink-muted); padding: 11px 
 .delete-dialog{padding:28px}.delete-dialog h2{margin:8px 0 10px;letter-spacing:-.04em}.delete-dialog p{color:var(--ink-muted);font-size:13px;line-height:1.6}.delete-dialog label{display:grid;gap:6px;margin-top:14px;color:var(--ink-muted);font-size:12px}.delete-dialog input{padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
 .dialog-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.button.danger{background:var(--danger);color:var(--surface)}.button.danger:disabled{opacity:.4;cursor:not-allowed}
 .vault-notice{display:flex;justify-content:space-between;margin-top:20px}.vault-notice button{border:0;background:transparent;color:inherit;font-size:18px}
+/* Editor layout: type + review on the left, the text gets the full column, actions appear on hover/focus. */
+.semantic-row{display:grid;grid-template-columns:92px minmax(0,1fr) auto;grid-template-areas:"type text actions" "review text actions";column-gap:10px;align-items:start}
+.semantic-row .element-selector{grid-area:type}.semantic-row .format-proposal{grid-area:review;justify-self:start;margin-top:4px;padding:3px 6px;font-size:9px}.semantic-row .format-proposal:disabled{display:none}
+.semantic-row .script-editor,.semantic-row .page-break-marker{grid-area:text}.semantic-row .block-actions{grid-area:actions;opacity:0;transition:opacity .15s}.semantic-row:hover .block-actions,.semantic-row:focus-within .block-actions{opacity:1}
+.page-break-marker{display:flex;align-items:center;gap:10px;min-height:28px;color:var(--ink-faint);font:9px 'DM Mono';text-transform:uppercase;letter-spacing:.14em}.page-break-marker::before,.page-break-marker::after{content:"";flex:1;border-top:1px dashed var(--line-strong)}
+.workspace-left{display:flex;align-items:center;gap:18px}.workspace-nav{display:flex;gap:4px}.workspace-nav a,.workspace-nav button{padding:6px 10px;border:1px solid transparent;border-radius:99px;background:transparent;color:var(--ink-muted);font-size:12px;font-weight:600;text-decoration:none}.workspace-nav a:hover,.workspace-nav button:hover,.workspace-nav .active{border-color:var(--line);background:var(--surface-2);color:var(--ink)}
+.context-panel .revision-panel{position:static;width:auto;max-height:none;margin:0 0 16px;box-shadow:none}
+@media(max-width:1100px){.workspace-nav a:not(:first-of-type){display:none}}
+.semantic-row .script-editor{field-sizing:content;height:auto;min-height:1.9em;resize:none;overflow:hidden}

@@ -41,7 +41,7 @@ class UsedTools(Evaluator[Any, Any, Any]):
 
     def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
         """Check the recorded tool calls."""
-        tools = ctx.output.get("tools", []) if isinstance(ctx.output, dict) else []
+        tools = ctx.attributes.get("tools") or (ctx.output.get("tools", []) if isinstance(ctx.output, dict) else [])
         return EvaluationReason(any(tool in tools for tool in self.any_of), f"tools={tools}")
 
 

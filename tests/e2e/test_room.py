@@ -137,3 +137,59 @@ def test_writer_launches_a_rewrite_and_approves_its_proposal(page: Page) -> None
     page.get_by_role("tab", name="Coverage").click()
     expect(page.get_by_role("button", name="Start coverage")).to_be_enabled()
     expect(page.get_by_text("Report", exact=True).first).to_be_visible()
+
+
+def _stream(*events: dict[str, object]) -> str:
+    """Encode Vercel AI SDK v6 UI-message stream events as server-sent events."""
+    return "".join(f"data: {json.dumps(event)}\n\n" for event in events) + "data: [DONE]\n\n"
+
+
+def test_room_chat_streams_the_answer_and_shows_the_tools_used(page: Page) -> None:
+    """The showrunner's reply streams in, with its tool calls shown as chips; the role rides on the request."""
+    requests: list[str] = []
+
+    def chat(route: Route) -> None:
+        """Answer with a tool call, a delegated consult, and streamed text."""
+        requests.append(route.request.url)
+        body = _stream(
+            {"type": "start", "messageId": "m1"},
+            {"type": "tool-input-available", "toolCallId": "c1", "toolName": "read_story_twin", "input": {"project_id": 9002}},
+            {"type": "tool-output-available", "toolCallId": "c1", "output": {"characters": []}},
+            {"type": "tool-input-available", "toolCallId": "c2", "toolName": "consult", "input": {"role": "character_specialist", "brief": "Will's want"}},
+            {"type": "tool-output-available", "toolCallId": "c2", "output": "[Character specialist] He wants the truth."},
+            {"type": "text-start", "id": "t1"},
+            {"type": "text-delta", "id": "t1", "delta": "Will wants his father "},
+            {"type": "text-delta", "id": "t1", "delta": "to be real."},
+            {"type": "text-end", "id": "t1"},
+            {"type": "finish"},
+        )
+        route.fulfill(status=200, headers={"content-type": "text/event-stream", "x-vercel-ai-ui-message-stream": "v1"}, body=body)
+
+    page.route("**/api/v1/projects/9002/room/chat**", chat)
+    page.route("**/api/v1/projects/9002/room/workflows", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(WORKFLOWS)))
+    page.route("**/api/v1/projects/9002/workspace**", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(WORKSPACE)))
+    for path in ("runs", "agent-proposals"):
+        page.route(f"**/api/v1/projects/9002/{path}", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9002/insights", lambda route: route.fulfill(status=200, content_type="application/json", body='{"workflows":{},"roles":{}}'))
+    page.route("**/api/v1/projects/9002/events", lambda route: route.fulfill(status=204, body=""))
+    page.route("**/api/v1/agent-roles", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([
+        {"key": "showrunner", "label": "Showrunner", "description": "", "default_permission": "chat_only"},
+        {"key": "script_editor", "label": "Script editor", "description": "", "default_permission": "chat_only"},
+    ])))
+
+    page.goto("/projects/9002/room")
+    chat_panel = page.get_by_role("region", name="Room chat")
+    chat_panel.get_by_label("Message the room").fill("What does Will want from Edward?")
+    chat_panel.get_by_role("button", name="Send").click()
+    expect(chat_panel.get_by_text("Will wants his father to be real.")).to_be_visible()
+    expect(chat_panel.get_by_text("Checked the Story twin ✓")).to_be_visible()
+    expect(chat_panel.get_by_text("Consulted a specialist (character specialist) ✓")).to_be_visible()
+    assert "role=showrunner" in requests[0] and "permission_mode=chat_only" in requests[0]
+
+    chat_panel.get_by_label("Room role").select_option("script_editor")
+    chat_panel.get_by_label("Chat permission").select_option("suggest")
+    chat_panel.get_by_label("Message the room").fill("Tighten scene 2.")
+    chat_panel.get_by_label("Message the room").press("Enter")
+    expect(chat_panel.get_by_text("Tighten scene 2.")).to_be_visible()
+    page.wait_for_timeout(300)
+    assert "role=script_editor" in requests[1] and "permission_mode=suggest" in requests[1]

@@ -19,6 +19,7 @@ import {
   subscribeProjectEvents,
   WorkflowRun,
 } from './api'
+import RoomChat from './RoomChat'
 import './room.css'
 
 type Json = Record<string, unknown>
@@ -120,7 +121,7 @@ export default function WritersRoom({ projectId }: { projectId: number }) {
 
   return <div className="room-page">
     <header className="room-head">
-      <div><a className="room-back" href={`/projects/${projectId}`}>← Workspace</a><p className="eyebrow warm">WRITERS’ ROOM</p><h1>Put the room to work</h1><p>Each workflow is a team of agents with a critique loop or a panel. Anything that would change your script or story arrives as a proposal you approve.</p></div>
+      <div><a className="room-back" href={`/projects/${projectId}`}>← Workspace</a> <a className="room-back" href={`/projects/${projectId}/twin`}>Story twin ↗</a><p className="eyebrow warm">WRITERS’ ROOM</p><h1>Put the room to work</h1><p>Each workflow is a team of agents with a critique loop or a panel. Anything that would change your script or story arrives as a proposal you approve.</p></div>
     </header>
     {error && <p className="notice" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">×</button></p>}
     <div className="room-grid">
@@ -133,12 +134,13 @@ export default function WritersRoom({ projectId }: { projectId: number }) {
           <button className="button primary" type="submit" disabled={busy || missing}>{busy ? 'Starting…' : `Start ${selected.label.toLowerCase()}`}</button>
         </form>}
       </section>
+      <div className="room-side"><RoomChat projectId={projectId} />
       <section className="room-runs" aria-label="Room runs">
         <p className="eyebrow">RUNS / {runs.length}</p>
         {runs.length === 0 && <p className="empty-copy">No room runs yet. Pick a workflow and start one; you can leave the page while it works.</p>}
         {runs.map(run => <RunCard key={run.id} run={run} open={openRunId === run.id} onToggle={() => setOpenRunId(openRunId === run.id ? null : run.id)} proposals={proposals.filter(proposal => proposal.run_id === run.id)} onCancel={() => void act(cancelWorkflowRun, run.id)} onApprove={id => void act(approveAgentProposal, id)} onReject={id => void act(rejectAgentProposal, id)} onRollback={id => void act(rollbackAgentProposal, id)} rated={rated[run.id]} onRate={rating => void rate(run.id, rating)} label={workflows.find(workflow => workflow.key === run.input?.workflow)?.label ?? String(run.input?.workflow ?? 'Workflow')} />)}
         {insights && Object.keys(insights.workflows).length > 0 && <InsightsTable insights={insights} labels={Object.fromEntries(workflows.map(workflow => [workflow.key, workflow.label]))} />}
-      </section>
+      </section></div>
     </div>
   </div>
 }

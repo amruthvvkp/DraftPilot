@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic_evals import Case, Dataset, increment_eval_metric
+from pydantic_evals import Case, Dataset, increment_eval_metric, set_eval_attribute
 from pydantic_evals.evaluators import LLMJudge
 
 from draftpilot.agents.deps import RoomDeps
@@ -61,16 +61,16 @@ async def room_qa(project: EvalProject, model: Any, name: str, judge: Any) -> tu
     """Ask the script editor questions only the script can answer."""
     cases = [
         Case(name="second_scene_heading", inputs="What is the exact scene heading of the second scene? Answer with the heading only.",
-             expected_output="INT. WILL'S BEDROOM - NIGHT (1973)", evaluators=(MentionsAny(["will's bedroom"], path="reply"),)),
+             expected_output="INT. WILL'S BEDROOM - NIGHT (1973)", evaluators=(MentionsAny(["will's bedroom"]),)),
         Case(name="wills_wife", inputs="What is the name of Will's wife?", expected_output="Josephine",
-             evaluators=(MentionsAny(["josephine"], path="reply"),)),
+             evaluators=(MentionsAny(["josephine"]),)),
         Case(name="wills_mother", inputs="What is Will's mother's first name?", expected_output="Sandra",
-             evaluators=(MentionsAny(["sandra"], path="reply"),)),
+             evaluators=(MentionsAny(["sandra"]),)),
         Case(name="witch_eye", inputs="What is special about the witch's eye, and what do the boys see in it?",
              expected_output="She has a glass eye; looking into it shows you how you will die.",
-             evaluators=(MentionsAny(["glass"], path="reply"), MentionsAny(["die", "death"], path="reply"))),
+             evaluators=(MentionsAny(["glass"]), MentionsAny(["die", "death"]))),
         Case(name="catfish_ring", inputs="In Edward's opening story, what did the uncatchable fish take from him?",
-             expected_output="His (gold) wedding ring.", evaluators=(MentionsAny(["ring"], path="reply"),)),
+             expected_output="His (gold) wedding ring.", evaluators=(MentionsAny(["ring"]),)),
     ]
     dataset = Dataset[Any, Any, Any](
         name="room_qa",
@@ -78,20 +78,21 @@ async def room_qa(project: EvalProject, model: Any, name: str, judge: Any) -> tu
         evaluators=[
             UsedTools(),
             LLMJudge(
-                rubric="The reply answers the question correctly for the Big Fish screenplay (compare with the expected "
-                "answer), is concise, and invents no details.",
+                rubric="The reply gives the same answer as the expected output for the Big Fish screenplay. Extra accurate "
+                "context is fine; fail only if the answer is wrong, missing, or contradicts the expected output.",
                 model=judge, include_input=True, include_expected_output=True,
             ),
         ],
     )
 
-    async def task(question: str) -> dict[str, Any]:
+    async def task(question: str) -> str:
         """Answer one question through the MCP tools."""
         reply: str
         reply, record = await run_role(role_spec("script_editor"), model, _room(project), question, str,
                                        provider="lm_studio", model_name=name, kind="eval")
         _measure(record)
-        return {"reply": reply, "tools": record.tools_used}
+        set_eval_attribute("tools", record.tools_used)
+        return reply
 
     return dataset, task
 

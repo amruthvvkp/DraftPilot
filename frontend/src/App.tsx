@@ -5,6 +5,7 @@ import ArtifactStudio from './ArtifactStudio'
 import KnowledgeGraphPage from './KnowledgeGraph'
 import ProjectWizard from './ProjectWizard'
 import ProviderSettings from './ProviderSettings'
+import StoryTwinPage from './StoryTwin'
 import Workspace from './Workspace'
 import WritersRoom from './WritersRoom'
 
@@ -17,10 +18,12 @@ export default function App() {
   const artifactMatch = path.match(/^\/projects\/(\d+)\/studio$/)
   const contextMatch = path.match(/^\/projects\/(\d+)\/context$/)
   const roomMatch = path.match(/^\/projects\/(\d+)\/room$/)
+  const twinMatch = path.match(/^\/projects\/(\d+)\/twin$/)
   if (workspaceMatch) return <Workspace projectId={Number(workspaceMatch[1])} />
   if (artifactMatch) return <ArtifactStudio projectId={Number(artifactMatch[1])} />
   if (contextMatch) return <KnowledgeGraphPage projectId={Number(contextMatch[1])} />
   if (roomMatch) return <WritersRoom projectId={Number(roomMatch[1])} />
+  if (twinMatch) return <StoryTwinPage projectId={Number(twinMatch[1])} />
   if (path === '/settings') return <ProviderSettings />
   return <ProjectVault />
 }

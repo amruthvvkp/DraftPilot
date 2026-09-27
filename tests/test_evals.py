@@ -15,15 +15,16 @@ from draftpilot.evals.evaluators import (
     MentionsAny,
     OutlineShape,
     Shorter,
+    UsedTools,
     speakers,
 )
 from draftpilot.evals.harness import eval_project
 from draftpilot.models import KnowledgeNode
 
 
-def _ctx(output: Any) -> Any:
+def _ctx(output: Any, **attributes: Any) -> Any:
     """Build the slice of an evaluator context the evaluators read."""
-    return SimpleNamespace(output=output)
+    return SimpleNamespace(output=output, attributes=attributes)
 
 
 ORIGINAL = "INT. HALL - NIGHT\n\nWill waits.\n\nWILL\nWhere is he?\n\nSANDRA\nHe'll come.\n"
@@ -31,7 +32,9 @@ ORIGINAL = "INT. HALL - NIGHT\n\nWill waits.\n\nWILL\nWhere is he?\n\nSANDRA\nHe
 
 def test_evaluators_check_what_they_claim() -> None:
     """Each deterministic evaluator passes and fails on the obvious cases."""
-    assert MentionsAny(["josephine"], path="reply").evaluate(_ctx({"reply": "Her name is Josephine."})).value
+    assert MentionsAny(["josephine"]).evaluate(_ctx("Her name is Josephine.")).value
+    assert UsedTools().evaluate(_ctx("Josephine", tools=["read_story_twin"])).value
+    assert not UsedTools().evaluate(_ctx("Josephine", tools=[])).value
     assert not MentionsAny(["glass", "death"], minimum=2).evaluate(_ctx("a glass eye")).value
     assert speakers(ORIGINAL) == {"WILL", "SANDRA"}
     assert KeepsCast().evaluate(_ctx({"original": ORIGINAL, "fountain": "INT. HALL - NIGHT\n\nWILL\nWell?\n"})).value

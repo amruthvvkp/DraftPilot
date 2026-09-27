@@ -16,6 +16,7 @@ def summarize(suite: str, report: EvaluationReport[Any, Any, Any], model: str, j
     cases = {
         case.name: {
             "assertions": {name: result.value for name, result in case.assertions.items()},
+            "failures": {name: result.reason for name, result in case.assertions.items() if not result.value and result.reason},
             "scores": {name: result.value for name, result in case.scores.items()},
             "metrics": case.metrics,
             "duration_s": round(case.task_duration, 1),
