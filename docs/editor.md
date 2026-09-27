@@ -14,7 +14,12 @@ Every line of a scene is a typed block: action, character, dialogue, parenthetic
 shot, page break, and so on. The type sits to the left of each block.
 
 - ++tab++ moves to the next sensible element, for example from character to dialogue to action.
-- Character names autocomplete from the cast you've already written.
+- Character names autocomplete from the cast you've already written, and character cues upper-case as
+  you type.
+- **Smart typing** retypes an action block when you leave it, but only when it's unambiguous:
+  - an all-caps name such as `EDWARD` or `WILL (V.O.)` becomes a character cue;
+  - a line such as `(beat)` becomes a parenthetical;
+  - `CUT TO:` or `FADE OUT.` becomes a transition.
 - To change a block's type, pick a new one and click **Review format**. The change is recorded as a
   proposal, so formatting fixes can be reviewed and undone like any other edit.
 - Hover over a block, or focus it, to reveal its tools: move it up or down, delete it, and see who

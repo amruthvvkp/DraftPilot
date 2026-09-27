@@ -73,6 +73,12 @@ def test_big_fish_from_import_to_cleanup(signed_in: Page, base_url: str) -> None
     expect(page.get_by_text("(smoke edit)", exact=False)).to_be_visible(timeout=30_000)
     expect(page.get_by_role("separator", name="Page break").first).to_be_visible()
 
+    # Smart typing: an action line that reads as a transition becomes one when you leave it.
+    second = page.get_by_label("Edit action").nth(1)
+    second.fill("FADE OUT.")
+    second.blur()
+    expect(page.get_by_label("Edit transition").first).to_have_value("FADE OUT.", timeout=30_000)
+
     # The Story twin knows the cast (refresh derives it now rather than waiting for the debounce).
     page.get_by_role("navigation", name="Project tools").get_by_role("link", name="Story twin").click()
     page.get_by_role("button", name="Refresh from the draft").click()
