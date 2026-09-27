@@ -33,6 +33,13 @@ Tracking epic: [#13](https://github.com/amruthvvkp/DraftPilot/issues/13).
   page-aware capability bundle, while the server remains authoritative for project scope,
   permissions, approvals, redaction, and audit.
 
+## v1 completion
+
+v1 means a complete, agent-first studio. It includes a digital writers' room of coordinated agents
+grounded in a Story twin and a Writer twin, with MCP as the one tool surface, LM Studio-backed evals,
+and full manual editing. The audited status of each item and the execution order (G0–G9) are in the
+[v1 gap analysis](dev/v1-gap-analysis.md).
+
 ## Ground-test screenplay benchmark
 
 The first serious validation project is a writer-owned 165-page feature screenplay developed in

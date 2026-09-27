@@ -46,6 +46,9 @@ Copyright &copy; 2026 Amruth Vithala
 nav = [
   { "Get started" = "index.md" },
   { "Roadmap" = "roadmap.md" },
+  { "Developer guide" = [
+    { "v1 gap analysis" = "dev/v1-gap-analysis.md" },
+  ] },
   { "Backups & recovery" = "backups.md" },
   { "Provider setup" = "providers.md" },
   { "Monty sandbox" = "monty.md" },
