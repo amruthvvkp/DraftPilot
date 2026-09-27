@@ -16,6 +16,7 @@ UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run interrogate src migrations
 | 0 · deterministic | nothing | `uv run pytest tests --ignore=tests/e2e` | Unit and API behaviour. Runs in CI. `lmstudio` tests are deselected by default |
 | e2e · browser | the running stack on `:9000` | `uv run pytest tests/e2e` | Playwright journeys. Tests are auto-marked `e2e` |
 | 1 · local model | LM Studio server | `uv run pytest -m lmstudio` | Real PydanticAI calls against local LM Studio |
+| postgres | the stack's Postgres (pgvector) on `:55432` | `uv run pytest -m postgres` | The pgvector hybrid retrieval store, in a throwaway schema |
 
 All LLM-backed tests run against local LM Studio. They never fall back to a cloud provider. Configure
 the target with the `EVAL__` settings:

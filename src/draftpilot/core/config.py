@@ -163,15 +163,26 @@ class MCPSettings(BaseSettings):
 
 
 class RAGSettings(BaseSettings):
-    """Local retrieval service configuration."""
+    """Hybrid retrieval service configuration (vector + full-text, fused with RRF)."""
 
     model_config = SettingsConfigDict(env_prefix="RAG__")
 
     auth_token: SecretStr = SecretStr("draftpilot-local-token")
     max_results: int = 8
-    embedding_provider: str = "hash"
-    database_path: Path = Path("/tmp/draftpilot-rag.sqlite3")
     service_url: str = "http://rag:8000"
+    # Store: "postgres" (pgvector + tsvector; compose default) or "sqlite" (FTS5; local/tests).
+    backend: str = "sqlite"
+    database_url: SecretStr = SecretStr("postgresql://draftpilot:draftpilot@localhost:55432/draftpilot")
+    database_path: Path = Path("/tmp/draftpilot-rag.sqlite3")
+    # Embeddings: "lm_studio" (default), "openai_compatible", "hash" (offline), or "none" (lexical).
+    embedding_provider: str = "lm_studio"
+    embedding_model: str = "text-embedding-nomic-embed-text-v1.5"
+    embedding_base_url: str = "http://localhost:1234/v1"
+    embedding_api_key: SecretStr = SecretStr("")
+    embedding_dimensions: int = Field(default=768, ge=8, le=4096)
+    # nomic-embed-text needs task prefixes; clear them for models that do not.
+    embedding_document_prefix: str = "search_document: "
+    embedding_query_prefix: str = "search_query: "
 
 
 class BackupSettings(BaseSettings):

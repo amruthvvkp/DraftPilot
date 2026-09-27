@@ -39,7 +39,11 @@ x-extra-hosts: &extra-hosts
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # postgres:16-alpine + pgvector (see Dockerfile.postgres) for hybrid retrieval.
+    image: draftpilot-postgres
+    build:
+      context: .
+      dockerfile: ./Dockerfile.postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: draftpilot
@@ -181,8 +185,20 @@ services:
       - "${DRAFTPILOT_RAG_PORT:-9010}:8000"
     environment:
       RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
+      # Hybrid store in Postgres (pgvector HNSW + tsvector GIN, schema "rag").
+      RAG__BACKEND: ${RAG__BACKEND:-postgres}
+      RAG__DATABASE_URL: ${RAG__DATABASE_URL:-postgresql://draftpilot:draftpilot@postgres:5432/draftpilot}
       RAG__DATABASE_PATH: /data/draftpilot-rag.sqlite3
+      # Embeddings from LM Studio on the host; retrieval falls back to full-text if it is down.
+      RAG__EMBEDDING_PROVIDER: ${RAG__EMBEDDING_PROVIDER:-lm_studio}
+      RAG__EMBEDDING_BASE_URL: ${RAG__EMBEDDING_BASE_URL:-http://host.docker.internal:1234/v1}
+      RAG__EMBEDDING_MODEL: ${RAG__EMBEDDING_MODEL:-text-embedding-nomic-embed-text-v1.5}
+      RAG__EMBEDDING_DIMENSIONS: ${RAG__EMBEDDING_DIMENSIONS:-768}
       OTEL__ENABLED: "false"
+    extra_hosts: *extra-hosts
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - rag_data:/data
     healthcheck:

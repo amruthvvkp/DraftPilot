@@ -20,6 +20,7 @@ from draftpilot.api.mcp_approvals import router as mcp_approvals_router
 from draftpilot.api.monty import router as monty_router
 from draftpilot.api.projects import router as projects_router
 from draftpilot.api.providers import router as providers_router
+from draftpilot.api.retrieval import router as retrieval_router
 from draftpilot.api.room import router as room_router
 from draftpilot.api.runs import router as runs_router
 from draftpilot.api.timeline import router as timeline_router
@@ -56,6 +57,7 @@ protected.include_router(monty_router)
 protected.include_router(mcp_approvals_router)
 protected.include_router(events_router)
 protected.include_router(room_router)
+protected.include_router(retrieval_router)
 router.include_router(protected)
 
 __all__ = ["router"]

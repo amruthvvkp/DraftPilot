@@ -6,11 +6,17 @@ re-enables both for Tier 1 tests, which always target local LM Studio.
 """
 
 import os
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
 os.environ.setdefault("LLM__ENABLED", "false")
 os.environ.setdefault("PYDANTIC_AI_NO_BANNER", "1")
+# The in-process RAG service uses a throwaway SQLite store with deterministic hash embeddings.
+os.environ.setdefault("RAG__BACKEND", "sqlite")
+os.environ.setdefault("RAG__EMBEDDING_PROVIDER", "hash")
+os.environ.setdefault("RAG__EMBEDDING_DIMENSIONS", "256")
+os.environ.setdefault("RAG__DATABASE_PATH", os.path.join(tempfile.mkdtemp(prefix="draftpilot-rag-"), "rag.sqlite3"))
 
 import httpx
 import pytest
@@ -48,3 +54,14 @@ def lmstudio() -> Iterator[LMStudio]:
         yield server
     finally:
         models.ALLOW_MODEL_REQUESTS = False
+
+
+async def _queue_unavailable() -> None:
+    """Fail fast like an absent Redis instead of letting ARQ retry for seconds."""
+    raise ConnectionError("no job queue in Tier 0 tests")
+
+
+@pytest.fixture(autouse=True)
+def _no_job_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make best-effort enqueues fail immediately; tests that need a queue patch their own."""
+    monkeypatch.setattr("draftpilot.core.queue.pool.get_arq_pool", _queue_unavailable)

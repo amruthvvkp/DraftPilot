@@ -10,6 +10,7 @@ deterministic metrics even when no model is reachable.
 import httpx
 import logfire
 
+from draftpilot.core import events
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
@@ -18,6 +19,7 @@ from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.db import session_scope
 from draftpilot.core.providers import build_chat_model, settings_from_profile
 from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.rag_sources import project_documents
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import evaluations as evaluations_crud
@@ -103,6 +105,28 @@ async def index_rag_document(ctx: dict, document: dict[str, object]) -> dict[str
         response = await client.post(url, json=payload, headers=headers)
         response.raise_for_status()
     return {"status": "indexed"}
+
+
+async def reindex_project(ctx: dict, project_id: int) -> dict[str, object]:
+    """Re-send every retrievable document of a project to the hybrid index."""
+    with logfire.span("reindex_project", project_id=project_id):
+        async with session_scope() as session:
+            documents = await project_documents(session, project_id)
+        chunks = 0
+        failures = 0
+        headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
+        url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}/documents"
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            for document in documents:
+                try:
+                    response = await client.post(url, json=document, headers=headers)
+                    response.raise_for_status()
+                    chunks += int(response.json().get("chunks", 0))
+                except (httpx.HTTPError, ValueError) as exc:
+                    failures += 1
+                    logfire.warning("Reindex skipped {source}: {exc}", source=document["source_id"], exc=str(exc))
+        await events.publish(project_id, "rag.reindexed", {"documents": len(documents), "chunks": chunks, "failures": failures})
+        return {"documents": len(documents), "chunks": chunks, "failures": failures}
 
 
 async def delete_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:
