@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.config import settings
 from draftpilot.core.copilot import retrieve_context
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.crud import projects as projects_crud
 
 router = APIRouter(prefix="/projects/{project_id}/rag", tags=["retrieval"])
@@ -54,5 +54,5 @@ async def stats(project_id: int, session: AsyncSession = Depends(async_get_db)) 
 async def reindex(project_id: int, session: AsyncSession = Depends(async_get_db)) -> ReindexResponse:
     """Queue a full re-index of the project's scenes, artifacts, canon, and references."""
     await _require_project(session, project_id)
-    queued = await enqueue_best_effort("reindex_project", project_id, description="Project reindex enqueue")
+    queued = await temporal.start_best_effort("reindex_project", project_id, description="Project reindex enqueue")
     return ReindexResponse(queued=queued)

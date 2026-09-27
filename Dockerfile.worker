@@ -22,4 +22,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-cache --group worker \
     $( [ "${INSTALL_DEBUGPY}" = "true" ] && printf '%s' "--group debugpy" )
 
-CMD ["uv", "run", "arq", "draftpilot.worker.settings.WorkerSettings"]
+CMD ["uv", "run", "python", "-m", "draftpilot.worker"]

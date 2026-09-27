@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.core.story_operations import (
     apply_story_operation,
     validate_story_operation,
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/projects/{project_id}/artifacts", tags=["artifacts"]
 
 async def _enqueue_index(project_id: int, artifact: StoryArtifact) -> None:
     """Queue an artifact refresh without rolling back the committed artifact."""
-    await enqueue_best_effort(
+    await temporal.start_best_effort(
         "index_rag_document",
         {
             "project_id": project_id,

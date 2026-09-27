@@ -403,9 +403,9 @@ def test_start_run_persists_before_enqueue(
     class Pool:
         """Capture queue submissions without Redis."""
 
-        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+        async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
             """Record one queued job."""
-            enqueued.append((name, run_id))
+            enqueued.append((name, args[0]))
 
     async def get_pool() -> Pool:
         """Return the in-memory queue fixture."""
@@ -414,7 +414,7 @@ def test_start_run_persists_before_enqueue(
     monkeypatch.setattr("draftpilot.api.runs.projects_crud.get", get_project)
     monkeypatch.setattr("draftpilot.api.runs.screenplays_crud.get", get_screenplay)
     monkeypatch.setattr("draftpilot.api.runs.runs_crud.create", create_run)
-    monkeypatch.setattr("draftpilot.api.runs.get_arq_pool", get_pool)
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", get_pool)
     response = client.post(
         "/api/v1/projects/9/runs", json={"screenplay_id": 2}
     )
@@ -477,16 +477,16 @@ def test_resume_run_resets_exhausted_attempt_budget(
     class Pool:
         """Capture the resumed workflow job."""
 
-        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+        async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
             """Verify the same run is requeued."""
-            assert (name, run_id) == ("execute_workflow", 32)
+            assert (name, args[0]) == ("execute_workflow", 32)
 
     async def get_pool() -> Pool:
         """Return the isolated queue fixture."""
         return Pool()
 
     monkeypatch.setattr("draftpilot.api.runs.runs_crud.get", get_run)
-    monkeypatch.setattr("draftpilot.api.runs.get_arq_pool", get_pool)
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", get_pool)
     response = client.post("/api/v1/projects/9/runs/32/resume")
 
     assert response.status_code == 202

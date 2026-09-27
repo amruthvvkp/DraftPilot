@@ -16,12 +16,11 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from draftpilot.api import router as api_router
-from draftpilot.core import telemetry
+from draftpilot.core import telemetry, temporal
 from draftpilot.core.api_auth import open_api_warning
 from draftpilot.core.cache import close_redis, get_redis
 from draftpilot.core.config import settings
 from draftpilot.core.db import dispose_engine
-from draftpilot.core.queue import close_arq_pool, get_arq_pool
 
 
 @asynccontextmanager
@@ -30,11 +29,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     if warning := open_api_warning(settings.web.host):
         logfire.warning(warning)
     get_redis()
-    await get_arq_pool()
+    try:
+        await temporal.get_client()
+    except Exception as exc:  # noqa: BLE001 - background work degrades; the studio still serves
+        logfire.warning("Temporal is unreachable at {host}; background work is paused: {exc}", host=settings.temporal.host, exc=str(exc))
     try:
         yield
     finally:
-        await close_arq_pool()
+        await temporal.close_client()
         await close_redis()
         await dispose_engine()
 

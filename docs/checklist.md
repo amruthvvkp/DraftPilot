@@ -80,8 +80,8 @@ For each workflow, start it, leave the page, come back, and check that the trail
 
 - [ ] **How useful is the room?** shows accepted, kept, thumbs and time per workflow.
 - [ ] Edit a block an approved rewrite wrote. **Kept** falls after a refresh.
-- [ ] In Langfuse (<http://localhost:3300>), the room's traces carry `writer_feedback`,
-      `proposal_*` and `check_*` scores.
+- [ ] In the Temporal UI (<http://localhost:8233>), the run's `execute_workflow` shows each step, and
+      a cancelled run ends as cancelled.
 
 ## 8. External agents (MCP)
 

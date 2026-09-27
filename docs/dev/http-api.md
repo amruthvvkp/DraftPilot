@@ -96,7 +96,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 
 | Method | Path | What it does | Body | Returns |
 |---|---|---|---|---|
-| `POST` | `/projects/{project_id}/feedback` | Record a thumbs up or down on one agent run or room workflow run, and score its traces. | `AgentFeedbackCreate` | 201 `object` |
+| `POST` | `/projects/{project_id}/feedback` | Record a thumbs up or down on one agent run or room workflow run. | `AgentFeedbackCreate` | 201 `object` |
 | `GET` | `/projects/{project_id}/insights` | Return acceptance, retention, feedback, cost and reliability per workflow and role. |  | 200 `object` |
 
 ## knowledge-graph

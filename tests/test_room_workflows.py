@@ -395,6 +395,18 @@ def _durable(project: AsyncSession, monkeypatch: pytest.MonkeyPatch, responders:
     return run_async(create())
 
 
+async def _execute_run(run_id: int) -> Any:
+    """Execute a persisted run through the real ExecuteRun workflow and activities."""
+    from _temporal import temporal_worker
+
+    from draftpilot.core import temporal
+    from draftpilot.worker.activities import ACTIVITIES
+    from draftpilot.worker.workflows import WORKFLOWS
+
+    async with temporal_worker(WORKFLOWS, ACTIVITIES) as (client, queue):
+        return await client.execute_workflow(temporal.RUN_WORKFLOW, run_id, id=temporal.run_workflow_id(run_id), task_queue=queue)
+
+
 def _scope_for(project: AsyncSession) -> Any:
     """Return a session_scope replacement that opens a fresh session on the test database."""
 
@@ -410,10 +422,9 @@ def _scope_for(project: AsyncSession) -> Any:
 def test_the_worker_runs_a_durable_workflow_and_persists_its_result(project: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     """A queued run executes in the worker, links its proposals and agent runs, and ends succeeded."""
     from draftpilot.models import WorkflowRun
-    from draftpilot.worker.functions import execute_workflow
 
     run_id = _durable(project, monkeypatch, {"Outline": _outline, "Critique": _scores(9)})
-    outcome = run_async(execute_workflow({}, run_id))
+    outcome = run_async(_execute_run(run_id))
     assert outcome["workflow"] == "notes_to_outline" and len(outcome["proposal_ids"]) == 2
     (run,) = _all(project, WorkflowRun)
     assert run.status == "succeeded" and run.permission_mode == "suggest"
@@ -425,7 +436,6 @@ def test_the_worker_runs_a_durable_workflow_and_persists_its_result(project: Asy
 def test_cancelling_a_running_workflow_stops_it_at_the_next_step(project: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
     """Once the writer cancels, the next progress report stops the graph and nothing is proposed."""
     from draftpilot.models import WorkflowRun
-    from draftpilot.worker.functions import execute_workflow
 
     def cancel_then_outline(prompt: str, count: int) -> dict[str, Any]:
         """Cancel the run from 'the writer's side' while the first step is in flight."""
@@ -445,15 +455,14 @@ def test_cancelling_a_running_workflow_stops_it_at_the_next_step(project: AsyncS
         return _outline(prompt, count)
 
     run_id = _durable(project, monkeypatch, {"Outline": cancel_then_outline, "Critique": _scores(9)})
-    assert run_async(execute_workflow({}, run_id)) == {"status": "cancelled"}
+    assert run_async(_execute_run(run_id)) == {"status": "cancelled"}
     (run,) = _all(project, WorkflowRun)
     assert run.status == "cancelled" and _all(project, AgentProposal) == []
 
 
-def test_the_room_api_lists_workflows_and_queues_valid_runs(project: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_room_api_lists_workflows_and_queues_valid_runs(project: AsyncSession, started_workflows: list[Any]) -> None:
     """The launcher sees every workflow's schema; starts are validated before anything is queued."""
     from collections.abc import AsyncGenerator
-    from unittest.mock import AsyncMock, MagicMock
 
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -461,13 +470,6 @@ def test_the_room_api_lists_workflows_and_queues_valid_runs(project: AsyncSessio
     from draftpilot.api.room import router
     from draftpilot.core.db import async_get_db
 
-    pool = MagicMock(enqueue_job=AsyncMock())
-
-    async def get_pool() -> MagicMock:
-        """Return the fake queue."""
-        return pool
-
-    monkeypatch.setattr("draftpilot.api.room.get_arq_pool", get_pool)
     app = FastAPI()
 
     async def dependency() -> AsyncGenerator[AsyncSession]:
@@ -486,13 +488,13 @@ def test_the_room_api_lists_workflows_and_queues_valid_runs(project: AsyncSessio
     assert client.post("/api/v1/projects/1/room/workflows", json={"workflow": "nope"}).status_code == 404
     assert client.post("/api/v1/projects/1/room/workflows", json={"workflow": "rewrite_scene", "params": {}}).status_code == 422
     assert client.post("/api/v1/projects/9/room/workflows", json={"workflow": "coverage"}).status_code == 404
-    pool.enqueue_job.assert_not_awaited()
+    assert started_workflows == []
 
     started = client.post("/api/v1/projects/1/room/workflows", json={"workflow": "coverage", "params": {"focus": "Act 2"}})
     assert started.status_code == 202, started.text
     body = started.json()
     assert body["kind"] == "room_workflow" and body["input"]["params"] == {"focus": "Act 2"} and body["max_attempts"] == 1
-    pool.enqueue_job.assert_awaited_once_with("execute_workflow", body["id"])
+    assert started_workflows == [("execute_workflow", (body["id"],))]
 
 
 def test_self_contained_steps_get_no_tools_but_reading_steps_do(project: AsyncSession) -> None:

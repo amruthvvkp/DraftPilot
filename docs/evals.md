@@ -73,15 +73,9 @@ card.
 Per role, the insights also report runs, failure rate, tokens and mean duration, all taken from each
 agent run's record.
 
-### Langfuse scores
+### Where the measures live
 
-When `OTEL__LANGFUSE_PUBLIC_KEY` and `OTEL__LANGFUSE_SECRET_KEY` are set, every measure is also sent
-to Langfuse as a score. The bundled stack sets both to its development project's keys. Each score is
-attached to the traces of the agent runs involved, so you can filter traces by writer outcome:
-
-- `writer_feedback` (+1 or −1);
-- `proposal_approved`, `proposal_rejected` and `proposal_rolled_back`;
-- `check_<name>` for each automatic check.
-
-Scores are queued to the worker and sent on a best-effort basis. If Langfuse is down, the studio
-carries on.
+Every measure is computed from Postgres: proposals and their decisions, block authorship, feedback
+rows and agent-run records. Nothing is pushed to an external trace store. To look at spans, turn on
+telemetry (`OTEL__ENABLED=true`) and open the bundled Grafana (`--profile observability`). Agent-run
+records keep their trace ids, so you can go from a run to its trace.

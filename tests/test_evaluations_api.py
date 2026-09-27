@@ -98,9 +98,9 @@ def test_start_evaluation_validates_screenplay_and_enqueues_run(monkeypatch: obj
     class Pool:
         """Capture queue submission without Redis."""
 
-        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+        async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
             """Verify the durable run is queued by id."""
-            assert (name, run_id) == ("execute_workflow", 8)
+            assert (name, args[0]) == ("execute_workflow", 8)
 
     async def get_pool() -> Pool:
         """Return the queue fixture."""
@@ -109,7 +109,7 @@ def test_start_evaluation_validates_screenplay_and_enqueues_run(monkeypatch: obj
     monkeypatch.setattr("draftpilot.api.evaluations.projects_crud.get", get_project)
     monkeypatch.setattr("draftpilot.api.evaluations.screenplays_crud.get", get_screenplay)
     monkeypatch.setattr("draftpilot.api.evaluations.runs_crud.create", create_run)
-    monkeypatch.setattr("draftpilot.api.evaluations.get_arq_pool", get_pool)
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", get_pool)
     response = TestClient(app).post(
         "/api/v1/projects/9/evaluations/runs",
         json={"screenplay_id": 2, "evaluator": "continuity_supervisor", "max_attempts": 4},

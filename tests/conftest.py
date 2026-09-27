@@ -56,12 +56,26 @@ def lmstudio() -> Iterator[LMStudio]:
         models.ALLOW_MODEL_REQUESTS = False
 
 
-async def _queue_unavailable() -> None:
-    """Fail fast like an absent Redis instead of letting ARQ retry for seconds."""
-    raise ConnectionError("no job queue in Tier 0 tests")
+async def _temporal_unavailable() -> None:
+    """Fail fast like an absent Temporal server instead of retrying the connection."""
+    raise ConnectionError("no Temporal server in Tier 0 tests")
 
 
 @pytest.fixture(autouse=True)
-def _no_job_queue(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make best-effort enqueues fail immediately; tests that need a queue patch their own."""
-    monkeypatch.setattr("draftpilot.core.queue.pool.get_arq_pool", _queue_unavailable)
+def _no_temporal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make workflow starts fail immediately; tests that need them use ``started_workflows``."""
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", _temporal_unavailable)
+
+
+@pytest.fixture
+def started_workflows(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, tuple[object, ...]]]:
+    """Record every workflow started (type name and arguments) instead of reaching Temporal."""
+    started: list[tuple[str, tuple[object, ...]]] = []
+
+    async def start_job(workflow: str, *args: object, id: str | None = None, **_options: object) -> str:
+        """Record the start and return the workflow id."""
+        started.append((workflow, args))
+        return id or f"{workflow}-test"
+
+    monkeypatch.setattr("draftpilot.core.temporal.start_job", start_job)
+    return started

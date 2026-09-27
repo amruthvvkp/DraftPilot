@@ -2,7 +2,7 @@
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.queue import enqueue_best_effort
+from draftpilot.core import temporal
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import workflow_runs as runs_crud
@@ -54,7 +54,7 @@ async def apply_context_suggestion(
         ),
     )
     if node.id is not None:
-        await enqueue_best_effort(
+        await temporal.start_best_effort(
             "index_rag_document",
             {
                 "project_id": project_id,

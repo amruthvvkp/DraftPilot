@@ -31,7 +31,7 @@ Then open these addresses:
 |---|---|
 | <http://localhost:9000> | The studio |
 | <http://localhost:9001/mcp> | The MCP server for Claude Code, Codex and other agents |
-| <http://localhost:3300> | Langfuse, which holds traces and scores for every agent run |
+| <http://localhost:8233> | The Temporal UI, which shows every room workflow and background job step by step |
 
 If `API__TOKEN` is set, the studio asks for it once and then remembers you with a secure cookie.
 

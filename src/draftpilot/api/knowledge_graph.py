@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import (
@@ -23,7 +23,7 @@ async def _enqueue_index(
     project_id: int, source_id: str, source_kind: str, text: str, content_version: int
 ) -> None:
     """Queue one committed graph record for bounded RAG refresh."""
-    await enqueue_best_effort(
+    await temporal.start_best_effort(
         "index_rag_document",
         {
             "project_id": project_id,
@@ -38,7 +38,7 @@ async def _enqueue_index(
 
 async def _enqueue_delete(project_id: int, source_id: str) -> None:
     """Queue one removed graph record for RAG deletion."""
-    await enqueue_best_effort(
+    await temporal.start_best_effort(
         "delete_rag_document",
         {"project_id": project_id, "source_id": source_id},
         description="RAG graph deletion enqueue",

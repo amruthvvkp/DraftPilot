@@ -17,7 +17,6 @@ from draftpilot.core import events
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.db import session_scope
 from draftpilot.core.providers import build_chat_model, settings_from_profile
-from draftpilot.core.usefulness import score_traces, traces_for_run
 from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.evals.online import online_checks
@@ -112,8 +111,4 @@ async def execute_room_workflow(run: WorkflowRun) -> dict[str, Any]:
     with logfire.span("room workflow {workflow}", workflow=key, run_id=run_id, project_id=run.project_id):
         result = await run_room_workflow(key, params or {}, deps)
     result["checks"] = online_checks(key, result)
-    async with session_scope() as session:
-        traces = await traces_for_run(session, run_id)
-    for name, value in result["checks"].items():
-        await score_traces(traces, f"check_{name}", value)
     return result

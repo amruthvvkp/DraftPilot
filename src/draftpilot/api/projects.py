@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile,
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.config import settings
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.core.scene_sync import scene_changed
 from draftpilot.core.screenplay.hydrate import blocks_for_scene
 from draftpilot.core.screenplay.timeline import (
@@ -67,7 +67,7 @@ async def _enqueue_rag_index(
     project_id: int, source_id: str, source_kind: str, text: str, content_version: int
 ) -> None:
     """Queue a bounded canonical-document refresh after a committed screenplay change."""
-    await enqueue_best_effort(
+    await temporal.start_best_effort(
         "index_rag_document",
         {
             "project_id": project_id,
@@ -277,7 +277,7 @@ async def delete_project_reference(
     if reference is None or reference.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference not found")
     await references_crud.delete(session, reference)
-    await enqueue_best_effort(
+    await temporal.start_best_effort(
         "delete_rag_document",
         {"project_id": project_id, "source_id": f"reference:{reference_id}"},
         description="RAG reference deletion enqueue",

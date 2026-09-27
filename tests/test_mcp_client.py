@@ -138,9 +138,9 @@ def test_mcp_context_workflow_uses_shared_scope_and_queues_run(monkeypatch: pyte
             """Initialize the captured job list."""
             self.jobs: list[tuple[str, int | None]] = []
 
-        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+        async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
             """Capture a worker job."""
-            self.jobs.append((name, run_id))
+            self.jobs.append((name, args[0]))
 
     pool = Pool()
     run = WorkflowRun(id=44, project_id=9, kind="context_generation")
@@ -149,7 +149,7 @@ def test_mcp_context_workflow_uses_shared_scope_and_queues_run(monkeypatch: pyte
     monkeypatch.setattr(server.projects_crud, "get", AsyncMock(return_value=Project(id=9, title="Draft")))
     monkeypatch.setattr(server.artifacts_crud, "get", AsyncMock(return_value=StoryArtifact(id=3, project_id=9, kind="outline", title="Outline", version=4)))
     monkeypatch.setattr(server.runs_crud, "create", AsyncMock(return_value=run))
-    monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", AsyncMock(return_value=pool))
 
     result = run_async(server.start_context_workflow(9, "camera", 3, "Plan the reveal.", ctx=SimpleNamespace(client_id="writer")))
 
@@ -179,9 +179,9 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
             """Initialize the captured job list."""
             self.jobs: list[tuple[str, object]] = []
 
-        async def enqueue_job(self, name: str, payload: object) -> None:
+        async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
             """Capture one RAG refresh job."""
-            self.jobs.append((name, payload))
+            self.jobs.append((name, args[0]))
 
     run = WorkflowRun(id=44, project_id=9, kind="context_generation", status="succeeded", input={"artifact_id": 3}, result={"suggestion": "Use a long lens.", "output_kind": "camera", "source_version": 4, "citations": []})
     node = KnowledgeNode(id=51, project_id=9, kind="camera", label="Camera from run 44", description="Use a long lens.")
@@ -196,8 +196,7 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     monkeypatch.setattr(server.artifacts_crud, "get", AsyncMock(return_value=SimpleNamespace(id=3, project_id=9, version=4)))
     monkeypatch.setattr(server.graph_crud, "create_node", AsyncMock(return_value=node))
     monkeypatch.setattr(server.runs_crud, "update_status", update)
-    monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
-    monkeypatch.setattr("draftpilot.core.queue.pool.get_arq_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", AsyncMock(return_value=pool))
 
     with pytest.raises(ValueError, match="approval_id=7"):
         run_async(server.apply_context_workflow(9, 44, 4, ctx=SimpleNamespace(client_id="writer")))

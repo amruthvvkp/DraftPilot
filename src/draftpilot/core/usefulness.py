@@ -8,20 +8,16 @@
 * **Feedback**: thumbs up and down on runs.
 * **Usefulness**: the mean of whichever of acceptance, retention and the thumbs-up share are known.
 
-Every score also goes to Langfuse, attached to the run's traces, when keys are configured.
+Every measure lives in Postgres; nothing is pushed to an external trace store.
 """
 
 from collections import defaultdict
 from statistics import mean
 from typing import Any
 
-import httpx
-import logfire
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.config import settings
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.models import AgentFeedback, AgentProposal, AgentRun, Block, WorkflowRun
 
 CHAT = "chat & MCP"
@@ -120,59 +116,3 @@ async def project_insights(session: AsyncSession, project_id: int) -> dict[str, 
             for key, role in sorted(roles.items())
         },
     }
-
-
-# ---------------------------------------------------------------------------------------------------------------------
-# Langfuse scores
-# ---------------------------------------------------------------------------------------------------------------------
-
-
-def scores_enabled() -> bool:
-    """Return whether Langfuse score keys are configured."""
-    return bool(settings.otel.langfuse_public_key and settings.otel.langfuse_secret_key.get_secret_value())
-
-
-async def traces_for_run(session: AsyncSession, workflow_run_id: int | None) -> list[str]:
-    """Return the trace ids of every agent run a workflow run made."""
-    if workflow_run_id is None:
-        return []
-    rows = await session.exec(select(AgentRun.trace_id).where(AgentRun.workflow_run_id == workflow_run_id))
-    return sorted({trace for trace in rows.all() if trace})
-
-
-async def score_traces(traces: list[str], name: str, value: float, comment: str = "") -> None:
-    """Queue one score for each trace (best-effort; never fails the caller)."""
-    if traces and scores_enabled():
-        scores = [{"trace_id": trace, "name": name, "value": value, "comment": comment[:500]} for trace in traces]
-        await enqueue_best_effort("push_langfuse_scores", scores, description="Langfuse score enqueue")
-
-
-async def push_scores(scores: list[dict[str, Any]]) -> int:
-    """POST scores to Langfuse's public API and return how many it accepted."""
-    if not scores_enabled():
-        return 0
-    auth = (settings.otel.langfuse_public_key, settings.otel.langfuse_secret_key.get_secret_value())
-    accepted = 0
-    async with httpx.AsyncClient(base_url=settings.otel.langfuse_base_url, auth=auth, timeout=5.0) as client:
-        for score in scores:
-            payload = {"traceId": score["trace_id"], "name": score["name"], "value": score["value"], "dataType": "NUMERIC"}
-            if score.get("comment"):
-                payload["comment"] = score["comment"]
-            try:
-                response = await client.post("/api/public/scores", json=payload)
-                response.raise_for_status()
-                accepted += 1
-            except httpx.HTTPError as exc:
-                logfire.warning("Langfuse score skipped: {exc}", exc=str(exc))
-    return accepted
-
-
-DECISION_VALUES = {"approved": 1.0, "rejected": 0.0, "rolled_back": 0.0}
-
-
-async def record_decision(session: AsyncSession, proposal: AgentProposal) -> None:
-    """Score the traces behind a proposal with the writer's decision on it."""
-    value = DECISION_VALUES.get(proposal.status)
-    if value is not None:
-        summary = str(proposal.diff.get("summary", "")) if isinstance(proposal.diff, dict) else ""
-        await score_traces(await traces_for_run(session, proposal.run_id), f"proposal_{proposal.status}", value, summary)

@@ -11,14 +11,13 @@ from draftpilot.api.backups import (
     _project_payload,
     restore_backup_payload,
 )
-from draftpilot.core import events
+from draftpilot.core import events, temporal
 from draftpilot.core.db import async_get_db
 from draftpilot.core.project_lifecycle import (
     delete_project,
     deleted_project_backups,
     dismiss_deleted_project,
 )
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import ProjectRead
 
@@ -57,7 +56,7 @@ async def delete_project_route(project_id: int, session: AsyncSession = Depends(
         result = await delete_project(session, project_id, payload)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found") from exc
-    await enqueue_best_effort("purge_rag_project", project_id, description="RAG project purge enqueue")
+    await temporal.start_best_effort("purge_rag_project", project_id, description="RAG project purge enqueue")
     await events.publish(project_id, "project.deleted", {"backup": result["backup"]})
     return result
 
@@ -71,6 +70,6 @@ async def duplicate_project(
     payload["project"]["title"] = (data.title if data and data.title else f"{payload['project']['title']} (copy)")[:200]
     project = await restore_backup_payload(session, payload)
     await _enqueue_restored_artifacts(session, project.id or 0)
-    await enqueue_best_effort("reindex_project", project.id, description="RAG reindex enqueue")
-    await enqueue_best_effort("refresh_story_twin", project.id, description="Story twin refresh enqueue")
+    await temporal.start_best_effort("reindex_project", project.id, description="RAG reindex enqueue")
+    await temporal.start_best_effort("refresh_story_twin", project.id, description="Story twin refresh enqueue")
     return ProjectRead.model_validate(project)

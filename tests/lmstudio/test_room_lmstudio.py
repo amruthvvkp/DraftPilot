@@ -77,7 +77,7 @@ def big_fish(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[AsyncS
     monkeypatch.setattr("draftpilot.agents.runtime.session_scope", scope)
     monkeypatch.setattr("draftpilot.agents.workflows.session_scope", scope)
     monkeypatch.setattr("draftpilot.core.events.get_redis", lambda: _NoRedis())
-    monkeypatch.setattr("draftpilot.core.queue.pool.get_arq_pool", _no_pool)
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", _no_pool)
     with local_index(index):
         yield session
     run_async(context.__aexit__(None, None, None))

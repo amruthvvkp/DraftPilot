@@ -36,8 +36,8 @@ class _NoRedis:
 
 
 async def _no_queue() -> Any:
-    """Refuse background jobs so evals never enqueue work on a running stack."""
-    raise ConnectionError("evals run without a queue")
+    """Refuse background workflows so evals never start work on a running stack."""
+    raise ConnectionError("evals run without Temporal")
 
 
 @dataclass(frozen=True)
@@ -88,7 +88,7 @@ async def eval_project(*, embeddings: bool = True) -> AsyncIterator[EvalProject]
     with ExitStack() as stack:
         stack.enter_context(database.bound_to(engine))
         stack.enter_context(patch("draftpilot.core.events.get_redis", lambda: _NoRedis()))
-        stack.enter_context(patch("draftpilot.core.queue.pool.get_arq_pool", _no_queue))
+        stack.enter_context(patch("draftpilot.core.temporal.get_client", _no_queue))
         stack.enter_context(rag_client.local_index(index))
         async with database.session_scope() as session:
             project = Project(title="Big Fish", logline="A son pieces together the truth behind his dying father's tall tales.")

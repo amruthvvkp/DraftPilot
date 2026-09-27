@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.backup import (
     BackupError,
     BackupManifest,
@@ -17,7 +18,6 @@ from draftpilot.core.backup import (
 )
 from draftpilot.core.config import settings
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
 from draftpilot.core.screenplay.schema import ScreenplayDoc
 from draftpilot.crud import project_references as references_crud
@@ -45,11 +45,10 @@ class BackupRead(BaseModel):
 async def _enqueue_restored_artifacts(session: AsyncSession, project_id: int) -> None:
     """Queue restored artifacts for incremental project-scoped indexing."""
     try:
-        pool = await get_arq_pool()
         for artifact in await artifacts_crud.list_for_project(session, project_id):
             if artifact.id is None:
                 continue
-            await pool.enqueue_job(
+            await temporal.start_job(
                 "index_rag_document",
                 {
                     "project_id": project_id,
@@ -59,7 +58,7 @@ async def _enqueue_restored_artifacts(session: AsyncSession, project_id: int) ->
                     "content_version": artifact.version,
                 },
             )
-    except Exception as exc:  # noqa: BLE001 - queue availability varies by deployment
+    except Exception as exc:  # noqa: BLE001 - Temporal availability varies by deployment
         logfire.warning("Restored artifact indexing enqueue skipped: {exc}", exc=str(exc))
 
 

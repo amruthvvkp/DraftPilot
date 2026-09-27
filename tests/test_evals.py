@@ -64,11 +64,10 @@ def test_the_harness_is_isolated_and_searchable() -> None:
 
                 leads = (await session.exec(select(KnowledgeNode).where(KnowledgeNode.kind == "character"))).all()
                 assert {"Edward", "Will"} <= {node.label for node in leads}
-            from draftpilot.core import events
-            from draftpilot.core.queue import enqueue_best_effort
+            from draftpilot.core import events, temporal
 
             await events.publish(project.project_id, "scene.changed", {})  # swallowed, never reaches Redis
-            await enqueue_best_effort("index_rag_document", {}, description="eval guard")  # refused, never queued
+            assert not await temporal.start_best_effort("index_rag_document", {}, description="eval guard")  # refused, never started
         assert rag_client._local_index is None
 
     run_async(scenario())

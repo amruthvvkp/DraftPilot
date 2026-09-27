@@ -53,8 +53,7 @@ services:
         "--listen",
         "0.0.0.0:5678",
         "-m",
-        "arq",
-        "draftpilot.worker.settings.WorkerSettings",
+        "draftpilot.worker",
       ]
 
   mcp:

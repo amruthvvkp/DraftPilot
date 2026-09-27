@@ -10,12 +10,12 @@ writers build, research, co-write, and evaluate screenplays alongside AI agents.
 - **Agents**: PydanticAI (provider-agnostic). **All LLM-backed tests/evals run on local LM Studio**
 - **MCP**: FastMCP 4 / MCP SDK 2 — the one tool surface for in-app and external agents
 - **Data**: Postgres via SQLModel + asyncpg; Alembic migrations
-- **Cache / queue**: Redis; ARQ background worker (separate process)
-- **Telemetry**: Logfire → OTLP → a **self-hosted Langfuse bundled in `compose.yml`** (part of the
-  default stack). Logfire is the single logging + instrumentation backend. **On by default**: Langfuse
-  auto-provisions a dev project whose keys match the default OTLP auth header, so traces flow on
-  `docker compose up`. Override `OTEL__EXPORTER_OTLP_ENDPOINT` for an external Grafana LGTM, or set
-  `OTEL__ENABLED=false`. Replace the `# CHANGEME` secrets before non-local use. See `.env.example`.
+- **Cache**: Redis (cache + live-sync pub/sub)
+- **Durable execution**: Temporal (dev server in `compose.yml`, UI :8233). Background jobs, runs and
+  room workflows are Temporal workflows served by `python -m draftpilot.worker` (separate process)
+- **Telemetry**: Logfire → OTLP, the single logging + instrumentation backend. **Off by default**
+  (`OTEL__ENABLED=false`); `docker compose --profile observability up` adds a bundled Grafana
+  `otel-lgtm` (:3300) to export to. Metrics, feedback and online checks live in Postgres. See `.env.example`.
 - **Docs**: Zensical (not MkDocs) — `zensical.toml`, sources in `docs/`
 - **Tooling**: `uv` (Python pinned 3.13), `ruff`, `mypy`
 
@@ -24,12 +24,12 @@ writers build, research, co-write, and evaluate screenplays alongside AI agents.
 ```
 src/draftpilot/
   api/         app.py (create_app), __main__.py (uvicorn), routers under /api/v1, auth
-  core/        config (pydantic-settings), telemetry, db/, cache/, queue/, screenplay/, domain services
+  core/        config (pydantic-settings), telemetry, temporal (client), db/, cache/, screenplay/, domain services
   models/      SQLModel domain: Project → Screenplay → Act → Scene → Block (+ story, agents, MCP access)
   crud/        thin async CRUD per model
   agents/      writers' room: role specs (specs/*.yaml), runtime, room workflows (pydantic_graph)
   evals/       pydantic_evals suites on LM Studio (`python -m draftpilot.evals`) + online checks
-  worker/      ARQ WorkerSettings + task functions
+  worker/      Temporal worker: workflows, activities, job functions
   mcp/         FastMCP server (HTTP + stdio)
 frontend/      React/Vite studio (src/, public/ assets; build → dist/)
 migrations/    Alembic (env.py reads settings sync DSN; SQLModel.metadata is the target)
@@ -38,15 +38,15 @@ migrations/    Alembic (env.py reads settings sync DSN; SQLModel.metadata is the
 ## Run
 
 ```bash
-# Full stack (Postgres, Redis, migrate, ui(web), worker, mcp, rag + self-hosted Langfuse)
-docker compose up --build         # Studio :9000 · MCP :9001 · RAG :9010 · Langfuse :3300
+# Full stack (Postgres, Redis, Temporal, migrate, ui(web), worker, mcp, rag)
+docker compose up --build         # Studio :9000 · MCP :9001 · RAG :9010 · Temporal UI :8233
 
-# Local dev (needs local Postgres + Redis)
+# Local dev (needs local Postgres + Redis + `temporal server start-dev`)
 uv sync --all-groups
 uv run alembic upgrade head
 uv run python -m draftpilot.api       # API + built studio on :8000
 npm --prefix frontend run dev         # React studio with Vite hot reload
-uv run arq draftpilot.worker.settings.WorkerSettings
+uv run python -m draftpilot.worker
 
 # Tests: Tier 0 (CI) · browser e2e (stack on :9000) · Tier 1 local LM Studio
 uv run pytest tests --ignore=tests/e2e && uv run pytest tests/e2e && uv run pytest -m lmstudio
@@ -66,7 +66,7 @@ docker compose -f compose.yml -f compose.dev.yml up --build
   generics). `uv run mypy src` must stay clean. Note: SQLModel `table=True` classes carry a
   `# type: ignore[call-arg]` (pydantic mypy-plugin false positive); `@computed_field` properties
   carry `# type: ignore[prop-decorator]`.
-- Config: every settings group has an `env_prefix` (`POSTGRES__`, `REDIS__`, `QUEUE__`, `LLM__`,
+- Config: every settings group has an `env_prefix` (`POSTGRES__`, `REDIS__`, `TEMPORAL__`, `LLM__`,
   `WEB__`, `API__`, `MCP__`, `RAG__`, `EVAL__`, `OTEL__`, ...). Nested env uses the `__` delimiter.
   Never read bare env names — they collide with system vars (e.g. `$USER`).
 - React pages and components live in `frontend/src`; register API routers in `api/__init__.py`

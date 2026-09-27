@@ -67,7 +67,7 @@ def test_context_worker_persists_cited_review_only_result(monkeypatch) -> None:
     monkeypatch.setattr(functions.workflow_runs_crud, "update_status", update)
     monkeypatch.setattr(functions, "retrieve_context", context)
     monkeypatch.setattr(functions, "generate_reply", reply)
-    result = run_async(functions._execute_context_generation({}, run))
+    result = run_async(functions._execute_context_generation(run))
 
     assert result["workflow"] == "camera"
     assert result["requires_review"] is True

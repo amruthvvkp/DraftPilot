@@ -1,10 +1,8 @@
-"""Test usefulness measurement: acceptance, retention, feedback, Langfuse scores, and online checks."""
+"""Test usefulness measurement: acceptance, retention, feedback, and online checks (all in Postgres)."""
 
-import json
 from collections.abc import AsyncGenerator, Iterator
 from typing import Any
 
-import httpx
 import pytest
 from _async import run_async
 from _db import memory_session
@@ -29,17 +27,8 @@ from draftpilot.models import (
 
 
 @pytest.fixture
-def seeded(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient, AsyncSession, list[Any]]]:
+def seeded(started_workflows: list[Any]) -> Iterator[tuple[TestClient, AsyncSession, list[Any]]]:
     """Seed one rewrite run with decided proposals, blocks, agent runs, and a feedback-ready API."""
-    queued: list[Any] = []
-
-    async def enqueue(function: str, *args: Any, **_kwargs: Any) -> None:
-        """Capture queued score batches."""
-        queued.append((function, *args))
-
-    monkeypatch.setattr(usefulness, "enqueue_best_effort", enqueue)
-    monkeypatch.setattr(usefulness.settings.otel, "langfuse_public_key", "pk")
-    monkeypatch.setattr(usefulness.settings.otel, "langfuse_secret_key", usefulness.settings.otel.langfuse_secret_key.__class__("sk"))
     context = memory_session()
     session = run_async(context.__aenter__())
 
@@ -88,7 +77,7 @@ def seeded(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient, AsyncS
 
     app.dependency_overrides[async_get_db] = dependency
     app.include_router(router, prefix="/api/v1")
-    yield TestClient(app), session, queued
+    yield TestClient(app), session, started_workflows
     run_async(context.__aexit__(None, None, None))
 
 
@@ -106,57 +95,17 @@ def test_insights_measure_acceptance_retention_and_cost(seeded: tuple[TestClient
     assert client.get("/api/v1/projects/99/insights").status_code == 404
 
 
-def test_feedback_is_validated_stored_and_scored(seeded: tuple[TestClient, AsyncSession, list[Any]]) -> None:
-    """Exactly one target, a non-zero rating, and the right project; the run's traces get a score."""
-    client, _session, queued = seeded
+def test_feedback_is_validated_and_stored(seeded: tuple[TestClient, AsyncSession, list[Any]]) -> None:
+    """Exactly one target, a non-zero rating, and the right project; nothing leaves Postgres."""
+    client, _session, started = seeded
     assert client.post("/api/v1/projects/1/feedback", json={"rating": 1}).status_code == 422
     assert client.post("/api/v1/projects/1/feedback", json={"rating": 0, "workflow_run_id": 1}).status_code == 422
     assert client.post("/api/v1/projects/2/feedback", json={"rating": 1, "workflow_run_id": 1}).status_code == 404
     created = client.post("/api/v1/projects/1/feedback", json={"rating": -1, "workflow_run_id": 1, "comment": "Too talky."})
     assert created.status_code == 201, created.text
-    function, scores = queued[-1]
-    assert function == "push_langfuse_scores"
-    assert sorted(score["trace_id"] for score in scores) == ["a" * 32, "b" * 32]
-    assert {score["name"] for score in scores} == {"writer_feedback"} and scores[0]["value"] == -1.0
+    assert started == []
     insights = client.get("/api/v1/projects/1/insights").json()
     assert insights["workflows"]["rewrite_scene"]["down"] == 1 and insights["workflows"]["rewrite_scene"]["thumbs_up_share"] == 0.0
-
-
-def test_decisions_score_the_runs_traces(seeded: tuple[TestClient, AsyncSession, list[Any]]) -> None:
-    """Approving scores 1, rejecting 0; proposals without a run have no traces to score."""
-    _client, session, queued = seeded
-
-    async def decide() -> None:
-        """Record the seeded decisions."""
-        for proposal_id in (1, 2, 4):
-            proposal = await session.get(AgentProposal, proposal_id)
-            assert proposal is not None
-            await usefulness.record_decision(session, proposal)
-
-    run_async(decide())
-    names = [(scores[0]["name"], scores[0]["value"]) for _function, scores in queued]
-    assert names == [("proposal_approved", 1.0), ("proposal_rejected", 0.0)]
-
-
-def test_scores_post_to_langfuse_with_basic_auth(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Each score becomes one authenticated POST to the public scores API; failures are skipped."""
-    seen: list[httpx.Request] = []
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        """Accept the first score and reject the second."""
-        seen.append(request)
-        return httpx.Response(200 if len(seen) == 1 else 500, json={})
-
-    real = httpx.AsyncClient
-    monkeypatch.setattr(usefulness.httpx, "AsyncClient", lambda **kwargs: real(transport=httpx.MockTransport(handler), **kwargs))
-    monkeypatch.setattr(usefulness.settings.otel, "exporter_otlp_endpoint", "http://langfuse-web:3000/api/public/otel")
-    monkeypatch.setattr(usefulness.settings.otel, "langfuse_public_key", "pk")
-    monkeypatch.setattr(usefulness.settings.otel, "langfuse_secret_key", usefulness.settings.otel.langfuse_secret_key.__class__("sk"))
-    scores = [{"trace_id": "a" * 32, "name": "writer_feedback", "value": 1.0, "comment": "Great"}, {"trace_id": "b" * 32, "name": "x", "value": 0.0}]
-    assert run_async(usefulness.push_scores(scores)) == 1
-    assert str(seen[0].url) == "http://langfuse-web:3000/api/public/scores"
-    assert seen[0].headers["authorization"].startswith("Basic ")
-    assert json.loads(seen[0].content) == {"traceId": "a" * 32, "name": "writer_feedback", "value": 1.0, "dataType": "NUMERIC", "comment": "Great"}
 
 
 def test_online_checks_score_real_results() -> None:

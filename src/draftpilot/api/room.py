@@ -14,12 +14,12 @@ from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.specs import role_spec
 from draftpilot.agents.workflow_runner import create_room_workflow_run
 from draftpilot.agents.workflows import ROOM_WORKFLOWS
+from draftpilot.core import temporal
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.copilot import retrieve_context
 from draftpilot.core.db import async_get_db
 from draftpilot.core.providers import build_chat_model, settings_from_profile
-from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.models import AgentRun, AgentRunRead, WorkflowRunRead
@@ -154,5 +154,5 @@ async def start_room_workflow(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.errors(include_url=False, include_context=False)
         ) from exc
-    await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    await temporal.start_run(run.id)
     return WorkflowRunRead.model_validate(run)

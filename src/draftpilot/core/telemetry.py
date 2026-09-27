@@ -1,7 +1,7 @@
 """Logfire-based telemetry: traces, metrics, and logs over OTLP.
 
 Logfire is the single instrumentation + logging backend for DraftPilot. It
-exports to the OTLP endpoint configured in settings (the bundled Langfuse in compose)
+exports to the OTLP endpoint configured in settings (the opt-in `otel-lgtm` in compose)
 and is never sent to the Logfire cloud. Call :func:`setup` once per process,
 selecting the role so the service name and instrumentation match.
 """

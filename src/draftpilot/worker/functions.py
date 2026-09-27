@@ -1,4 +1,4 @@
-"""ARQ background tasks.
+"""Background job logic the Temporal activities run (``worker/activities.py``).
 
 ``analyze_screenplay`` computes deterministic structural metrics for a
 screenplay and, when an LLM provider is configured, augments them with a short
@@ -15,7 +15,7 @@ from draftpilot.agents.workflow_runner import (
     WorkflowCancelled,
     execute_room_workflow,
 )
-from draftpilot.core import events, twins, usefulness
+from draftpilot.core import events, twins
 from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
@@ -23,7 +23,6 @@ from draftpilot.core.context_workflows import get_context_workflow
 from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.db import session_scope
 from draftpilot.core.providers import build_chat_model, settings_from_profile
-from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.rag_sources import project_documents
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import copilot_messages as messages_crud
@@ -62,7 +61,7 @@ async def _llm_note(title: str, scene_count: int, word_count: int, agent_role: s
         return None
 
 
-async def analyze_screenplay(ctx: dict, screenplay_id: int, agent_role: str = "story_architect") -> dict:
+async def analyze_screenplay(screenplay_id: int, agent_role: str = "story_architect") -> dict:
     """Compute metrics for a screenplay and cache the result in Redis."""
     with logfire.span("analyze_screenplay", screenplay_id=screenplay_id):
         async with session_scope() as session:
@@ -93,7 +92,7 @@ async def analyze_screenplay(ctx: dict, screenplay_id: int, agent_role: str = "s
         return result
 
 
-async def index_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:
+async def index_rag_document(document: dict[str, object]) -> dict[str, str]:
     """Index one approved document through the isolated RAG HTTP boundary."""
     project_id = document.get("project_id")
     if not isinstance(project_id, int):
@@ -112,7 +111,7 @@ async def index_rag_document(ctx: dict, document: dict[str, object]) -> dict[str
     return {"status": "indexed"}
 
 
-async def reindex_project(ctx: dict, project_id: int) -> dict[str, object]:
+async def reindex_project(project_id: int) -> dict[str, object]:
     """Re-send every retrievable document of a project to the hybrid index."""
     with logfire.span("reindex_project", project_id=project_id):
         async with session_scope() as session:
@@ -136,7 +135,7 @@ async def reindex_project(ctx: dict, project_id: int) -> dict[str, object]:
         return {"documents": len(documents), "chunks": chunks, "failures": failures}
 
 
-async def refresh_story_twin(ctx: dict, project_id: int) -> dict[str, int]:
+async def refresh_story_twin(project_id: int) -> dict[str, int]:
     """Run the Twin Keeper: re-derive characters and locations from the working draft."""
     with logfire.span("refresh_story_twin", project_id=project_id):
         async with session_scope() as session:
@@ -145,7 +144,7 @@ async def refresh_story_twin(ctx: dict, project_id: int) -> dict[str, int]:
         return counts
 
 
-async def purge_rag_project(ctx: dict, project_id: int) -> dict[str, object]:
+async def purge_rag_project(project_id: int) -> dict[str, object]:
     """Remove a deleted project's documents from the RAG service."""
     url = f"{settings.rag.service_url.rstrip('/')}/projects/{project_id}"
     headers = {"Authorization": f"Bearer {settings.rag.auth_token.get_secret_value()}"}
@@ -155,12 +154,7 @@ async def purge_rag_project(ctx: dict, project_id: int) -> dict[str, object]:
     return {"project_id": project_id, "purged": True}
 
 
-async def push_langfuse_scores(ctx: dict, scores: list[dict[str, object]]) -> dict[str, int]:
-    """Send queued usefulness scores to Langfuse."""
-    return {"accepted": await usefulness.push_scores(scores)}
-
-
-async def delete_rag_document(ctx: dict, document: dict[str, object]) -> dict[str, str]:
+async def delete_rag_document(document: dict[str, object]) -> dict[str, str]:
     """Delete one approved document through the isolated RAG HTTP boundary."""
     project_id = document.get("project_id")
     source_id = document.get("source_id")
@@ -174,82 +168,69 @@ async def delete_rag_document(ctx: dict, document: dict[str, object]) -> dict[st
     return {"status": "deleted"}
 
 
-async def execute_workflow(ctx: dict, run_id: int) -> dict:
-    """Resume a persisted workflow run and record its terminal state."""
-    with logfire.span("execute_workflow", run_id=run_id):
-        async with session_scope() as session:
-            run = await workflow_runs_crud.get(session, run_id)
-            if run is None:
-                return {"error": "not_found"}
-            if run.status in {"succeeded", "cancelled"}:
-                return {"status": run.status}
-            if run.attempt_count >= run.max_attempts:
-                await workflow_runs_crud.update_status(
-                    session, run, "failed", error="Maximum workflow attempts exceeded"
-                )
-                return {"error": "maximum_attempts_exceeded"}
-            run.attempt_count += 1
-            await workflow_runs_crud.update_status(session, run, "running")
-            copilot_run = run.kind == "copilot_response"
-            evaluation_run = run.kind == "evaluation"
-            context_run = run.kind == "context_generation"
-            room_run = run.kind == ROOM_WORKFLOW_KIND
-            screenplay_id = run.input.get("screenplay_id")
-            if not copilot_run and not room_run and not isinstance(screenplay_id, int):
-                await workflow_runs_crud.update_status(
-                    session, run, "failed", error="screenplay_id is required"
-                )
-                return {"error": "invalid_input"}
-        try:
-            if room_run:
-                result = await execute_room_workflow(run)
-            elif context_run:
-                return await _execute_context_generation(ctx, run)
-            elif copilot_run:
-                return await _execute_copilot_run(ctx, run)
-            else:
-                assert isinstance(screenplay_id, int)
-                result = await evaluate_screenplay(ctx, run) if evaluation_run else await analyze_screenplay(ctx, screenplay_id, run.agent_role)
-        except WorkflowCancelled:
-            return {"status": "cancelled"}
-        except Exception as exc:  # noqa: BLE001 - worker failure boundary records retry state
-            return await _retry_or_fail(ctx, run_id, exc)
-        async with session_scope() as session:
-            run = await workflow_runs_crud.get(session, run_id)
-            if run is not None and run.status != "cancelled":
-                await workflow_runs_crud.update_status(session, run, "succeeded", result=result)
-                return result
-        return {"status": "cancelled"}
-
-
-async def _retry_or_fail(ctx: dict, run_id: int, error: Exception) -> dict[str, object]:
-    """Persist a bounded retry or terminal failure for a workflow run."""
+async def begin_run(run_id: int, workflow_id: str) -> dict[str, object]:
+    """Load a run for execution, record its Temporal workflow id, and describe how to execute it."""
     async with session_scope() as session:
         run = await workflow_runs_crud.get(session, run_id)
         if run is None:
-            return {"error": "not_found"}
-        if run.status == "cancelled":
+            return {"skip": "not_found"}
+        if run.status in {"succeeded", "cancelled"}:
+            return {"skip": run.status}
+        screenplay_id = run.input.get("screenplay_id")
+        if run.kind not in {"copilot_response", ROOM_WORKFLOW_KIND} and not isinstance(screenplay_id, int):
+            await workflow_runs_crud.update_status(session, run, "failed", error="screenplay_id is required")
+            return {"skip": "invalid_input"}
+        run.temporal_workflow_id = workflow_id
+        await workflow_runs_crud.update_status(session, run, "running")
+        return {"kind": run.kind, "max_attempts": run.max_attempts}
+
+
+async def run_job(run_id: int, attempt: int) -> dict:
+    """Execute one attempt of a persisted non-room run and return its result."""
+    with logfire.span("execute_workflow", run_id=run_id, attempt=attempt):
+        async with session_scope() as session:
+            run = await workflow_runs_crud.get(session, run_id)
+            if run is None or run.status == "cancelled":
+                return {"status": "cancelled"}
+            run.attempt_count = attempt
+            session.add(run)
+            await session.commit()
+            await session.refresh(run)
+        try:
+            if run.kind == ROOM_WORKFLOW_KIND:
+                return await execute_room_workflow(run)
+            if run.kind == "context_generation":
+                return await _execute_context_generation(run)
+            if run.kind == "copilot_response":
+                return await _execute_copilot_run(run)
+            screenplay_id = run.input.get("screenplay_id")
+            assert isinstance(screenplay_id, int)
+            if run.kind == "evaluation":
+                return await evaluate_screenplay(run)
+            return await analyze_screenplay(screenplay_id, run.agent_role)
+        except WorkflowCancelled:
             return {"status": "cancelled"}
-        message = str(error)[:900]
-        if run.attempt_count < run.max_attempts:
-            await workflow_runs_crud.update_status(
-                session,
-                run,
-                "queued",
-                error=f"Attempt {run.attempt_count}/{run.max_attempts} failed: {message}",
-            )
-            should_retry = True
-        else:
-            await workflow_runs_crud.update_status(session, run, "failed", error=message)
-            should_retry = False
-    if should_retry:
-        pool = await get_arq_pool()
-        await pool.enqueue_job("execute_workflow", run_id)
-        return {"status": "retrying", "attempt": run.attempt_count}
-    return {"error": message, "status": "failed"}
+        except Exception as exc:
+            if attempt < run.max_attempts:
+                async with session_scope() as session:
+                    current = await workflow_runs_crud.get(session, run_id)
+                    if current is not None and current.status != "cancelled":
+                        await workflow_runs_crud.update_status(
+                            session, current, "running", error=f"Attempt {attempt}/{run.max_attempts} failed: {str(exc)[:900]}"
+                        )
+            raise
 
 
-async def _execute_context_generation(ctx: dict, run: WorkflowRun) -> dict[str, object]:
+async def finish_run(run_id: int, status: str, result: dict | None = None, error: str | None = None) -> None:
+    """Record a run's terminal state unless the run already reached one (cancelled, or set by its job)."""
+    async with session_scope() as session:
+        run = await workflow_runs_crud.get(session, run_id)
+        if run is None or run.status in {"succeeded", "failed", "cancelled"}:
+            return
+        await workflow_runs_crud.update_status(session, run, status, result=result, error=error[:900] if error else None)
+
+
+async def _execute_context_generation(run: WorkflowRun) -> dict[str, object]:
     """Generate a durable, review-only creative-context suggestion."""
     workflow_key = run.input.get("workflow")
     instruction = run.input.get("instruction")
@@ -319,7 +300,7 @@ async def _fail_context_run(run_id: int, error: str) -> dict[str, object]:
     return {"error": error}
 
 
-async def evaluate_screenplay(ctx: dict, run: WorkflowRun) -> dict[str, object]:
+async def evaluate_screenplay(run: WorkflowRun) -> dict[str, object]:
     """Compute and persist deterministic screenplay quality findings for one durable run."""
     screenplay_id = run.input.get("screenplay_id")
     if not isinstance(screenplay_id, int):
@@ -365,7 +346,7 @@ async def evaluate_screenplay(ctx: dict, run: WorkflowRun) -> dict[str, object]:
     return {"evaluation_id": evaluation.id or 0, **findings, "score": score}
 
 
-async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]:
+async def _execute_copilot_run(run: WorkflowRun) -> dict[str, object]:
     """Resume one persisted Copilot response and store its assistant turn."""
     data = run.input
     content = data.get("content")

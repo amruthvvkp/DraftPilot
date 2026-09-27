@@ -1,12 +1,10 @@
-# DraftPilot stack: web (FastAPI API + React studio), ARQ worker, MCP server, RAG, Postgres, Redis.
+# DraftPilot stack: web (FastAPI API + React studio), Temporal worker, MCP server, RAG, Postgres, Redis,
+# and a Temporal dev server (durable execution; UI at http://localhost:8233).
 #
-# `docker compose up` brings up the WHOLE stack — app (ui/worker/mcp), Postgres,
-# Redis, AND a self-hosted Langfuse (web/worker/clickhouse/minio/postgres/redis).
-# Telemetry (Logfire → OTLP) is ON by default and ships to the in-stack Langfuse,
-# which auto-provisions a dev project (keys below) so traces flow out of the box.
-# Override OTEL__EXPORTER_OTLP_ENDPOINT to use an external Grafana LGTM instead,
-# or set OTEL__ENABLED=false to disable. REPLACE every # CHANGEME secret before
-# any non-local use. See .env.example.
+# Telemetry (Logfire → OTLP) is OFF by default. For local traces, logs and metrics run the bundled
+# Grafana LGTM as well — `docker compose --profile observability up` (Grafana at http://localhost:3300)
+# — and set OTEL__ENABLED=true. Point OTEL__EXPORTER_OTLP_ENDPOINT at any other OTLP collector
+# instead if you have one. See .env.example.
 
 x-app-env: &app-env
   POSTGRES__HOST: postgres
@@ -16,9 +14,7 @@ x-app-env: &app-env
   POSTGRES__DB: draftpilot
   REDIS__HOST: redis
   REDIS__PORT: "6379"
-  QUEUE__HOST: redis
-  QUEUE__PORT: "6379"
-  QUEUE__DB: "1"
+  TEMPORAL__HOST: temporal:7233
   RAG__SERVICE_URL: http://rag:8000
   RAG__AUTH_TOKEN: ${RAG__AUTH_TOKEN:-draftpilot-local-token}
   BACKUP__ROOT: /data/backups
@@ -27,14 +23,8 @@ x-app-env: &app-env
   LLM__BASE_URL: ${LLM__BASE_URL:-http://host.docker.internal:1234/v1}
   LLM__MODEL: ${LLM__MODEL:-auto}
   LLM__ENABLED: ${LLM__ENABLED:-true}
-  OTEL__ENABLED: ${OTEL__ENABLED:-true}
-  OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
-  # Basic base64("pk-lf-draftpilot-dev:sk-lf-draftpilot-dev") — matches the
-  # LANGFUSE_INIT_* bootstrap keys on langfuse-web. # CHANGEME for non-local use.
-  OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
-  # Langfuse score API keys (feedback, proposal decisions, online checks). # CHANGEME for non-local use.
-  OTEL__LANGFUSE_PUBLIC_KEY: ${OTEL__LANGFUSE_PUBLIC_KEY:-pk-lf-draftpilot-dev}
-  OTEL__LANGFUSE_SECRET_KEY: ${OTEL__LANGFUSE_SECRET_KEY:-sk-lf-draftpilot-dev}
+  OTEL__ENABLED: ${OTEL__ENABLED:-false}
+  OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4318}
 
 # Lets containers reach a collector running on the host (works on Linux too).
 x-extra-hosts: &extra-hosts
@@ -106,6 +96,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      temporal:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -138,6 +130,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      temporal:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
 
@@ -168,9 +162,6 @@ services:
       MCP__AUTH_TOKEN: ${MCP__AUTH_TOKEN:-draftpilot-local-token}
       MCP__ADMIN_TOKEN: ${MCP__ADMIN_TOKEN:-draftpilot-local-admin-token}
       MCP__STDIO_CLIENT_ID: ${MCP__STDIO_CLIENT_ID:-mcp-stdio}
-      OTEL__ENABLED: ${OTEL__ENABLED:-true}
-      OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://langfuse-web:3000/api/public/otel}
-      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-Authorization=Basic%20cGstbGYtZHJhZnRwaWxvdC1kZXY6c2stbGYtZHJhZnRwaWxvdC1kZXY=}
     extra_hosts: *extra-hosts
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -210,153 +201,44 @@ services:
       timeout: 3s
       retries: 12
 
-  # --- Langfuse (self-hosted LLM observability, part of the default stack) -----
-  # Comes up with `docker compose up`. UI at http://localhost:3300. On first boot
-  # LANGFUSE_INIT_* (on langfuse-web) auto-provisions an org/project/user with the
-  # dev API keys that DraftPilot's OTEL_EXPORTER_OTLP_HEADERS already uses, so
-  # traces flow without manual setup. Datastores are namespaced + isolated from
-  # DraftPilot's app Postgres/Redis. Replace every # CHANGEME before non-local use.
-  langfuse-worker:
-    image: docker.io/langfuse/langfuse-worker:3
-    restart: always
-    depends_on: &langfuse-depends-on
-      langfuse-postgres:
-        condition: service_healthy
-      langfuse-minio:
-        condition: service_healthy
-      langfuse-redis:
-        condition: service_healthy
-      langfuse-clickhouse:
-        condition: service_healthy
-    environment: &langfuse-worker-env
-      DATABASE_URL: ${LANGFUSE_DATABASE_URL:-postgresql://postgres:postgres@langfuse-postgres:5432/postgres} # CHANGEME
-      SALT: ${LANGFUSE_SALT:-mysalt} # CHANGEME
-      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000} # CHANGEME: openssl rand -hex 32
-      TELEMETRY_ENABLED: ${LANGFUSE_TELEMETRY_ENABLED:-true}
-      LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES: ${LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES:-false}
-      CLICKHOUSE_MIGRATION_URL: ${LANGFUSE_CLICKHOUSE_MIGRATION_URL:-clickhouse://langfuse-clickhouse:9000}
-      CLICKHOUSE_URL: ${LANGFUSE_CLICKHOUSE_URL:-http://langfuse-clickhouse:8123}
-      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
-      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse} # CHANGEME
-      CLICKHOUSE_CLUSTER_ENABLED: ${LANGFUSE_CLICKHOUSE_CLUSTER_ENABLED:-false}
-      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
-      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
-      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID:-minio}
-      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY:-miniosecret} # CHANGEME
-      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: ${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://langfuse-minio:9000}
-      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE:-true}
-      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: ${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
-      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
-      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
-      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID:-minio}
-      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY:-miniosecret} # CHANGEME
-      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://localhost:9190}
-      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: ${LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE:-true}
-      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: ${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
-      REDIS_HOST: ${LANGFUSE_REDIS_HOST:-langfuse-redis}
-      REDIS_PORT: ${LANGFUSE_REDIS_PORT:-6379}
-      REDIS_AUTH: ${LANGFUSE_REDIS_AUTH:-myredissecret} # CHANGEME
-      REDIS_TLS_ENABLED: ${LANGFUSE_REDIS_TLS_ENABLED:-false}
-      EMAIL_FROM_ADDRESS: ${LANGFUSE_EMAIL_FROM_ADDRESS:-}
-      SMTP_CONNECTION_URL: ${LANGFUSE_SMTP_CONNECTION_URL:-}
-
-  langfuse-web:
-    image: docker.io/langfuse/langfuse:3
-    restart: always
-    depends_on: *langfuse-depends-on
+  temporal:
+    # Temporal dev server: one process, SQLite on a volume, UI on :8233. Fine for local-first use;
+    # point TEMPORAL__HOST at a Temporal cluster (or Temporal Cloud) for anything shared.
+    image: temporalio/temporal:1.9.1
+    restart: unless-stopped
+    command:
+      [
+        "server", "start-dev",
+        "--ip", "0.0.0.0",
+        "--db-filename", "/home/temporal/temporal.db",
+        "--namespace", "default",
+        "--ui-port", "8233",
+      ]
     ports:
-      - "${DRAFTPILOT_LANGFUSE_PORT:-3300}:3000"
-    environment:
-      <<: *langfuse-worker-env
-      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:-http://localhost:3300}
-      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-mysecret} # CHANGEME
-      # First-boot bootstrap: provisions an org/project/user with the dev API keys
-      # that DraftPilot's OTEL header uses. # CHANGEME the keys/password for non-local use.
-      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID:-draftpilot}
-      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME:-DraftPilot}
-      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID:-draftpilot}
-      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME:-DraftPilot}
-      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY:-pk-lf-draftpilot-dev}
-      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY:-sk-lf-draftpilot-dev} # CHANGEME
-      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL:-dev@draftpilot.local}
-      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME:-DraftPilot Dev}
-      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD:-draftpilot-dev} # CHANGEME
-
-  langfuse-clickhouse:
-    image: docker.io/clickhouse/clickhouse-server
-    restart: always
-    user: "101:101"
-    environment:
-      CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: ${LANGFUSE_CLICKHOUSE_USER:-clickhouse}
-      CLICKHOUSE_PASSWORD: ${LANGFUSE_CLICKHOUSE_PASSWORD:-clickhouse} # CHANGEME
+      - "${DRAFTPILOT_TEMPORAL_PORT:-7233}:7233"
+      - "${DRAFTPILOT_TEMPORAL_UI_PORT:-8233}:8233"
     volumes:
-      - langfuse_clickhouse_data:/var/lib/clickhouse
-      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+      - temporal_data:/home/temporal
     healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "localhost:7233"]
       interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 1s
+      retries: 20
 
-  langfuse-minio:
-    image: cgr.dev/chainguard/minio
-    restart: always
-    entrypoint: sh
-    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
-    environment:
-      MINIO_ROOT_USER: ${LANGFUSE_MINIO_ROOT_USER:-minio}
-      MINIO_ROOT_PASSWORD: ${LANGFUSE_MINIO_ROOT_PASSWORD:-miniosecret} # CHANGEME
+  otel-lgtm:
+    # Opt-in local observability: OTLP collector + Tempo, Loki, Prometheus and Grafana in one image.
+    profiles: [observability]
+    image: grafana/otel-lgtm:latest
+    restart: unless-stopped
     ports:
-      - "127.0.0.1:${DRAFTPILOT_LANGFUSE_MINIO_PORT:-9190}:9000"
-      - "127.0.0.1:${DRAFTPILOT_LANGFUSE_MINIO_CONSOLE_PORT:-9191}:9001"
+      - "${DRAFTPILOT_GRAFANA_PORT:-3300}:3000"
+      - "${DRAFTPILOT_OTLP_HTTP_PORT:-4318}:4318"
     volumes:
-      - langfuse_minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 1s
-      timeout: 5s
-      retries: 5
-      start_period: 1s
-
-  langfuse-redis:
-    image: docker.io/redis:7
-    restart: always
-    command: >
-      --requirepass ${LANGFUSE_REDIS_AUTH:-myredissecret}
-      --maxmemory-policy noeviction
-    volumes:
-      - langfuse_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 3s
-      timeout: 10s
-      retries: 10
-
-  langfuse-postgres:
-    image: docker.io/postgres:${LANGFUSE_POSTGRES_VERSION:-17}
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 3s
-      timeout: 3s
-      retries: 10
-    environment:
-      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:-postgres} # CHANGEME
-      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:-postgres}
-      TZ: UTC
-      PGTZ: UTC
-    volumes:
-      - langfuse_postgres_data:/var/lib/postgresql/data
+      - lgtm_data:/data
 
 volumes:
   pgdata:
-  langfuse_postgres_data:
-  langfuse_clickhouse_data:
-  langfuse_clickhouse_logs:
-  langfuse_minio_data:
-  langfuse_redis_data:
+  temporal_data:
+  lgtm_data:
   rag_data:
   backup_data:

@@ -23,9 +23,9 @@ class _Pool:
         """Initialize captured jobs."""
         self.jobs: list[tuple[str, int | None]] = []
 
-    async def enqueue_job(self, name: str, run_id: int | None) -> None:
+    async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
         """Capture a durable worker job."""
-        self.jobs.append((name, run_id))
+        self.jobs.append((name, args[0]))
 
 
 def _client() -> TestClient:
@@ -95,7 +95,7 @@ def test_context_workflow_persists_source_version_and_enqueues_run(
         return pool
 
     monkeypatch.setattr("draftpilot.api.context_workflows.runs_crud.create", create)
-    monkeypatch.setattr("draftpilot.api.context_workflows.get_arq_pool", get_pool)
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", get_pool)
     response = _client().post(
         "/api/v1/projects/7/context/workflows/runs",
         json={"workflow": "camera", "artifact_id": 3, "instruction": "Plan the opening coverage.", "max_attempts": 5},

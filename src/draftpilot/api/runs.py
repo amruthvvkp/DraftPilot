@@ -4,9 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.agent_roles import AgentRoleKey, PermissionMode
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import workflow_runs as runs_crud
@@ -49,7 +49,7 @@ async def start_run(
             max_attempts=data.max_attempts,
         ),
     )
-    await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    await temporal.start_run(run.id)
     return WorkflowRunRead.model_validate(run)
 
 
@@ -92,7 +92,7 @@ async def resume_run(
     session.add(run)
     await session.commit()
     await session.refresh(run)
-    await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    await temporal.start_run(run.id)
     return WorkflowRunRead.model_validate(run)
 
 
@@ -107,4 +107,5 @@ async def cancel_run(
     if run.status in {"succeeded", "failed", "cancelled"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Run is already terminal")
     await runs_crud.update_status(session, run, "cancelled")
+    await temporal.cancel_run(run_id)
     return WorkflowRunRead.model_validate(run)

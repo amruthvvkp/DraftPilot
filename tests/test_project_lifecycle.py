@@ -43,7 +43,7 @@ def studio(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[tuple[Te
     """Seed a fully used Big Fish project and a neighbour, and serve the lifecycle and backup routes."""
     monkeypatch.setattr("draftpilot.core.config.settings.backup.root", tmp_path / "backups")
     enqueue = AsyncMock()
-    monkeypatch.setattr("draftpilot.api.lifecycle.enqueue_best_effort", enqueue)
+    monkeypatch.setattr("draftpilot.core.temporal.start_best_effort", enqueue)
     monkeypatch.setattr("draftpilot.api.lifecycle.events.publish", AsyncMock())
     monkeypatch.setattr("draftpilot.api.backups._enqueue_restored_artifacts", AsyncMock())
     monkeypatch.setattr("draftpilot.api.lifecycle._enqueue_restored_artifacts", AsyncMock())

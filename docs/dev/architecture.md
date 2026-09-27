@@ -6,13 +6,14 @@ graph LR
   Ext["Claude Code · Codex"] -->|MCP HTTP| MCP["mcp: FastMCP server"]
   Web -->|in-process MCPToolset| MCP
   Web --> PG[(Postgres)]
-  Web -->|enqueue| Redis[(Redis)]
-  Worker["worker: ARQ"] --> Redis
+  Web & MCP -->|start workflow| Temporal[("Temporal<br/>dev server")]
+  Worker["worker: Temporal"] -->|poll task queue| Temporal
   Worker -->|in-process MCPToolset| MCP
   Worker --> PG
   Web & Worker -->|search / index| RAG["rag: hybrid index<br/>pgvector + tsvector"]
-  Web & Worker & MCP -->|OTLP| LF["Langfuse"]
+  Web & Worker & MCP -. OTLP, opt-in .-> LGTM["otel-lgtm<br/>(observability profile)"]
   Web & Worker -->|chat + embeddings| LMS["LM Studio"]
+  Web & Worker --> Redis[(Redis)]
   Web -. pub/sub .-> Redis -. SSE .-> Browser
 ```
 
@@ -21,7 +22,8 @@ graph LR
 | Process | Entry point | Job |
 |---|---|---|
 | web | `python -m draftpilot.api` → `api/app.py:create_app` | The REST API under `/api/v1`, streamed room chat, SSE live sync, and serving `frontend/dist` |
-| worker | `arq draftpilot.worker.settings.WorkerSettings` | Durable runs: room workflows, context workflows, evaluations, RAG indexing, Story-twin refresh, Langfuse scores |
+| worker | `python -m draftpilot.worker` | A Temporal worker: durable runs (room workflows, context workflows, evaluations, copilot replies), RAG indexing and purges, Story-twin refresh |
+| temporal | `temporal server start-dev` (compose) | Durable execution: workflow histories, retries, timers and cancellation; UI on :8233 |
 | mcp | `fastmcp run src/draftpilot/mcp/server.py:mcp --transport http` (stdio: `python -m draftpilot.mcp`) | The one tool surface, shared by external agents and the in-app room |
 | rag | `uvicorn draftpilot.rag_service:app` | A replaceable hybrid-retrieval service: pgvector HNSW and tsvector GIN, fused with RRF |
 
@@ -41,6 +43,18 @@ credentials. MCP runs as its own service with its own bearer auth.
 `WEB__FRONTEND_DIST` (default `/app/frontend/dist`). The image sets `WEB__REQUIRE_FRONTEND=true`,
 so the web process refuses to start without a build. Local runs, tests and `compose.dev.yml` (which
 bind-mounts the host's `frontend/dist`) leave it `false`, and the API serves without a build.
+
+### Durable execution
+
+All background work runs on Temporal. The web and MCP processes start workflows by type name with
+`core/temporal.py`: `start_job`, `start_best_effort` (logs and carries on when Temporal is down),
+`start_run(run_id)` and `cancel_run`. The worker (`worker/`) serves those workflows. They are
+deterministic orchestration in `workflows.py`, and every I/O call is an activity in `activities.py`.
+A `WorkflowRun` row is a read-only copy of its workflow (`run-<id>`, stored in `temporal_workflow_id`).
+`execute_workflow` applies the run's `max_attempts` as the activity retry policy, mirrors each
+attempt's error, and writes the terminal state. Cancelling a run cancels the workflow as well, and a
+worker restart simply resumes from history. Bursty jobs share a workflow id, so they collapse. For
+example, `story-twin:<project>` has a 5-second start delay, so a run of edits becomes one refresh.
 
 ## Data
 

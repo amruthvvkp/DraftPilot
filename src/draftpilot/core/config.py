@@ -58,18 +58,6 @@ class OTELConfig(BaseSettings):
 
     exporter_otlp_endpoint: str = "http://localhost:4318"
     enabled: bool = False
-    # Langfuse score API (writer feedback, proposal decisions, online checks). Empty keys disable scores.
-    langfuse_host: str = ""
-    langfuse_public_key: str = ""
-    langfuse_secret_key: SecretStr = SecretStr("")
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def langfuse_base_url(self) -> str:
-        """Return the Langfuse base URL: explicit, or derived from its OTLP endpoint."""
-        if self.langfuse_host:
-            return self.langfuse_host.rstrip("/")
-        return self.exporter_otlp_endpoint.split("/api/public/otel")[0].rstrip("/")
 
 
 class PostgresSettings(BaseSettings):
@@ -118,15 +106,16 @@ class RedisSettings(BaseSettings):
         return f"redis://{self.host}:{self.port}/{self.db}"
 
 
-class QueueSettings(BaseSettings):
-    """Redis target + queue name for the ARQ worker."""
+class TemporalSettings(BaseSettings):
+    """Temporal server target and task queue for durable workflows."""
 
-    model_config = SettingsConfigDict(env_prefix="QUEUE__")
+    model_config = SettingsConfigDict(env_prefix="TEMPORAL__")
 
-    host: str = "localhost"
-    port: int = 6379
-    db: int = 1
-    queue_name: str = "draftpilot:queue"
+    host: str = "localhost:7233"
+    namespace: str = "default"
+    task_queue: str = "draftpilot"
+    # Bounds one model request activity; local reasoning models can think for minutes.
+    model_timeout_seconds: int = Field(default=900, ge=10)
 
 
 class LLMSettings(BaseSettings):
@@ -275,7 +264,7 @@ class Settings(BaseSettings):
     otel: OTELConfig = OTELConfig()
     postgres: PostgresSettings = PostgresSettings()
     redis: RedisSettings = RedisSettings()
-    queue: QueueSettings = QueueSettings()
+    temporal: TemporalSettings = TemporalSettings()
     llm: LLMSettings = LLMSettings()
     secrets: SecretsSettings = SecretsSettings()
     mcp: MCPSettings = MCPSettings()

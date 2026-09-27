@@ -7,13 +7,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
 from draftpilot.core.capabilities import capabilities_for_page
 from draftpilot.core.config import LLMSettings
 from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.db import async_get_db
 from draftpilot.core.providers import settings_from_profile
-from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import provider_profiles as profiles_crud
@@ -205,7 +205,7 @@ async def start_async_response(
             permission_mode=permission,
         ),
     )
-    await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+    await temporal.start_run(run.id)
     return CopilotRunResponse(
         message=CopilotMessageRead.model_validate(message),
         run=WorkflowRunRead.model_validate(run),

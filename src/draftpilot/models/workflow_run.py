@@ -21,6 +21,8 @@ class WorkflowRunBase(SQLModel):
     permission_mode: str = Field(default="chat_only", max_length=30)
     attempt_count: int = Field(default=0, ge=0)
     max_attempts: int = Field(default=3, ge=1, le=10)
+    # The Temporal workflow executing this run; the row is a read-only copy of its state.
+    temporal_workflow_id: str | None = Field(default=None, max_length=200, index=True)
 
 
 class WorkflowRun(WorkflowRunBase, table=True):  # type: ignore[call-arg]

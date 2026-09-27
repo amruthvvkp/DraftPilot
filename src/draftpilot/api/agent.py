@@ -19,7 +19,6 @@ from draftpilot.core.scene_proposals import (
 )
 from draftpilot.core.scene_sync import SceneLike, scene_changed
 from draftpilot.core.screenplay.schema import BlockDoc
-from draftpilot.core.usefulness import record_decision
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -543,9 +542,7 @@ async def approve_agent_proposal(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
 ) -> AgentProposalRead:
     """Apply a typed proposal only when its target version is unchanged."""
-    result = await _approve(project_id, proposal_id, session)
-    await _record(session, proposal_id)
-    return result
+    return await _approve(project_id, proposal_id, session)
 
 
 @router.post("/{proposal_id}/reject", response_model=AgentProposalRead)
@@ -553,9 +550,7 @@ async def reject_agent_proposal(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
 ) -> AgentProposalRead:
     """Reject a pending proposal without touching its target."""
-    result = await _reject(project_id, proposal_id, session)
-    await _record(session, proposal_id)
-    return result
+    return await _reject(project_id, proposal_id, session)
 
 
 @router.post("/{proposal_id}/rollback", response_model=AgentProposalRead)
@@ -563,13 +558,4 @@ async def rollback_agent_proposal(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
 ) -> AgentProposalRead:
     """Rollback an approved proposal as a new versioned target mutation."""
-    result = await _rollback(project_id, proposal_id, session)
-    await _record(session, proposal_id)
-    return result
-
-
-async def _record(session: AsyncSession, proposal_id: int) -> None:
-    """Score the traces behind a decided proposal (best-effort)."""
-    proposal = await proposals_crud.get(session, proposal_id)
-    if proposal is not None:
-        await record_decision(session, proposal)
+    return await _rollback(project_id, proposal_id, session)

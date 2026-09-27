@@ -108,9 +108,9 @@ def test_async_copilot_response_enqueues_durable_run(monkeypatch) -> None:
     class Pool:
         """Capture one queued worker job."""
 
-        async def enqueue_job(self, name: str, run_id: int | None) -> None:
+        async def start_workflow(self, name: str, *, args: list[object], **_options: object) -> None:
             """Capture the queued worker call."""
-            assert (name, run_id) == ("execute_workflow", 44)
+            assert (name, args[0]) == ("execute_workflow", 44)
 
     async def get_pool() -> Pool:
         """Return the queue fixture."""
@@ -120,7 +120,7 @@ def test_async_copilot_response_enqueues_durable_run(monkeypatch) -> None:
     monkeypatch.setattr("draftpilot.api.copilot.messages_crud.create", create_message)
     monkeypatch.setattr("draftpilot.api.copilot.messages_crud.list_for_project", list_messages)
     monkeypatch.setattr("draftpilot.api.copilot.runs_crud.create", create_run)
-    monkeypatch.setattr("draftpilot.api.copilot.get_arq_pool", get_pool)
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", get_pool)
     response = TestClient(app).post(
         "/api/v1/projects/7/copilot/messages/respond-async",
         json={"content": "Keep the ending earned.", "page": "workspace"},

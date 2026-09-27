@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core import temporal
 from draftpilot.core.benchmark import (
     BenchmarkManifest,
     BenchmarkTrack,
@@ -11,7 +12,6 @@ from draftpilot.core.benchmark import (
     source_digest,
 )
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.core.screenplay.adapters.fdx import parse_fdx, render_fdx
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain, render_fountain
 from draftpilot.core.screenplay.adapters.pdf import parse_pdf
@@ -138,5 +138,5 @@ async def import_screenplay(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Import could not be persisted")
     await save_screenplay_doc(session, imported.id, document)
     # Imported scripts become searchable for the room (scenes are chunked and embedded).
-    await enqueue_best_effort("reindex_project", project_id, description="Imported screenplay reindex enqueue")
+    await temporal.start_best_effort("reindex_project", project_id, description="Imported screenplay reindex enqueue")
     return ScreenplayRead.model_validate(imported)

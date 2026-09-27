@@ -26,7 +26,7 @@ from draftpilot.api.timeline import (
     approve_timeline_proposal,
     rollback_timeline_proposal,
 )
-from draftpilot.core import events, rag_client, telemetry
+from draftpilot.core import events, rag_client, telemetry, temporal
 from draftpilot.core.agent_identity import current_internal_agent
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
@@ -40,7 +40,6 @@ from draftpilot.core.context_workflows import (
 from draftpilot.core.db import session_scope
 from draftpilot.core.exports import ExportError, write_export
 from draftpilot.core.mcp_auth import client_id_for_token
-from draftpilot.core.queue import enqueue_best_effort, get_arq_pool
 from draftpilot.core.scene_proposals import (
     parse_scene_fountain,
     rewrite_operation,
@@ -305,7 +304,7 @@ async def start_context_workflow(
                 permission_mode=permission_mode,
             ),
         )
-        await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+        await temporal.start_run(run.id)
     return WorkflowRunRead.model_validate(run).model_dump(mode="json")
 
 
@@ -1075,6 +1074,7 @@ async def control_workflow_run(
             if run.status in {"succeeded", "failed", "cancelled"}:
                 raise ValueError("Run is already terminal")
             await runs_crud.update_status(session, run, "cancelled")
+            await temporal.cancel_run(run.id)
         else:
             if run.status == "succeeded":
                 raise ValueError("Run already succeeded")
@@ -1084,7 +1084,7 @@ async def control_workflow_run(
             session.add(run)
             await session.commit()
             await session.refresh(run)
-            await (await get_arq_pool()).enqueue_job("execute_workflow", run.id)
+            await temporal.start_run(run.id)
     return WorkflowRunRead.model_validate(run).model_dump(mode="json")
 
 
@@ -1122,7 +1122,7 @@ async def start_room_workflow(
             raise ValueError(f"Unknown room workflow; choose one of {', '.join(ROOM_WORKFLOWS)}") from exc
         except ValidationError as exc:
             raise ValueError(f"Invalid workflow parameters: {exc.errors(include_url=False)}") from exc
-    await enqueue_best_effort("execute_workflow", run.id, description="room workflow enqueue")
+    await temporal.start_best_effort(temporal.RUN_WORKFLOW, run.id, description="room workflow enqueue", id=temporal.run_workflow_id(run.id or 0), collapse=True)
     return WorkflowRunRead.model_validate(run).model_dump(mode="json")
 
 
