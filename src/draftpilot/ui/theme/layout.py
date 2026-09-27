@@ -131,16 +131,15 @@ def _build_sidebar() -> tuple[ui.left_drawer, list[ui.item_label]]:
     labels: list[ui.item_label] = []
     with ui.left_drawer(bordered=True).classes("dp-sidebar").props(
         f"width={_DRAWER_EXPANDED}"
-    ) as drawer:
-        with ui.list().classes("w-full"):
-            for icon, label, path in NAV_ITEMS:
-                with ui.item(on_click=lambda p=path: ui.navigate.to(p)).classes(
-                    "rounded-lg no-wrap"
-                ):
-                    with ui.item_section().props("avatar"):
-                        ui.icon(icon)
-                    with ui.item_section():
-                        labels.append(ui.item_label(label).classes("dp-nav-label text-sm"))
+    ) as drawer, ui.list().classes("w-full"):
+        for icon, label, path in NAV_ITEMS:
+            with ui.item(on_click=lambda p=path: ui.navigate.to(p)).classes(
+                "rounded-lg no-wrap"
+            ):
+                with ui.item_section().props("avatar"):
+                    ui.icon(icon)
+                with ui.item_section():
+                    labels.append(ui.item_label(label).classes("dp-nav-label text-sm"))
     _apply_sidebar(drawer, labels, _collapsed())
     return drawer, labels
 

@@ -9,6 +9,25 @@ UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui mypy src
 UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run --group ui interrogate src migrations
 ```
 
+## Test tiers
+
+| Tier | Needs | Command | What it proves |
+|---|---|---|---|
+| 0 · deterministic | nothing | `uv run pytest tests --ignore=tests/e2e` | Unit and API behaviour. Runs in CI. `lmstudio` tests are deselected by default |
+| e2e · browser | the running stack on `:9000` | `uv run pytest tests/e2e` | Playwright journeys. Tests are auto-marked `e2e` |
+| 1 · local model | LM Studio server | `uv run pytest -m lmstudio` | Real PydanticAI calls against local LM Studio |
+
+All LLM-backed tests run against local LM Studio. They never fall back to a cloud provider. Configure
+the target with the `EVAL__` settings:
+
+- `EVAL__BASE_URL` defaults to `http://localhost:1234/v1`.
+- `EVAL__CHAT_MODEL`, `EVAL__JUDGE_MODEL` and `EVAL__EMBEDDING_MODEL` pick the models. When they're
+  empty, the first *loaded* model reported by `/api/v0/models` is used.
+
+If LM Studio isn't reachable, the `lmstudio` fixture fails with a clear message instead of skipping.
+Install the browser once with `uv run playwright install chromium`, and again after any Playwright
+upgrade.
+
 The isolated Python suite includes `tests/test_migrations.py`, which verifies that the Alembic
 history has one current head without connecting to the developer database. Compose startup also
 runs `alembic upgrade head` against its dedicated Postgres service.

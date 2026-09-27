@@ -60,6 +60,7 @@ ui = [
   "alembic>=1.20.0",
   "arq>=0.28.0",
   "asyncpg>=0.31.0",
+  "httpx2>=2.13.1",  # MCP SDK 2 client transport
   "nicegui>=3.17.1",
   "psycopg[binary]>=3.3.6",
   "pydantic-ai>=2.51.0",
@@ -74,7 +75,7 @@ ui = [
 worker = [{ include-group = "ui" }]
 
 [build-system]
-requires = ["uv_build>=0.9.7,<0.12"]
+requires = ["uv_build>=0.9.7,<0.13"]
 build-backend = "uv_build"
 
 [tool.interrogate]
@@ -97,3 +98,21 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 base_url = "http://localhost:9000"
+# Tier 0 (deterministic) runs by default; pass `-m lmstudio` for the local-model tier.
+addopts = "-m 'not lmstudio'"
+markers = [
+  "e2e: Playwright browser journeys against the running web stack",
+  "lmstudio: needs a local LM Studio server (Tier 1); deselected by default",
+]
+
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["migrations/versions", "site", "frontend"]
+
+[tool.ruff.lint]
+# Domain validation raises ValueError by contract; callers map it to 4xx/422.
+ignore = ["TRY004"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are evaluated once by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query", "fastapi.Header"]

@@ -1,16 +1,17 @@
 """Test the durable, context-bearing Copilot message boundary."""
 
 from collections.abc import AsyncGenerator
+from typing import Self
 
+import pytest
+from _async import run_async
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from draftpilot.api.copilot import router
 from draftpilot.core.copilot import retrieve_context
 from draftpilot.core.db import async_get_db
 from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project
-from _async import run_async
 
 
 class _Session:
@@ -36,7 +37,7 @@ def test_retrieve_context_returns_bounded_citations(monkeypatch: pytest.MonkeyPa
             """Accept the bounded client configuration."""
             assert kwargs["timeout"] == 3.0
 
-        async def __aenter__(self) -> "Client":
+        async def __aenter__(self) -> Self:
             """Enter the HTTP fixture context."""
             return self
 
@@ -59,7 +60,7 @@ def test_copilot_message_persists_full_context_envelope(
     """Persist page, selection, instructions, citations, and active tools."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 

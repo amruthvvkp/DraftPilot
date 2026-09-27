@@ -1,25 +1,30 @@
 """Typed agent proposal endpoints with approval and rollback controls."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.db import async_get_db
 from draftpilot.api.projects import _enqueue_rag_index
-from draftpilot.crud import agent_proposals as proposals_crud
+from draftpilot.core.agent_roles import normalize_permission_mode
+from draftpilot.core.db import async_get_db
 from draftpilot.crud import acts as acts_crud
+from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import scenes as scenes_crud
-from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import screenplays as screenplays_crud
+from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import workflow_runs as runs_crud
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, DialogueTranslation
-from draftpilot.core.agent_roles import normalize_permission_mode
+from draftpilot.models import (
+    AgentProposal,
+    AgentProposalRead,
+    BlockType,
+    DialogueTranslation,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/agent-proposals", tags=["agent"])
 
@@ -294,7 +299,7 @@ async def approve_agent_proposal(
             existing.source_version = target.version
             session.add(existing)
         proposal.status = "approved"
-        proposal.updated_at = datetime.now(timezone.utc)
+        proposal.updated_at = datetime.now(UTC)
         session.add(proposal)
         await session.commit()
         await session.refresh(proposal)
@@ -317,7 +322,7 @@ async def approve_agent_proposal(
         session.add(block)
         session.add(target)
         proposal.status = "approved"
-        proposal.updated_at = datetime.now(timezone.utc)
+        proposal.updated_at = datetime.now(UTC)
         session.add(proposal)
         await session.commit()
         await session.refresh(proposal)
@@ -344,7 +349,7 @@ async def approve_agent_proposal(
     if proposal.target_kind == "artifact":
         await artifacts_crud.mark_dependents_stale(session, project_id, [proposal.target_id])
     proposal.status = "approved"
-    proposal.updated_at = datetime.now(timezone.utc)
+    proposal.updated_at = datetime.now(UTC)
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
@@ -422,7 +427,7 @@ async def rollback_agent_proposal(
     target.version += 1
     session.add(target)
     proposal.status = "rolled_back"
-    proposal.updated_at = datetime.now(timezone.utc)
+    proposal.updated_at = datetime.now(UTC)
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)

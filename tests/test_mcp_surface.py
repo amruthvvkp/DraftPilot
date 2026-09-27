@@ -1,7 +1,6 @@
 """Test the discoverable FastMCP prompt, resource, and tool surface."""
 
 import pytest
-
 from _async import run_async
 
 

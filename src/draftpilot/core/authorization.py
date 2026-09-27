@@ -1,6 +1,6 @@
 """Server-authoritative capability grants and approval checks."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -32,7 +32,7 @@ def authorize(request: CapabilityRequest, grants: list[CapabilityGrant]) -> None
     )
     if capability is None:
         raise PermissionError("Unknown capability")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     granted = next(
         (
             grant

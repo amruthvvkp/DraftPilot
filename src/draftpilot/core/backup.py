@@ -4,7 +4,7 @@ import gzip
 import hashlib
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,7 +63,7 @@ def write_backup(
     payload_bytes = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     manifest = BackupManifest(
         project_id=project_id,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         app_version=app_version,
         sha256=hashlib.sha256(payload_bytes).hexdigest(),
     )

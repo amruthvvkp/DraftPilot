@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core.context_operations import (
+    apply_context_suggestion as apply_context_suggestion_operation,
+)
 from draftpilot.core.context_workflows import (
     ContextWorkflowRequest,
     ContextWorkflowSpec,
@@ -11,7 +14,6 @@ from draftpilot.core.context_workflows import (
     get_context_workflow,
     validate_context_source,
 )
-from draftpilot.core.context_operations import apply_context_suggestion as apply_context_suggestion_operation
 from draftpilot.core.db import async_get_db
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.crud import projects as projects_crud

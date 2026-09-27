@@ -2,9 +2,9 @@
 
 from collections.abc import AsyncGenerator
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from draftpilot.api.monty import router
 from draftpilot.core.db import async_get_db
@@ -21,7 +21,7 @@ def test_list_monty_executions_returns_redacted_records(
     """Return persisted audit fields without source code or inputs."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 

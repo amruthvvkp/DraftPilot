@@ -10,13 +10,13 @@ from nicegui import ui
 from draftpilot.core.db import session_scope
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
-from draftpilot.models import Project, ReferenceKind, ScreenplayCreate, ScreeningType
+from draftpilot.models import Project, ReferenceKind, ScreeningType, ScreenplayCreate
+from draftpilot.ui import components as c
 from draftpilot.ui.project_wizard import (
     ProjectWizardData,
     build_project_create,
     reference_create_payloads,
 )
-from draftpilot.ui import components as c
 
 
 async def content() -> None:

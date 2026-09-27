@@ -27,14 +27,14 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 )
 
 
-async def async_get_db() -> AsyncGenerator[AsyncSession, None]:
+async def async_get_db() -> AsyncGenerator[AsyncSession]:
     """Yield a database session (FastAPI ``Depends`` compatible)."""
     async with async_session_factory() as session:
         yield session
 
 
 @asynccontextmanager
-async def session_scope() -> AsyncGenerator[AsyncSession, None]:
+async def session_scope() -> AsyncGenerator[AsyncSession]:
     """Transactional session context for use outside request handlers."""
     async with async_session_factory() as session:
         yield session

@@ -1,7 +1,8 @@
 """Test the isolated project retrieval service."""
 
-from fastapi.testclient import TestClient
 from pathlib import Path
+
+from fastapi.testclient import TestClient
 
 from draftpilot.core.rag import IndexedDocument, SQLiteLexicalIndex
 from draftpilot.rag_service import app, index

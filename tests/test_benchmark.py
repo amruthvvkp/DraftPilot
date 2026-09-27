@@ -2,10 +2,12 @@
 
 import pytest
 
-from draftpilot.core.benchmark import compare_manifests, manifest_from_document, source_digest
-
+from draftpilot.core.benchmark import (
+    compare_manifests,
+    manifest_from_document,
+    source_digest,
+)
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain
-
 
 
 def test_manifest_counts_structure_and_source_digest() -> None:

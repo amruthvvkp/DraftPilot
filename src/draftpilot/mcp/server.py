@@ -2,7 +2,7 @@
 
 import base64
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import logfire
@@ -14,26 +14,37 @@ from starlette.responses import JSONResponse
 
 from draftpilot.api.agent import approve_agent_proposal, rollback_agent_proposal
 from draftpilot.api.artifacts import _enqueue_index
-from draftpilot.api.backups import _enqueue_restored_artifacts, _project_payload, restore_backup_payload
-from draftpilot.api.timeline import approve_timeline_proposal, rollback_timeline_proposal
+from draftpilot.api.backups import (
+    _enqueue_restored_artifacts,
+    _project_payload,
+    restore_backup_payload,
+)
+from draftpilot.api.timeline import (
+    approve_timeline_proposal,
+    rollback_timeline_proposal,
+)
 from draftpilot.core import telemetry
 from draftpilot.core.backup import BackupError, read_backup, write_backup
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
-from draftpilot.core.exports import ExportError, write_export
+from draftpilot.core.context_operations import apply_context_suggestion
+from draftpilot.core.context_workflows import (
+    context_workflow_catalog,
+    get_context_workflow,
+    validate_context_source,
+)
 from draftpilot.core.db import session_scope
+from draftpilot.core.exports import ExportError, write_export
 from draftpilot.core.mcp_auth import client_id_for_token
 from draftpilot.core.queue import get_arq_pool
 from draftpilot.core.screenplay.adapters.fdx import render_fdx
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
-from draftpilot.core.screenplay.hydrate import load_screenplay_doc
 from draftpilot.core.screenplay.html import render_html
+from draftpilot.core.screenplay.hydrate import load_screenplay_doc
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.timeline import propose_reorder
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
 from draftpilot.core.story_operations import validate_story_operation
-from draftpilot.core.context_workflows import context_workflow_catalog, get_context_workflow, validate_context_source
-from draftpilot.core.context_operations import apply_context_suggestion
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import blocks as blocks_crud
@@ -49,7 +60,17 @@ from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import timeline_proposals as timeline_proposals_crud
 from draftpilot.crud import workflow_runs as runs_crud
 from draftpilot.crud.mcp_access import authorize_invocation
-from draftpilot.models import AgentProposal, AgentProposalRead, BlockType, EvaluationResultRead, StoryArtifactRead, TimelineProposalRead, TimelineProposalRecord, WorkflowRunCreate, WorkflowRunRead
+from draftpilot.models import (
+    AgentProposal,
+    AgentProposalRead,
+    BlockType,
+    EvaluationResultRead,
+    StoryArtifactRead,
+    TimelineProposalRead,
+    TimelineProposalRecord,
+    WorkflowRunCreate,
+    WorkflowRunRead,
+)
 
 telemetry.setup(mcp=True)
 
@@ -398,7 +419,7 @@ async def apply_story_operation(
         except ValueError as exc:
             raise ValueError(str(exc)) from exc
         apply_operation(artifact, parsed)
-        artifact.updated_at = datetime.now(timezone.utc)
+        artifact.updated_at = datetime.now(UTC)
         session.add(artifact)
         await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
         await session.commit()

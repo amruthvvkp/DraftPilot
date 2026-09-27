@@ -3,15 +3,15 @@
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock
 
+import pytest
+from _async import run_async
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from draftpilot.api.artifacts import router
 from draftpilot.core.db import async_get_db
 from draftpilot.crud import story_artifacts
 from draftpilot.models import Project, StoryArtifact
-from _async import run_async
 
 
 class _Session:
@@ -39,7 +39,7 @@ def _client() -> tuple[TestClient, _Session]:
     app = FastAPI()
     session = _Session()
 
-    async def dependency() -> AsyncGenerator[_Session, None]:
+    async def dependency() -> AsyncGenerator[_Session]:
         """Yield the isolated session marker."""
         yield session
 

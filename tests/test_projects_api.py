@@ -42,7 +42,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Build an isolated API client with a mocked database dependency."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an in-memory session marker."""
         yield _Session()
 
@@ -73,9 +73,9 @@ def test_create_project_persists_typed_references(
 
     async def create_with_references(_session: _Session, data: object, references: list[object]) -> Project:
         """Return the fixture project after receiving the normalized request."""
-        assert getattr(data, "primary_language") == "Hindi"
+        assert data.primary_language == "Hindi"
         assert len(references) == 1
-        assert getattr(references[0], "label") == "Pather Panchali"
+        assert references[0].label == "Pather Panchali"
         return project
 
     async def list_for_project(_session: _Session, _project_id: int) -> list[object]:
@@ -335,11 +335,11 @@ def test_translation_update_is_scoped_and_preserves_source(
         """Return a persisted translation fixture."""
         return DialogueTranslation(
             id=21,
-            block_id=getattr(data, "block_id"),
-            language=getattr(data, "language"),
-            text=getattr(data, "text"),
-            source_version=getattr(data, "source_version"),
-            status=getattr(data, "status"),
+            block_id=data.block_id,
+            language=data.language,
+            text=data.text,
+            source_version=data.source_version,
+            status=data.status,
         )
 
     monkeypatch.setattr("draftpilot.api.projects.scenes_crud.get", get_scene)

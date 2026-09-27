@@ -107,17 +107,11 @@ def test_writer_smoke_journey_from_project_to_recovery(page: Page) -> None:
             result = {"id": 55, "project_id": 42, "kind": "evaluation", "status": "succeeded", "result": {}, "error": None}
         elif path.endswith("/evaluations/runs"):
             result, code = {"id": 55, "project_id": 42, "kind": "evaluation", "status": "queued", "result": None, "error": None}, 202
-        elif path.endswith("/evaluations"):
-            result = []
-        elif path.endswith("/copilot/messages"):
+        elif path.endswith(("/evaluations", "/copilot/messages")):
             result = []
         elif path.endswith("/agents/roles"):
             result = [{"key": "story_architect", "label": "Story architect", "description": "Shape the story.", "default_permission": "chat_only"}]
-        elif path.endswith("/settings/providers"):
-            result = []
-        elif path.endswith("/capabilities"):
-            result = []
-        elif path.endswith("/revisions"):
+        elif path.endswith(("/settings/providers", "/capabilities", "/revisions")):
             result = []
         route.fulfill(status=code, content_type="application/json", body=json.dumps(result))
 

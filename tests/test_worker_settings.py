@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 from _async import run_async
+
 from draftpilot.worker import settings as worker_settings
 
 
@@ -36,7 +37,7 @@ class _SessionScope:
 
     async def __aexit__(self, *args: object) -> None:
         """Close the isolated session context."""
-        return None
+        return
 
 
 class _Pool:

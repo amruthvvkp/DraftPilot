@@ -9,8 +9,7 @@ from fastapi.testclient import TestClient
 
 from draftpilot.api.agent import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import AgentProposal, BlockType
-from draftpilot.models import WorkflowRun
+from draftpilot.models import AgentProposal, BlockType, WorkflowRun
 
 
 class _Session:
@@ -30,7 +29,7 @@ def _client() -> TestClient:
     """Build a proposal API client with an isolated database dependency."""
     app = FastAPI()
 
-    async def dependency() -> AsyncGenerator[_Session, None]:
+    async def dependency() -> AsyncGenerator[_Session]:
         """Yield an isolated session marker."""
         yield _Session()
 

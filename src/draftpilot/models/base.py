@@ -1,6 +1,6 @@
 """Shared model mixins."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime
 from sqlmodel import Field, SQLModel
@@ -8,7 +8,7 @@ from sqlmodel import Field, SQLModel
 
 def _utcnow() -> datetime:
     """Return the current timezone-aware UTC datetime."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class TimestampMixin(SQLModel):

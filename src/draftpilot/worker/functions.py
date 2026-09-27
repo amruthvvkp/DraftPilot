@@ -10,23 +10,22 @@ deterministic metrics even when no model is reachable.
 import httpx
 import logfire
 
+from draftpilot.core.agent_roles import normalize_agent_role
 from draftpilot.core.cache import cache_set
 from draftpilot.core.config import settings
-from draftpilot.core.db import session_scope
-from draftpilot.core.queue import get_arq_pool
-from draftpilot.core.providers import create_chat_model
-from draftpilot.core.agent_roles import normalize_agent_role
-from draftpilot.core.copilot import generate_reply, retrieve_context
-from draftpilot.core.providers import settings_from_profile
 from draftpilot.core.context_workflows import get_context_workflow
+from draftpilot.core.copilot import generate_reply, retrieve_context
+from draftpilot.core.db import session_scope
+from draftpilot.core.providers import create_chat_model, settings_from_profile
+from draftpilot.core.queue import get_arq_pool
+from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import evaluations as evaluations_crud
-from draftpilot.crud import blocks as blocks_crud
+from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
-from draftpilot.crud import workflow_runs as workflow_runs_crud
-from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
+from draftpilot.crud import workflow_runs as workflow_runs_crud
 from draftpilot.models import CopilotMessageCreate, EvaluationResult, WorkflowRun
 
 ANALYSIS_CACHE_KEY = "analysis:{id}"
@@ -50,7 +49,7 @@ async def _llm_note(title: str, scene_count: int, word_count: int, agent_role: s
             f"Title: {title}. Scenes: {scene_count}. Words: {word_count}."
         )
         return result.output
-    except Exception as exc:  # pragma: no cover - provider/network dependent
+    except Exception as exc:  # noqa: BLE001 - optional LLM note must never fail the task
         logfire.warning("LLM note skipped: {exc}", exc=str(exc))
         return None
 
@@ -151,7 +150,7 @@ async def execute_workflow(ctx: dict, run_id: int) -> dict:
                 return await _execute_copilot_run(ctx, run)
             assert isinstance(screenplay_id, int)
             result = await evaluate_screenplay(ctx, run) if evaluation_run else await analyze_screenplay(ctx, screenplay_id, run.agent_role)
-        except Exception as exc:  # pragma: no cover - worker failure boundary
+        except Exception as exc:  # noqa: BLE001 - worker failure boundary records retry state
             return await _retry_or_fail(ctx, run_id, exc)
         async with session_scope() as session:
             run = await workflow_runs_crud.get(session, run_id)
@@ -213,19 +212,16 @@ async def _execute_context_generation(ctx: dict, run: WorkflowRun) -> dict[str, 
         f"Source: {source_title}. Source material:\n{source_text}\n\n"
         f"Writer instruction: {instruction}"
     )
-    try:
-        suggestion = await generate_reply(
-            prompt,
-            f"context/{workflow.key}",
-            workflow.output_kind,
-            source_title,
-            normalize_agent_role(run.agent_role),
-            [],
-            None,
-            retrieved_context,
-        )
-    except Exception:  # pragma: no cover - provider/network dependent
-        raise
+    suggestion = await generate_reply(
+        prompt,
+        f"context/{workflow.key}",
+        workflow.output_kind,
+        source_title,
+        normalize_agent_role(run.agent_role),
+        [],
+        None,
+        retrieved_context,
+    )
     result: dict[str, object] = {
         "workflow": workflow.key,
         "output_kind": workflow.output_kind,
@@ -315,30 +311,27 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
             if current is not None:
                 await workflow_runs_crud.update_status(session, current, "failed", error="invalid Copilot input")
         return {"error": "invalid_input"}
-    try:
-        llm_settings = None
-        profile_id = data.get("provider_profile_id")
-        if isinstance(profile_id, int):
-            async with session_scope() as session:
-                profile = await profiles_crud.get(session, profile_id)
-                if profile is None:
-                    raise ValueError("Provider profile not found")
-                llm_settings = settings_from_profile(profile)
-        retrieved_context = await retrieve_context(run.project_id, content)
-        raw_citations = data.get("citations")
-        citations = raw_citations if isinstance(raw_citations, list) else []
-        reply = await generate_reply(
-            content,
-            page,
-            data.get("artifact") if isinstance(data.get("artifact"), str) else None,
-            data.get("selection") if isinstance(data.get("selection"), str) else None,
-            normalize_agent_role(run.agent_role),
-            history,
-            llm_settings,
-            retrieved_context,
-        )
-    except Exception:  # pragma: no cover - provider/network dependent
-        raise
+    llm_settings = None
+    profile_id = data.get("provider_profile_id")
+    if isinstance(profile_id, int):
+        async with session_scope() as session:
+            profile = await profiles_crud.get(session, profile_id)
+            if profile is None:
+                raise ValueError("Provider profile not found")
+            llm_settings = settings_from_profile(profile)
+    retrieved_context = await retrieve_context(run.project_id, content)
+    raw_citations = data.get("citations")
+    citations = raw_citations if isinstance(raw_citations, list) else []
+    reply = await generate_reply(
+        content,
+        page,
+        data.get("artifact") if isinstance(data.get("artifact"), str) else None,
+        data.get("selection") if isinstance(data.get("selection"), str) else None,
+        normalize_agent_role(run.agent_role),
+        history,
+        llm_settings,
+        retrieved_context,
+    )
     async with session_scope() as session:
         current = await workflow_runs_crud.get(session, run.id or 0)
         if current is None or current.status == "cancelled":
@@ -352,10 +345,10 @@ async def _execute_copilot_run(ctx: dict, run: WorkflowRun) -> dict[str, object]
                 page=page,
                 artifact=data.get("artifact") if isinstance(data.get("artifact"), str) else None,
                 selection=data.get("selection") if isinstance(data.get("selection"), str) else None,
-                instruction_layers=data.get("instruction_layers") if isinstance(data.get("instruction_layers"), dict) else {"agent_role": current.agent_role, "permission_mode": current.permission_mode},
+                instruction_layers=layers if isinstance(layers := data.get("instruction_layers"), dict) else {"agent_role": current.agent_role, "permission_mode": current.permission_mode},
                 citations=citations
                 + [item["citation"] for item in retrieved_context if isinstance(item.get("citation"), dict)],
-                active_tools=data.get("active_tools") if isinstance(data.get("active_tools"), list) else [],
+                active_tools=[str(tool) for tool in tools] if isinstance(tools := data.get("active_tools"), list) else [],
             ),
         )
         await workflow_runs_crud.update_status(

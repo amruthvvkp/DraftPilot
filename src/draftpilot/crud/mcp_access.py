@@ -1,13 +1,17 @@
 """CRUD helpers for MCP registrations and grants."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.authorization import CapabilityGrant, CapabilityRequest, authorize, redact_audit_payload
-from draftpilot.models import MCPClient, MCPGrant
-from draftpilot.models import MCPAuditEvent
+from draftpilot.core.authorization import (
+    CapabilityGrant,
+    CapabilityRequest,
+    authorize,
+    redact_audit_payload,
+)
+from draftpilot.models import MCPAuditEvent, MCPClient, MCPGrant
 
 
 async def get_client(session: AsyncSession, client_id: str) -> MCPClient | None:
@@ -26,7 +30,7 @@ async def list_grants(session: AsyncSession, project_id: int, client_id: str) ->
         ).order_by(col(MCPGrant.capability)
         )
     )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return [grant for grant in result.all() if grant.expires_at is None or grant.expires_at > now]
 
 

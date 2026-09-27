@@ -1,14 +1,15 @@
 """Project-scoped MCP client and capability grant administration endpoints."""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from datetime import datetime
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.db import async_get_db
 from draftpilot.core.capabilities import capability_catalog
 from draftpilot.core.config import settings
+from draftpilot.core.db import async_get_db
 from draftpilot.crud import mcp_access as access_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import MCPClient, MCPGrant, MCPGrantRead

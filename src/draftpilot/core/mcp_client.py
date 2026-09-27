@@ -7,10 +7,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 
+import httpx2
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
-from mcp.client.streamable_http import streamablehttp_client
-from pydantic import AnyUrl
+from mcp.client.streamable_http import streamable_http_client
 
 
 class MCPClientError(ValueError):
@@ -110,15 +110,19 @@ class DraftPilotMCPClient:
     async def _http_session(self) -> AsyncIterator[ClientSession]:
         """Open and initialize one authenticated Streamable HTTP session."""
         headers = {"Authorization": f"Bearer {self.token}"} if self.token else None
-        async with streamablehttp_client(
-            self.endpoint,
-            headers=headers,
-            timeout=self.timeout_seconds,
-            sse_read_timeout=self.timeout_seconds,
-        ) as (read_stream, write_stream, _session_id):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
+        http_client = httpx2.AsyncClient(
+            headers=headers, timeout=httpx2.Timeout(self.timeout_seconds)
+        )
+        async with (
+            http_client,
+            streamable_http_client(self.endpoint, http_client=http_client) as (
+                read_stream,
+                write_stream,
+            ),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            yield session
 
     @asynccontextmanager
     async def _stdio_session(
@@ -128,10 +132,12 @@ class DraftPilotMCPClient:
         if not command or any("\x00" in value for value in [command, *args]):
             raise MCPClientError("Invalid stdio MCP command")
         parameters = StdioServerParameters(command=command, args=args)
-        async with stdio_client(parameters) as (read_stream, write_stream):
-            async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                yield session
+        async with (
+            stdio_client(parameters) as (read_stream, write_stream),
+            ClientSession(read_stream, write_stream) as session,
+        ):
+            await session.initialize()
+            yield session
 
     async def list_tools(self) -> dict[str, object] | list[object] | str:
         """Discover external MCP tools through Streamable HTTP."""
@@ -153,13 +159,9 @@ class DraftPilotMCPClient:
         if not uri or len(uri) > 2_000:
             raise MCPClientError("MCP resource URI is invalid")
         async with self._http_session() as session:
-            try:
-                resource_uri = AnyUrl(uri)
-            except ValueError as exc:
-                raise MCPClientError("MCP resource URI is invalid") from exc
-            return _bounded_result(
-                await session.read_resource(resource_uri), self.max_output_chars
-            )
+            if "://" not in uri or any(char.isspace() for char in uri):
+                raise MCPClientError("MCP resource URI is invalid")
+            return _bounded_result(await session.read_resource(uri), self.max_output_chars)
 
     async def get_prompt(
         self, name: str, arguments: dict[str, str] | None = None

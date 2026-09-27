@@ -3,7 +3,7 @@
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -43,7 +43,7 @@ def write_export(
         raise ExportError("Export is empty or exceeds the configured size limit")
     directory = (root / "exports").resolve()
     directory.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     filename = f"{_safe_name(title)}-{project_id}-{screenplay_id}-{timestamp}.{file_format}"
     target = (directory / filename).resolve()
     if target.parent != directory:

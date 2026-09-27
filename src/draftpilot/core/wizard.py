@@ -144,5 +144,5 @@ async def generate_wizard_assist(
         if isinstance(output, dict):
             return WizardAssistResponse.model_validate(output)
         return fallback_wizard_assist(request)
-    except Exception:
+    except Exception:  # noqa: BLE001 - any provider failure degrades to the heuristic brief
         return fallback_wizard_assist(request)

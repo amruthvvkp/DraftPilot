@@ -1,6 +1,11 @@
 """Test project-scoped incremental local retrieval."""
 
-from draftpilot.core.rag import HashEmbeddingProvider, IndexedDocument, LocalLexicalIndex, SQLiteLexicalIndex
+from draftpilot.core.rag import (
+    HashEmbeddingProvider,
+    IndexedDocument,
+    LocalLexicalIndex,
+    SQLiteLexicalIndex,
+)
 
 
 def test_retrieval_returns_versioned_citations_with_project_isolation() -> None:

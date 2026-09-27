@@ -1,15 +1,17 @@
 """Versioned project story-artifact endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import logfire
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
-from draftpilot.core.queue import get_arq_pool
-from draftpilot.core.story_operations import apply_story_operation, validate_story_operation
+from draftpilot.core.queue import enqueue_best_effort
+from draftpilot.core.story_operations import (
+    apply_story_operation,
+    validate_story_operation,
+)
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.models import StoryArtifact, StoryArtifactRead
@@ -19,19 +21,17 @@ router = APIRouter(prefix="/projects/{project_id}/artifacts", tags=["artifacts"]
 
 async def _enqueue_index(project_id: int, artifact: StoryArtifact) -> None:
     """Queue an artifact refresh without rolling back the committed artifact."""
-    try:
-        await (await get_arq_pool()).enqueue_job(
-            "index_rag_document",
-            {
-                "project_id": project_id,
-                "source_id": f"artifact:{artifact.id}",
-                "source_kind": artifact.kind,
-                "text": artifact.content,
-                "content_version": artifact.version,
-            },
-        )
-    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
-        logfire.warning("RAG indexing enqueue skipped: {exc}", exc=str(exc))
+    await enqueue_best_effort(
+        "index_rag_document",
+        {
+            "project_id": project_id,
+            "source_id": f"artifact:{artifact.id}",
+            "source_kind": artifact.kind,
+            "text": artifact.content,
+            "content_version": artifact.version,
+        },
+        description="RAG indexing enqueue",
+    )
 
 
 class ArtifactCreateRequest(BaseModel):
@@ -161,7 +161,7 @@ async def update_artifact(
         setattr(artifact, key, value)
     artifact.version += 1
     artifact.stale = False
-    artifact.updated_at = datetime.now(timezone.utc)
+    artifact.updated_at = datetime.now(UTC)
     session.add(artifact)
     await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
     await session.commit()
@@ -191,7 +191,7 @@ async def apply_artifact_operation(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     apply_story_operation(artifact, operation)
-    artifact.updated_at = datetime.now(timezone.utc)
+    artifact.updated_at = datetime.now(UTC)
     session.add(artifact)
     await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
     await session.commit()

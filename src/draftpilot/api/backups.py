@@ -9,7 +9,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.backup import BackupError, BackupManifest, read_backup, write_backup
+from draftpilot.core.backup import (
+    BackupError,
+    BackupManifest,
+    read_backup,
+    write_backup,
+)
 from draftpilot.core.config import settings
 from draftpilot.core.db import async_get_db
 from draftpilot.core.queue import get_arq_pool
@@ -19,7 +24,13 @@ from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
-from draftpilot.models import Project, ProjectCreate, ProjectReference, Screenplay, StoryArtifact
+from draftpilot.models import (
+    Project,
+    ProjectCreate,
+    ProjectReference,
+    Screenplay,
+    StoryArtifact,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/backups", tags=["backups"])
 
@@ -48,7 +59,7 @@ async def _enqueue_restored_artifacts(session: AsyncSession, project_id: int) ->
                     "content_version": artifact.version,
                 },
             )
-    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
+    except Exception as exc:  # noqa: BLE001 - queue availability varies by deployment
         logfire.warning("Restored artifact indexing enqueue skipped: {exc}", exc=str(exc))
 
 

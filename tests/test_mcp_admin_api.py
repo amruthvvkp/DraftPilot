@@ -1,10 +1,10 @@
 """Test authentication for MCP grant administration."""
 
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from unittest.mock import AsyncMock
 
 from draftpilot.api.mcp_access import router
 from draftpilot.core.db import async_get_db
@@ -85,7 +85,7 @@ def test_mcp_grant_revocation_is_project_scoped() -> None:
     assert session.commits == 1
 
     foreign = _Session(MCPGrant(id=4, client_id=3, project_id=8, capability="context.read"))
-    async def foreign_dependency() -> AsyncGenerator[_Session, None]:
+    async def foreign_dependency() -> AsyncGenerator[_Session]:
         """Yield the foreign-project grant fixture."""
         yield foreign
 

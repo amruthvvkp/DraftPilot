@@ -2,7 +2,11 @@
 
 from fastapi import APIRouter, Query
 
-from draftpilot.core.capabilities import Capability, capabilities_for_page, capability_catalog
+from draftpilot.core.capabilities import (
+    Capability,
+    capabilities_for_page,
+    capability_catalog,
+)
 
 router = APIRouter(prefix="/capabilities", tags=["capabilities"])
 

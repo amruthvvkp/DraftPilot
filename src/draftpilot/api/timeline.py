@@ -1,6 +1,6 @@
 """Versioned timeline proposal and approval endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -116,7 +116,7 @@ async def approve_timeline_proposal(
     if timeline_ids:
         await artifacts_crud.mark_dependents_stale(session, project_id, timeline_ids)
     proposal.status = "approved"
-    proposal.updated_at = datetime.now(timezone.utc)
+    proposal.updated_at = datetime.now(UTC)
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
@@ -141,7 +141,7 @@ async def reject_timeline_proposal(
     if proposal.status != "proposed":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal is not pending")
     proposal.status = "rejected"
-    proposal.updated_at = datetime.now(timezone.utc)
+    proposal.updated_at = datetime.now(UTC)
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)
@@ -184,7 +184,7 @@ async def rollback_timeline_proposal(
     if timeline_ids:
         await artifacts_crud.mark_dependents_stale(session, project_id, timeline_ids)
     proposal.status = "rolled_back"
-    proposal.updated_at = datetime.now(timezone.utc)
+    proposal.updated_at = datetime.now(UTC)
     session.add(proposal)
     await session.commit()
     await session.refresh(proposal)

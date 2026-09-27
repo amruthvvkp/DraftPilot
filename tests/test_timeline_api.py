@@ -2,9 +2,13 @@
 
 from unittest.mock import AsyncMock
 
-from draftpilot.api.timeline import approve_timeline_proposal, rollback_timeline_proposal
-from draftpilot.models import Scene, StoryArtifact, TimelineProposalRecord
 from _async import run_async
+
+from draftpilot.api.timeline import (
+    approve_timeline_proposal,
+    rollback_timeline_proposal,
+)
+from draftpilot.models import Scene, StoryArtifact, TimelineProposalRecord
 
 
 class _Session:

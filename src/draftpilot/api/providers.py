@@ -1,19 +1,21 @@
 """Server-side provider profile endpoints with write-only credentials."""
 
 import time
-
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, SecretStr
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.db import async_get_db
+from draftpilot.core.providers import (
+    provider_base_url,
+    settings_from_profile,
+    validate_provider_url,
+)
 from draftpilot.core.security import encrypt_secret
-from draftpilot.core.providers import provider_base_url, settings_from_profile, validate_provider_url
 from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.models import ProviderProfile, ProviderProfileRead
 
@@ -112,7 +114,7 @@ async def update_provider(
         setattr(profile, key, value)
     if data.api_key is not None:
         profile.api_key_encrypted = encrypt_secret(data.api_key.get_secret_value(), settings.secrets.master_key)
-    profile.updated_at = datetime.now(timezone.utc)
+    profile.updated_at = datetime.now(UTC)
     session.add(profile)
     await session.commit()
     await session.refresh(profile)

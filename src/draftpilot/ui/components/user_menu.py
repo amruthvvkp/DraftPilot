@@ -43,12 +43,11 @@ def user_menu() -> None:
     """Render the avatar button + dropdown menu in the header."""
     with ui.button(icon="account_circle").props("flat round dense").style(
         "color: var(--dp-fg-muted)"
-    ):
-        with ui.menu().props("auto-close"):
-            ui.menu_item(_display_name()).props("disable").classes("dp-muted text-sm")
-            ui.separator()
-            ui.menu_item("Profile", _profile_dialog)
-            ui.menu_item("Settings", _settings_dialog)
+    ), ui.menu().props("auto-close"):
+        ui.menu_item(_display_name()).props("disable").classes("dp-muted text-sm")
+        ui.separator()
+        ui.menu_item("Profile", _profile_dialog)
+        ui.menu_item("Settings", _settings_dialog)
 
 
 def _profile_dialog() -> None:

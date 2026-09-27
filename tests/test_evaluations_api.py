@@ -18,7 +18,7 @@ def test_create_and_list_evaluations_are_project_scoped(monkeypatch: object) -> 
     """Persist and return typed findings without crossing project boundaries."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated session marker."""
         yield _Session()
 
@@ -74,7 +74,7 @@ def test_start_evaluation_validates_screenplay_and_enqueues_run(monkeypatch: obj
     """Create a reconnectable evaluation run only for the project screenplay."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated session marker."""
         yield _Session()
 

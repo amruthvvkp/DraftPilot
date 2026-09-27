@@ -15,41 +15,37 @@ def content() -> None:
     ui.label("Design System").classes("text-2xl font-bold")
     ui.label("Reusable building blocks for the DraftPilot studio UI.").classes("dp-muted")
 
-    with c.panel("Color tokens"):
-        with ui.row().classes("gap-3 flex-wrap"):
-            for name, value in design.quasar_colors().items():
-                with ui.column().classes("items-center gap-1"):
-                    ui.element("div").classes("rounded-lg").style(
-                        f"width:48px;height:48px;background:{value};"
-                        "border:1px solid var(--dp-border)"
-                    )
-                    ui.label(name).classes("text-xs dp-muted")
+    with c.panel("Color tokens"), ui.row().classes("gap-3 flex-wrap"):
+        for name, value in design.quasar_colors().items():
+            with ui.column().classes("items-center gap-1"):
+                ui.element("div").classes("rounded-lg").style(
+                    f"width:48px;height:48px;background:{value};"
+                    "border:1px solid var(--dp-border)"
+                )
+                ui.label(name).classes("text-xs dp-muted")
 
-    with c.panel("Buttons"):
-        with ui.row().classes("gap-3 items-center"):
-            c.primary_button("Primary", lambda: ui.notify("primary"), icon="bolt")
-            c.ghost_button("Ghost", lambda: ui.notify("ghost"), icon="circle")
+    with c.panel("Buttons"), ui.row().classes("gap-3 items-center"):
+        c.primary_button("Primary", lambda: ui.notify("primary"), icon="bolt")
+        c.ghost_button("Ghost", lambda: ui.notify("ghost"), icon="circle")
 
-    with c.panel("Stat cards"):
-        with ui.row().classes("gap-3 flex-wrap"):
-            c.stat_card("Projects", 4, icon="movie")
-            c.stat_card("Screenplays", 9, icon="description")
-            c.stat_card("Scenes", 132, icon="theaters")
+    with c.panel("Stat cards"), ui.row().classes("gap-3 flex-wrap"):
+        c.stat_card("Projects", 4, icon="movie")
+        c.stat_card("Screenplays", 9, icon="description")
+        c.stat_card("Scenes", 132, icon="theaters")
 
     with c.panel("Form inputs"):
         c.text_field("Title", placeholder="Untitled project")
         c.select_field("Genre", ["Drama", "Comedy", "Thriller", "Sci-Fi"], value="Drama")
         c.text_area("Logline", placeholder="A one-sentence summary…")
 
-    with c.panel("Project cards"):
-        with ui.row().classes("gap-4 flex-wrap"):
-            with ui.column().classes("w-72"):
-                c.project_card(
-                    "The Last Reel",
-                    subtitle="A projectionist guards the final film print.",
-                    meta="3 screenplays",
-                    on_click=lambda: ui.notify("card click"),
-                )
+    with c.panel("Project cards"), ui.row().classes("gap-4 flex-wrap"):  # noqa: SIM117 - removed with NiceGUI (G2)
+        with ui.column().classes("w-72"):
+            c.project_card(
+                "The Last Reel",
+                subtitle="A projectionist guards the final film print.",
+                meta="3 screenplays",
+                on_click=lambda: ui.notify("card click"),
+            )
 
     with c.panel("Empty state"):
         c.empty_state(

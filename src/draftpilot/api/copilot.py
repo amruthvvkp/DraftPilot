@@ -1,23 +1,29 @@
 """Project-scoped Copilot conversation endpoints."""
 
+from typing import Any
+
 import logfire
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.db import async_get_db
 from draftpilot.core.agent_roles import normalize_agent_role, normalize_permission_mode
 from draftpilot.core.capabilities import capabilities_for_page
-from draftpilot.core.copilot import generate_reply, retrieve_context
 from draftpilot.core.config import LLMSettings
+from draftpilot.core.copilot import generate_reply, retrieve_context
+from draftpilot.core.db import async_get_db
 from draftpilot.core.providers import settings_from_profile
 from draftpilot.core.queue import get_arq_pool
-from draftpilot.crud import workflow_runs as runs_crud
-from draftpilot.crud import provider_profiles as profiles_crud
-from draftpilot.models import WorkflowRunCreate, WorkflowRunRead
 from draftpilot.crud import copilot_messages as messages_crud
 from draftpilot.crud import projects as projects_crud
-from draftpilot.models import CopilotMessageCreate, CopilotMessageRead
+from draftpilot.crud import provider_profiles as profiles_crud
+from draftpilot.crud import workflow_runs as runs_crud
+from draftpilot.models import (
+    CopilotMessageCreate,
+    CopilotMessageRead,
+    WorkflowRunCreate,
+    WorkflowRunRead,
+)
 
 router = APIRouter(prefix="/projects/{project_id}/copilot/messages", tags=["copilot"])
 
@@ -108,8 +114,8 @@ async def respond_to_message(
     data = _server_context(data)
     _, profile_config = await _selected_profile_config(data, session)
     retrieved_context = await retrieve_context(project_id, data.content)
-    citations = data.citations + [
-        item["citation"] for item in retrieved_context if isinstance(item.get("citation"), dict)
+    citations: list[dict[str, Any]] = [dict(item) for item in data.citations] + [
+        citation for item in retrieved_context if isinstance(citation := item.get("citation"), dict)
     ]
     data = data.model_copy(update={"citations": citations})
     await messages_crud.create(session, CopilotMessageCreate(project_id=project_id, **data.model_dump()))

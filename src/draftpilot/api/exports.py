@@ -4,15 +4,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse, Response
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from draftpilot.core.benchmark import (
+    BenchmarkManifest,
+    BenchmarkTrack,
+    manifest_from_document,
+    source_digest,
+)
 from draftpilot.core.db import async_get_db
-from draftpilot.core.benchmark import BenchmarkManifest, BenchmarkTrack, manifest_from_document, source_digest
-from draftpilot.core.screenplay.adapters.fdx import render_fdx
-from draftpilot.core.screenplay.adapters.fdx import parse_fdx
-from draftpilot.core.screenplay.adapters.fountain import render_fountain
-from draftpilot.core.screenplay.adapters.fountain import parse_fountain
+from draftpilot.core.screenplay.adapters.fdx import parse_fdx, render_fdx
+from draftpilot.core.screenplay.adapters.fountain import parse_fountain, render_fountain
 from draftpilot.core.screenplay.adapters.pdf import parse_pdf
-from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
 from draftpilot.core.screenplay.html import render_html
+from draftpilot.core.screenplay.hydrate import load_screenplay_doc, save_screenplay_doc
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import screenplays as screenplays_crud
@@ -113,8 +116,11 @@ async def import_screenplay(
     if len(raw) > MAX_IMPORT_BYTES:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Import is too large")
     try:
-        text = raw.decode("utf-8-sig")
-        document = parse_pdf(raw) if file_format == "pdf" else parse_fountain(text) if file_format == "fountain" else parse_fdx(text)
+        if file_format == "pdf":
+            document = parse_pdf(raw)
+        else:
+            text = raw.decode("utf-8-sig")
+            document = parse_fountain(text) if file_format == "fountain" else parse_fdx(text)
     except (UnicodeDecodeError, ValueError, RuntimeError) as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Malformed screenplay import") from exc
     imported = await screenplays_crud.create(

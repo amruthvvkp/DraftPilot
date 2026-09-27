@@ -4,14 +4,13 @@ import difflib
 import json
 from uuid import uuid4
 
-import logfire
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.db import async_get_db
 from draftpilot.core.config import settings
-from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.db import async_get_db
+from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.core.screenplay.timeline import (
     SceneTiming,
     calculate_scene_timings,
@@ -25,9 +24,9 @@ from draftpilot.core.wizard import (
 from draftpilot.crud import acts as acts_crud
 from draftpilot.crud import blocks as blocks_crud
 from draftpilot.crud import dialogue_translations as translations_crud
-from draftpilot.crud import scene_revisions as revisions_crud
 from draftpilot.crud import project_references as references_crud
 from draftpilot.crud import projects as projects_crud
+from draftpilot.crud import scene_revisions as revisions_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import screenplays as screenplays_crud
 from draftpilot.models import (
@@ -39,12 +38,12 @@ from draftpilot.models import (
     DialogueTranslationRead,
     ProjectCreate,
     ProjectRead,
-    ProjectUpdate,
     ProjectReferenceBase,
     ProjectReferenceRead,
     ProjectReferenceUpdate,
-    SceneRead,
+    ProjectUpdate,
     SceneCreate,
+    SceneRead,
     SceneRevisionRead,
     SceneUpdate,
     ScreenplayRead,
@@ -65,19 +64,17 @@ async def _enqueue_rag_index(
     project_id: int, source_id: str, source_kind: str, text: str, content_version: int
 ) -> None:
     """Queue a bounded canonical-document refresh after a committed screenplay change."""
-    try:
-        await (await get_arq_pool()).enqueue_job(
-            "index_rag_document",
-            {
-                "project_id": project_id,
-                "source_id": source_id,
-                "source_kind": source_kind,
-                "text": text,
-                "content_version": content_version,
-            },
-        )
-    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
-        logfire.warning("RAG indexing enqueue skipped: {exc}", exc=str(exc))
+    await enqueue_best_effort(
+        "index_rag_document",
+        {
+            "project_id": project_id,
+            "source_id": source_id,
+            "source_kind": source_kind,
+            "text": text,
+            "content_version": content_version,
+        },
+        description="RAG indexing enqueue",
+    )
 
 
 class ProjectWorkspaceRead(BaseModel):
@@ -275,12 +272,11 @@ async def delete_project_reference(
     if reference is None or reference.project_id != project_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reference not found")
     await references_crud.delete(session, reference)
-    try:
-        await (await get_arq_pool()).enqueue_job(
-            "delete_rag_document", {"project_id": project_id, "source_id": f"reference:{reference_id}"}
-        )
-    except Exception as exc:  # pragma: no cover - queue availability varies by deployment
-        logfire.warning("RAG reference deletion enqueue skipped: {exc}", exc=str(exc))
+    await enqueue_best_effort(
+        "delete_rag_document",
+        {"project_id": project_id, "source_id": f"reference:{reference_id}"},
+        description="RAG reference deletion enqueue",
+    )
 
 
 @router.patch("/{project_id}", response_model=ProjectRead)

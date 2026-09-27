@@ -1,6 +1,7 @@
 """Test Monty feature gating and capability boundaries."""
 
 import pytest
+from _async import run_async
 
 from draftpilot.core.config import MontySettings
 from draftpilot.core.monty import (
@@ -13,7 +14,6 @@ from draftpilot.core.monty import (
     execution_config,
 )
 from draftpilot.models import MontyExecutionCreate
-from _async import run_async
 
 
 def test_monty_is_disabled_by_default() -> None:

@@ -5,12 +5,16 @@ Pure domain code: depends only on Pydantic, the model enums, and the
 Expose document, adapter, and timeline services.
 """
 
-from draftpilot.core.screenplay.timeline import SceneTiming, TimelineProposal, propose_reorder
 from draftpilot.core.screenplay.editor import (
     autocomplete_characters,
     autocomplete_elements,
     dual_dialogue_group,
     next_element,
+)
+from draftpilot.core.screenplay.timeline import (
+    SceneTiming,
+    TimelineProposal,
+    propose_reorder,
 )
 
 __all__ = [

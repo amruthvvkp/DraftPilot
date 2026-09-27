@@ -1,8 +1,8 @@
 """Test durable MCP invocation authorization and audit redaction."""
 
 import pytest
-
 from _async import run_async
+
 from draftpilot.crud import mcp_access
 from draftpilot.models import MCPAuditEvent, MCPGrant
 

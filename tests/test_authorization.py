@@ -1,6 +1,6 @@
 """Test server-authoritative capability authorization."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -27,7 +27,7 @@ def test_authorization_rejects_expired_or_cross_project_grants() -> None:
         client_id="claude",
         project_id=4,
         capability="screenplay.read",
-        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+        expires_at=datetime.now(UTC) - timedelta(seconds=1),
     )
     request = CapabilityRequest(client_id="claude", project_id=5, capability="screenplay.read")
     with pytest.raises(PermissionError, match="not granted"):

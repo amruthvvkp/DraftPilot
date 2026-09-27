@@ -1,17 +1,24 @@
 """Test provider endpoint selection without making model calls."""
 
-from cryptography.fernet import Fernet
-from pydantic import SecretStr
-import pytest
-from fastapi import HTTPException
+from typing import Self
 
-from draftpilot.core.config import LLMSettings, settings
-from draftpilot.api.providers import test_provider as probe_provider
+import pytest
+from _async import run_async
+from cryptography.fernet import Fernet
+from fastapi import HTTPException
+from pydantic import SecretStr
+
 from draftpilot.api.providers import _validate_profile_endpoint
-from draftpilot.core.providers import create_chat_model, provider_base_url, settings_from_profile, validate_provider_url
+from draftpilot.api.providers import test_provider as probe_provider
+from draftpilot.core.config import LLMSettings, settings
+from draftpilot.core.providers import (
+    create_chat_model,
+    provider_base_url,
+    settings_from_profile,
+    validate_provider_url,
+)
 from draftpilot.core.security import encrypt_secret
 from draftpilot.models import ProviderProfile
-from _async import run_async
 
 
 def test_provider_defaults_cover_local_and_gateway_endpoints() -> None:
@@ -96,7 +103,7 @@ def test_provider_probe_returns_safe_success(monkeypatch: pytest.MonkeyPatch) ->
         def __init__(self, **_kwargs: object) -> None:
             """Accept production client options for the fixture."""
 
-        async def __aenter__(self) -> "Client":
+        async def __aenter__(self) -> Self:
             """Enter the HTTP client fixture."""
             return self
 

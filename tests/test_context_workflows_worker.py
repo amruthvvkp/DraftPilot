@@ -3,8 +3,9 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-from draftpilot.models import StoryArtifact
 from _async import run_async
+
+from draftpilot.models import StoryArtifact
 
 
 class _Scope:

@@ -187,6 +187,21 @@ class MontySettings(BaseSettings):
     max_output_chars: int = 20_000
 
 
+class EvalSettings(BaseSettings):
+    """Local LM Studio target for Tier 1 tests, Tier 2 evals, and the LLM judge.
+
+    Every LLM-backed test and eval runs against local LM Studio. Empty model names
+    mean "use the first model LM Studio reports as loaded".
+    """
+
+    model_config = SettingsConfigDict(env_prefix="EVAL__")
+
+    base_url: str = "http://localhost:1234/v1"
+    chat_model: str = ""
+    judge_model: str = ""
+    embedding_model: str = ""
+
+
 class UISettings(BaseSettings):
     """NiceGUI web interface settings."""
 
@@ -215,6 +230,7 @@ class Settings(BaseSettings):
     rag: RAGSettings = RAGSettings()
     backup: BackupSettings = BackupSettings()
     monty: MontySettings = MontySettings()
+    eval: EvalSettings = EvalSettings()
     ui: UISettings = UISettings()
 
 

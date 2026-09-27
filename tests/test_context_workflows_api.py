@@ -3,9 +3,9 @@
 from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from draftpilot.api.context_workflows import router
 from draftpilot.core.db import async_get_db
@@ -32,7 +32,7 @@ def _client() -> TestClient:
     """Build a context-workflow client with an isolated session dependency."""
     app = FastAPI()
 
-    async def dependency() -> AsyncGenerator[_Session, None]:
+    async def dependency() -> AsyncGenerator[_Session]:
         """Yield the isolated session marker."""
         yield _Session()
 
@@ -127,7 +127,7 @@ def test_context_suggestion_apply_is_explicit_provenance_linked_and_version_chec
     monkeypatch.setattr("draftpilot.core.context_operations.artifacts_crud.get", AsyncMock(return_value=StoryArtifact(id=3, project_id=7, kind="outline", title="Outline", version=4)))
     monkeypatch.setattr("draftpilot.core.context_operations.graph_crud.create_node", AsyncMock(return_value=node))
 
-    async def update_status(_session: object, item: WorkflowRun, state: str, result: object = None, error: str = None) -> WorkflowRun:
+    async def update_status(_session: object, item: WorkflowRun, state: str, result: object = None, error: str | None = None) -> WorkflowRun:
         """Capture the explicit applied transition."""
         updated.append((item, state))
         return item

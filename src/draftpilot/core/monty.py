@@ -87,7 +87,7 @@ def execute_glue(
     if len(values) > effective.max_input_items:
         raise MontySandboxError("Input count exceeds the configured limit")
     try:
-        from pydantic_monty import Monty
+        from pydantic_monty import Monty, ResourceLimits
 
         output: list[str] = []
 
@@ -100,16 +100,14 @@ def execute_glue(
                 raise MontySandboxError("Sandbox output exceeds the configured limit")
 
         started = monotonic()
-        with Monty(request_timeout=effective.max_duration_seconds) as pool:
-            with pool.checkout(
-                limits={"max_duration_secs": effective.max_duration_seconds},
+        with (
+            Monty(request_timeout=effective.max_duration_seconds) as pool,
+            pool.checkout(
+                limits=ResourceLimits(max_feed_duration_secs=effective.max_duration_seconds),
                 type_check=not values,
-            ) as session:
-                value = session.feed_run(
-                    code,
-                    inputs=values,
-                    print_callback=capture_stdout,
-                )
+            ) as session,
+        ):
+            value = session.feed_run(code, inputs=values, print_callback=capture_stdout)
         duration_ms = round((monotonic() - started) * 1000)
         logfire.info("Monty glue execution completed in {duration_ms}ms", duration_ms=duration_ms)
         return MontyExecutionResult(value=value, stdout="".join(output), duration_ms=duration_ms)

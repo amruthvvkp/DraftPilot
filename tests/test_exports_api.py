@@ -1,16 +1,17 @@
 """Test safe screenplay import and export HTTP boundaries."""
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from draftpilot.api.exports import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import Project, Screenplay, ScreenplayCreate
 from draftpilot.core.screenplay.adapters.pdf import parse_pdf
 from draftpilot.core.screenplay.schema import ScreenplayDoc
+from draftpilot.models import Project, Screenplay, ScreenplayCreate
 
 
 class _Session:
@@ -23,7 +24,7 @@ def test_benchmark_manifest_is_project_scoped_and_metadata_bearing(
     """Build a benchmark manifest without exposing or mutating database state."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -76,7 +77,7 @@ def test_fountain_import_creates_a_new_screenplay(
     """Import valid Fountain without mutating the source screenplay."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -119,7 +120,7 @@ def test_fountain_import_creates_a_new_screenplay(
 def test_import_rejects_malformed_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
     """Reject malformed PDF content at the HTTP boundary."""
     app = FastAPI()
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -143,7 +144,12 @@ def test_import_rejects_malformed_pdf(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_pdf_parser_recovers_scene_and_dialogue() -> None:
     """Recover conservative scene semantics from a rendered PDF."""
     from draftpilot.core.screenplay.pdf import render_pdf
-    from draftpilot.core.screenplay.schema import ActDoc, BlockDoc, SceneDoc, ScreenplayDoc
+    from draftpilot.core.screenplay.schema import (
+        ActDoc,
+        BlockDoc,
+        SceneDoc,
+        ScreenplayDoc,
+    )
     from draftpilot.models.enums import BlockType
 
     document = ScreenplayDoc(
@@ -171,7 +177,7 @@ def test_html_export_returns_safe_print_document(monkeypatch: pytest.MonkeyPatch
     """Return canonical screenplay data as escaped HTML without mutation."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -196,3 +202,51 @@ def test_html_export_returns_safe_print_document(monkeypatch: pytest.MonkeyPatch
     assert response.headers["content-type"].startswith("text/html")
     assert "&lt;Unsafe&gt;" in response.text
     assert response.headers["content-disposition"].endswith('filename="Draft.html"')
+
+
+BIG_FISH = Path(__file__).parent / "test_screenplays"
+
+
+@pytest.mark.parametrize(
+    ("file_format", "filename"),
+    [("fountain", "Big-Fish.fountain"), ("fdx", "Big-Fish.xml"), ("pdf", "Big-Fish.pdf")],
+)
+def test_real_screenplay_imports_over_http(
+    monkeypatch: pytest.MonkeyPatch, file_format: str, filename: str
+) -> None:
+    """Import the full Big Fish screenplay in each supported format over HTTP."""
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(router, prefix="/api/v1")
+    project = Project(id=9, title="Story")
+    source = Screenplay(id=2, project_id=9, title="Draft", format="feature")
+    documents: list[ScreenplayDoc] = []
+
+    async def get(_session: _Session, item_id: int) -> Project | Screenplay | None:
+        """Return the project or source screenplay fixture."""
+        return project if item_id == 9 else source if item_id == 2 else None
+
+    async def create(_session: _Session, data: ScreenplayCreate) -> Screenplay:
+        """Return the imported screenplay row."""
+        return Screenplay(id=3, project_id=9, title=data.title, format="feature")
+
+    async def save(_session: _Session, _screenplay_id: int, document: ScreenplayDoc) -> None:
+        """Capture the parsed canonical document."""
+        documents.append(document)
+
+    monkeypatch.setattr("draftpilot.api.exports.projects_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.screenplays_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.exports.screenplays_crud.create", create)
+    monkeypatch.setattr("draftpilot.api.exports.save_screenplay_doc", save)
+    response = TestClient(app).post(
+        f"/api/v1/projects/9/screenplays/2/imports/{file_format}",
+        content=(BIG_FISH / filename).read_bytes(),
+    )
+    assert response.status_code == 201, response.text
+    scenes = [scene for act in documents[0].acts for scene in act.scenes]
+    assert len(scenes) >= 180

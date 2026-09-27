@@ -8,7 +8,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.api.copilot import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import CopilotMessage, CopilotMessageCreate, Project, WorkflowRun, WorkflowRunCreate
+from draftpilot.models import (
+    CopilotMessage,
+    CopilotMessageCreate,
+    Project,
+    WorkflowRun,
+    WorkflowRunCreate,
+)
 
 
 class _Session:
@@ -19,7 +25,7 @@ def test_copilot_response_persists_user_and_assistant_turns(monkeypatch) -> None
     """Generate an assistant reply with the current page and selected role context."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -74,7 +80,7 @@ def test_async_copilot_response_enqueues_durable_run(monkeypatch) -> None:
     """Persist a user turn before returning a worker-reconnectable run."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 

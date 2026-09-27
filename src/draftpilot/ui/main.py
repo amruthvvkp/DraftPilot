@@ -5,20 +5,19 @@ resources are initialized in ``app.on_startup`` and released in
 ``app.on_shutdown``. Run with ``python -m draftpilot.ui.main``.
 """
 
-import logfire
 from pathlib import Path
 
-from nicegui import app, ui
-from fastapi.responses import FileResponse
-from fastapi.responses import JSONResponse
+import logfire
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from nicegui import app, ui
 
+from draftpilot.api import router as api_router
 from draftpilot.core import telemetry
 from draftpilot.core.cache import close_redis, get_redis
 from draftpilot.core.config import settings
 from draftpilot.core.db import create_db_and_tables, dispose_engine
 from draftpilot.core.queue import close_arq_pool, get_arq_pool
-from draftpilot.api import router as api_router
 from draftpilot.ui.pages import design_system, home, projects, screenplay
 from draftpilot.ui.theme import register_assets, with_layout
 from draftpilot.ui.theme.layout import FAVICON_ICO
@@ -67,7 +66,7 @@ async def _startup() -> None:
     await get_arq_pool()
     try:
         await create_db_and_tables()
-    except Exception as exc:  # pragma: no cover - dev convenience only
+    except Exception as exc:  # noqa: BLE001 - dev convenience only
         logfire.warning("create_db_and_tables skipped: {exc}", exc=str(exc))
 
 

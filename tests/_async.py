@@ -15,7 +15,7 @@ def run_async(coroutine: Coroutine[Any, Any, Any]) -> Any:
         """Run the coroutine on an isolated event loop in a worker thread."""
         try:
             result.append(asyncio.run(coroutine))
-        except BaseException as exc:
+        except BaseException as exc:  # noqa: BLE001 - re-raised on the calling thread
             error.append(exc)
 
     thread = threading.Thread(target=runner)

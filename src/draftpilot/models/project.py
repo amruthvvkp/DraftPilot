@@ -2,8 +2,8 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON
 from pydantic import model_validator
+from sqlalchemy import JSON
 from sqlmodel import Field, Relationship, SQLModel
 
 from draftpilot.models.base import TimestampMixin

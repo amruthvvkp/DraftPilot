@@ -1,9 +1,8 @@
 """Shared typed operations for applying reviewed creative context."""
 
-import logfire
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core.queue import get_arq_pool
+from draftpilot.core.queue import enqueue_best_effort
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import workflow_runs as runs_crud
@@ -55,19 +54,17 @@ async def apply_context_suggestion(
         ),
     )
     if node.id is not None:
-        try:
-            await (await get_arq_pool()).enqueue_job(
-                "index_rag_document",
-                {
-                    "project_id": project_id,
-                    "source_id": f"knowledge_node:{node.id}",
-                    "source_kind": f"knowledge_node:{node.kind}",
-                    "text": f"{node.label}\n{node.description or ''}",
-                    "content_version": node.version,
-                },
-            )
-        except Exception as exc:  # pragma: no cover - queue availability varies by deployment
-            logfire.warning("Context suggestion RAG enqueue skipped: {exc}", exc=str(exc))
+        await enqueue_best_effort(
+            "index_rag_document",
+            {
+                "project_id": project_id,
+                "source_id": f"knowledge_node:{node.id}",
+                "source_kind": f"knowledge_node:{node.kind}",
+                "text": f"{node.label}\n{node.description or ''}",
+                "content_version": node.version,
+            },
+            description="Context suggestion RAG enqueue",
+        )
     run.result = {**run.result, "applied_node_id": node.id}
     await runs_crud.update_status(session, run, "applied", result=run.result)
     return node

@@ -1,12 +1,18 @@
 """Test the bounded outbound MCP client boundary."""
 
-import pytest
 import socket
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
 from _async import run_async
-from draftpilot.core.mcp_client import DraftPilotMCPClient, MCPClientError, _bounded_result, validate_mcp_endpoint
+
+from draftpilot.core.mcp_client import (
+    DraftPilotMCPClient,
+    MCPClientError,
+    _bounded_result,
+    validate_mcp_endpoint,
+)
 
 
 def test_validate_mcp_endpoint_blocks_metadata_and_credentials() -> None:
@@ -69,7 +75,7 @@ def test_mcp_block_proposal_rejects_invalid_semantic_values() -> None:
 def test_mcp_timeline_proposal_persists_with_server_order(monkeypatch: pytest.MonkeyPatch) -> None:
     """Persist an external timeline proposal only for the current screenplay order."""
     from draftpilot.mcp import server
-    from draftpilot.models import Screenplay, Scene, TimelineProposalRecord
+    from draftpilot.models import Scene, Screenplay, TimelineProposalRecord
 
     class SessionScope:
         """Provide a bounded fake database context for the MCP tool."""
@@ -188,7 +194,7 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     monkeypatch.setattr(server.graph_crud, "create_node", AsyncMock(return_value=node))
     monkeypatch.setattr(server.runs_crud, "update_status", update)
     monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
-    monkeypatch.setattr("draftpilot.core.context_operations.get_arq_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr("draftpilot.core.queue.pool.get_arq_pool", AsyncMock(return_value=pool))
 
     with pytest.raises(ValueError, match="approval"):
         run_async(server.apply_context_workflow(9, 44, 4, ctx=SimpleNamespace(client_id="writer")))

@@ -1,10 +1,9 @@
 """Studio dashboard — at-a-glance counts across the workspace."""
 
+from nicegui import ui
 from sqlalchemy import func
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-from nicegui import ui
 
 from draftpilot.core.db import session_scope
 from draftpilot.models import Project, Scene, Screenplay

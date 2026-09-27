@@ -3,11 +3,11 @@
 from pathlib import Path
 
 import pytest
-
-from draftpilot.core.backup import BackupError, read_backup, write_backup
-from draftpilot.api.backups import restore_backup_payload
-from draftpilot.models import Project, StoryArtifact
 from _async import run_async
+
+from draftpilot.api.backups import restore_backup_payload
+from draftpilot.core.backup import BackupError, read_backup, write_backup
+from draftpilot.models import Project, StoryArtifact
 
 
 class _RestoreSession:

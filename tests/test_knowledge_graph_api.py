@@ -2,9 +2,9 @@
 
 from collections.abc import AsyncGenerator
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-import pytest
 
 from draftpilot.api.knowledge_graph import router
 from draftpilot.core.db import async_get_db
@@ -21,7 +21,7 @@ def test_graph_rejects_cross_project_edge(
     """Prevent an edge from connecting nodes owned by different projects."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -62,7 +62,7 @@ def test_graph_node_update_rejects_stale_version(monkeypatch: pytest.MonkeyPatch
     """Reject an outdated canonical-node edit before persistence."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated session marker."""
         yield _Session()
 
@@ -89,7 +89,7 @@ def test_graph_mutations_enqueue_project_scoped_rag_refresh(
     """Refresh RAG after committed node and edge mutations."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated database marker."""
         yield _Session()
 
@@ -144,7 +144,7 @@ def test_graph_edge_delete_is_project_scoped_and_refreshes_rag(
     """Delete an owned graph edge and remove its indexed representation."""
     app = FastAPI()
 
-    async def session() -> AsyncGenerator[_Session, None]:
+    async def session() -> AsyncGenerator[_Session]:
         """Yield an isolated session marker."""
         yield _Session()
 
