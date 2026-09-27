@@ -14,6 +14,8 @@ services:
         INSTALL_DEBUGPY: "true"
     volumes:
       - ./src:/app/src
+      # Host `npm --prefix frontend run build` output is served live, like src/.
+      - ./frontend/dist:/app/frontend/dist
     ports:
       - "${DRAFTPILOT_UI_DEBUGPY_PORT:-5678}:5678"
     environment:
@@ -52,3 +54,9 @@ services:
         "arq",
         "draftpilot.worker.settings.WorkerSettings",
       ]
+
+  mcp:
+    # Live source for the MCP server too; restart the service after server changes
+    # (`docker compose -f compose.yml -f compose.dev.yml restart mcp`).
+    volumes:
+      - ./src:/app/src

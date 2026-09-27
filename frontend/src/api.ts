@@ -183,12 +183,24 @@ export type EvaluationResult = { id: number; project_id: number; target_kind: st
 
 export type CopilotRunResponse = { message: CopilotMessage; run: WorkflowRun }
 
+export const AUTH_REQUIRED_EVENT = 'draftpilot:auth-required'
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) { super(message) }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
     ...init,
   })
-  if (!response.ok) throw new Error(`Request failed (${response.status})`)
+  if (response.status === 401) window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))
+  if (!response.ok) {
+    let detail = `Request failed (${response.status})`
+    try { const body = await response.json(); if (typeof body?.detail === 'string') detail = body.detail } catch { /* non-JSON error body */ }
+    throw new ApiError(response.status, detail)
+  }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>
 }
@@ -287,6 +299,46 @@ export function createAgentProposal(projectId: number, payload: { target_kind: '
 
 export function approveAgentProposal(projectId: number, proposalId: number): Promise<AgentProposal> {
   return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals/${proposalId}/approve`, { method: 'POST' })
+}
+
+export function rejectAgentProposal(projectId: number, proposalId: number): Promise<AgentProposal> {
+  return request<AgentProposal>(`/api/v1/projects/${projectId}/agent-proposals/${proposalId}/reject`, { method: 'POST' })
+}
+
+export type AuthStatus = { auth_required: boolean; authenticated: boolean }
+
+export function getAuthStatus(): Promise<AuthStatus> {
+  return request<AuthStatus>('/api/v1/auth/status')
+}
+
+export function signIn(token: string): Promise<AuthStatus> {
+  return request<AuthStatus>('/api/v1/auth/session', { method: 'POST', body: JSON.stringify({ token }) })
+}
+
+export function signOut(): Promise<void> {
+  return request<void>('/api/v1/auth/session', { method: 'DELETE' })
+}
+
+export type McpApproval = {
+  id: number
+  client_id: string
+  project_id: number
+  capability: string
+  action: string
+  summary: Record<string, unknown>
+  status: 'pending' | 'approved' | 'rejected' | 'consumed' | 'expired'
+  created_at: string
+  expires_at: string
+  decided_at: string | null
+}
+
+export function listMcpApprovals(projectId: number, state?: McpApproval['status']): Promise<McpApproval[]> {
+  const query = state ? `?state=${state}` : ''
+  return request<McpApproval[]>(`/api/v1/projects/${projectId}/mcp-approvals${query}`)
+}
+
+export function decideMcpApproval(projectId: number, approvalId: number, decision: 'approve' | 'reject'): Promise<McpApproval> {
+  return request<McpApproval>(`/api/v1/projects/${projectId}/mcp-approvals/${approvalId}/${decision}`, { method: 'POST' })
 }
 
 export function rollbackAgentProposal(projectId: number, proposalId: number): Promise<AgentProposal> {

@@ -153,6 +153,7 @@ class MCPSettings(BaseSettings):
     stdio_client_id: str = Field(default="mcp-stdio", min_length=1, max_length=200)
     request_timeout_seconds: float = 10.0
     max_output_chars: int = 100_000
+    approval_ttl_seconds: int = Field(default=900, gt=0)
 
 
 class RAGSettings(BaseSettings):
@@ -185,6 +186,21 @@ class MontySettings(BaseSettings):
     max_input_items: int = 100
     max_duration_seconds: float = 0.5
     max_output_chars: int = 20_000
+
+
+class APISettings(BaseSettings):
+    """REST API access control for the single-user studio.
+
+    When ``token`` is set, every ``/api/v1`` route requires ``Authorization: Bearer <token>``
+    or a signed session cookie obtained by submitting the token once. When it is empty the API
+    is open, which is only appropriate on a loopback-bound development host.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="API__")
+
+    token: SecretStr = SecretStr("")
+    session_max_age_seconds: int = Field(default=30 * 24 * 3600, gt=0)
+    cookie_secure: bool = False
 
 
 class EvalSettings(BaseSettings):
@@ -231,6 +247,7 @@ class Settings(BaseSettings):
     backup: BackupSettings = BackupSettings()
     monty: MontySettings = MontySettings()
     eval: EvalSettings = EvalSettings()
+    api: APISettings = APISettings()
     ui: UISettings = UISettings()
 
 

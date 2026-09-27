@@ -52,6 +52,8 @@ from draftpilot.models.knowledge_graph import (
     KnowledgeNodeRead,
 )
 from draftpilot.models.mcp_access import (
+    MCPApprovalRequest,
+    MCPApprovalRequestRead,
     MCPAuditEvent,
     MCPClient,
     MCPClientBase,
@@ -158,6 +160,8 @@ __all__ = [
     "KnowledgeNodeBase",
     "KnowledgeNodeCreate",
     "KnowledgeNodeRead",
+    "MCPApprovalRequest",
+    "MCPApprovalRequestRead",
     "MCPAuditEvent",
     "MCPClient",
     "MCPClientBase",

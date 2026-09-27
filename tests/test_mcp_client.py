@@ -188,7 +188,10 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     pool = Pool()
     update = AsyncMock()
     monkeypatch.setattr(server, "session_scope", lambda: SessionScope())
-    monkeypatch.setattr(server, "authorize_invocation", AsyncMock())
+    from draftpilot.core.authorization import ApprovalRequiredError
+
+    authorize = AsyncMock(side_effect=[ApprovalRequiredError(7), None])
+    monkeypatch.setattr(server, "authorize_invocation", authorize)
     monkeypatch.setattr(server.runs_crud, "get", AsyncMock(return_value=run))
     monkeypatch.setattr(server.artifacts_crud, "get", AsyncMock(return_value=SimpleNamespace(id=3, project_id=9, version=4)))
     monkeypatch.setattr(server.graph_crud, "create_node", AsyncMock(return_value=node))
@@ -196,10 +199,12 @@ def test_mcp_context_apply_requires_approval_and_refreshes_rag(monkeypatch: pyte
     monkeypatch.setattr(server, "get_arq_pool", AsyncMock(return_value=pool))
     monkeypatch.setattr("draftpilot.core.queue.pool.get_arq_pool", AsyncMock(return_value=pool))
 
-    with pytest.raises(ValueError, match="approval"):
+    with pytest.raises(ValueError, match="approval_id=7"):
         run_async(server.apply_context_workflow(9, 44, 4, ctx=SimpleNamespace(client_id="writer")))
-    result = run_async(server.apply_context_workflow(9, 44, 4, approved=True, ctx=SimpleNamespace(client_id="writer")))
+    result = run_async(server.apply_context_workflow(9, 44, 4, approval_id=7, ctx=SimpleNamespace(client_id="writer")))
 
+    assert authorize.await_args.kwargs["approval_id"] == 7
+    assert authorize.await_args.kwargs["arguments"] == {"run_id": 44, "expected_source_version": 4}
     assert result["node"]["id"] == 51
     assert pool.jobs[0][0] == "index_rag_document"
     assert update.await_args.args[2] == "applied"

@@ -51,6 +51,7 @@ mcp = ["fastmcp>=4.0.10", { include-group = "otel" }, { include-group = "ui" }]
 otel = ["logfire[asyncpg,httpx,fastapi,redis,system-metrics]>=5.1.1"]
 rag = ["fastapi>=0.141.1", "uvicorn[standard]>=0.54.0"]
 test = [
+  "aiosqlite>=0.21",
   "dirty-equals>=0.11",
   "pyhamcrest>=2.1.0",
   "pytest>=9.1.1",

@@ -364,6 +364,23 @@ async def approve_agent_proposal(
     return AgentProposalRead.model_validate(proposal)
 
 
+@router.post("/{proposal_id}/reject", response_model=AgentProposalRead)
+async def reject_agent_proposal(
+    project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)
+) -> AgentProposalRead:
+    """Reject a pending proposal without touching its target."""
+    proposal = await proposals_crud.get(session, proposal_id)
+    if proposal is None or proposal.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposal not found")
+    if proposal.status != "proposed":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Proposal is not pending")
+    proposal.status = "rejected"
+    session.add(proposal)
+    await session.commit()
+    await session.refresh(proposal)
+    return AgentProposalRead.model_validate(proposal)
+
+
 @router.post("/{proposal_id}/rollback", response_model=AgentProposalRead)
 async def rollback_agent_proposal(
     project_id: int, proposal_id: int, session: AsyncSession = Depends(async_get_db)

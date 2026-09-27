@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { AgentProposal, AgentRole, approveAgentProposal, Capability, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, getWorkflowRun, listCapabilities, listProviderProfiles, ProviderProfile, rollbackAgentProposal, startCopilotRun } from './api'
+import { AgentProposal, AgentRole, approveAgentProposal, Capability, CopilotMessage, getAgentProposals, getAgentRoles, getCopilotMessages, getWorkflowRun, listCapabilities, listProviderProfiles, ProviderProfile, rejectAgentProposal, rollbackAgentProposal, startCopilotRun } from './api'
 
 type CopilotPanelProps = { projectId?: number; page?: string; artifact?: string | null; selection?: string | null; refreshToken?: number }
 
@@ -41,6 +41,11 @@ export default function CopilotPanel({ projectId, page = window.location.pathnam
     try { await approveAgentProposal(projectId, proposalId); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to approve proposal') }
   }
 
+  async function reject(proposalId: number): Promise<void> {
+    if (projectId === undefined) return
+    try { await rejectAgentProposal(projectId, proposalId); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to reject proposal') }
+  }
+
   async function rollback(proposalId: number): Promise<void> {
     if (projectId === undefined) return
     try { await rollbackAgentProposal(projectId, proposalId); await refresh() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to rollback proposal') }
@@ -78,6 +83,6 @@ export default function CopilotPanel({ projectId, page = window.location.pathnam
     {projectId === undefined ? <p className="copilot-empty">Settings context is installation-scoped. Open a project to continue a project-scoped conversation.</p> : <div className="copilot-messages">{messages.map(message => <article className={`copilot-message ${message.role}`} key={message.id}><div className="copilot-message-meta"><strong>{message.role}</strong><span>{message.page}{message.artifact ? ` · ${message.artifact}` : ''}{message.selection ? ` · ${message.selection}` : ''}</span></div><p>{message.content}</p>{message.citations.length > 0 && <div className="copilot-citations"><small>Retrieved sources</small>{message.citations.map((citation, index) => <span key={`${String(citation.source_id ?? index)}-${String(citation.content_version ?? '')}`}>{String(citation.source_id ?? 'project context')} · v{String(citation.content_version ?? '?')}</span>)}</div>}</article>)}</div>}
     <form className="copilot-compose" onSubmit={event => void send(event)}><input value={draft} onChange={event => setDraft(event.target.value)} placeholder="Ask the studio…" aria-label="Copilot message" /><button className="button primary" type="submit">Send</button></form>
     {error && <p className="copilot-error">{error}</p>}
-    <div className="proposal-list"><p className="eyebrow">PROPOSALS / {proposals.length}</p>{proposals.length === 0 && <p className="copilot-empty">No pending proposals. Ask an enabled agent to suggest a typed change.</p>}{proposals.map(proposal => <article className="copilot-proposal" key={proposal.id}><div className="proposal-meta"><strong>#{proposal.id} {proposal.target_kind}</strong><span className={`proposal-status ${proposal.status}`}>{proposal.status}</span></div><pre>{JSON.stringify(proposal.diff || proposal.operation, null, 2)}</pre>{proposal.status === 'proposed' && <button className="button primary" onClick={() => void approve(proposal.id)}>Approve change</button>}{proposal.status === 'approved' && <button className="button quiet" onClick={() => void rollback(proposal.id)}>Rollback</button>}</article>)}</div>
+    <div className="proposal-list"><p className="eyebrow">PROPOSALS / {proposals.length}</p>{proposals.length === 0 && <p className="copilot-empty">No pending proposals. Ask an enabled agent to suggest a typed change.</p>}{proposals.map(proposal => <article className="copilot-proposal" key={proposal.id}><div className="proposal-meta"><strong>#{proposal.id} {proposal.target_kind}</strong><span className={`proposal-status ${proposal.status}`}>{proposal.status}</span></div><pre>{JSON.stringify(proposal.diff || proposal.operation, null, 2)}</pre>{proposal.status === 'proposed' && <div className="proposal-actions"><button className="button primary" onClick={() => void approve(proposal.id)}>Approve change</button><button className="button quiet" onClick={() => void reject(proposal.id)}>Reject</button></div>}{proposal.status === 'approved' && <button className="button quiet" onClick={() => void rollback(proposal.id)}>Rollback</button>}</article>)}</div>
   </section>
 }

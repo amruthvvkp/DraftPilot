@@ -301,19 +301,24 @@ async def apply_context_workflow(
     project_id: int,
     run_id: int,
     expected_source_version: int,
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, object]:
     """Apply one approved context suggestion as a canonical graph node."""
     if ctx is None:
         raise ValueError("MCP context is required")
-    if not approved:
-        raise ValueError("Explicit approval is required")
     client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
             await authorize_invocation(
-                session, client_id, project_id, "context.apply", "apply", {"run_id": run_id}, approved=True
+                session,
+                client_id,
+                project_id,
+                "context.apply",
+                "apply",
+                {"run_id": run_id},
+                approval_id=approval_id,
+                arguments={"run_id": run_id, "expected_source_version": expected_source_version},
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
@@ -391,7 +396,7 @@ async def apply_story_operation(
     artifact_id: int,
     operation: str,
     payload: dict[str, object],
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, object]:
     """Apply one approved typed story operation through the canonical artifact service."""
@@ -407,7 +412,8 @@ async def apply_story_operation(
                 "story.operation",
                 "apply",
                 {"artifact_id": artifact_id, "operation": operation},
-                approved=approved,
+                approval_id=approval_id,
+                arguments={"artifact_id": artifact_id, "operation": operation, "payload": payload},
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
@@ -696,7 +702,7 @@ async def create_screenplay_export(
     project_id: int,
     screenplay_id: int,
     file_format: str,
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, object]:
     """Persist an approved, bounded screenplay export artifact without changing its source."""
@@ -714,7 +720,7 @@ async def create_screenplay_export(
                 "exports.create",
                 "create",
                 {"screenplay_id": screenplay_id, "format": file_format},
-                approved=approved,
+                approval_id=approval_id,
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
@@ -781,7 +787,7 @@ async def list_project_backups(project_id: int, ctx: Context) -> dict[str, objec
 
 @mcp.tool
 async def create_project_backup(
-    project_id: int, approved: bool = False, ctx: Context | None = None
+    project_id: int, approval_id: int | None = None, ctx: Context | None = None
 ) -> dict[str, object]:
     """Create an approved, project-scoped backup through the canonical backup service."""
     if ctx is None:
@@ -796,7 +802,7 @@ async def create_project_backup(
                 "backups.create",
                 "create",
                 {},
-                approved=approved,
+                approval_id=approval_id,
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
@@ -825,7 +831,7 @@ async def create_project_backup(
 async def restore_project_backup(
     project_id: int,
     filename: str,
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, int]:
     """Restore an approved backup into a new project through the canonical restore service."""
@@ -847,7 +853,7 @@ async def restore_project_backup(
                 "backups.restore",
                 "restore",
                 {"filename": filename},
-                approved=approved,
+                approval_id=approval_id,
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
@@ -905,7 +911,7 @@ async def control_workflow_run(
     project_id: int,
     run_id: int,
     action: str,
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, object]:
     """Resume or cancel a durable run only after explicit writer approval."""
@@ -923,7 +929,7 @@ async def control_workflow_run(
                 "runs.control",
                 action,
                 {"run_id": run_id, "action": action},
-                approved=approved,
+                approval_id=approval_id,
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
@@ -1077,7 +1083,7 @@ async def review_screenplay_proposal(
     project_id: int,
     proposal_id: int,
     action: str,
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, object]:
     """Approve or roll back a typed screenplay proposal through REST logic."""
@@ -1087,7 +1093,7 @@ async def review_screenplay_proposal(
     client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
-            await authorize_invocation(session, client_id, project_id, capability, action, {"proposal_id": proposal_id}, approved=approved)
+            await authorize_invocation(session, client_id, project_id, capability, action, {"proposal_id": proposal_id}, approval_id=approval_id)
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
         result = await (
@@ -1104,7 +1110,7 @@ async def review_timeline_proposal(
     screenplay_id: int,
     proposal_id: int,
     action: str,
-    approved: bool = False,
+    approval_id: int | None = None,
     ctx: Context | None = None,
 ) -> dict[str, object]:
     """Approve or roll back a timeline proposal through REST logic."""
@@ -1114,7 +1120,7 @@ async def review_timeline_proposal(
     client_id = _client_id(ctx)
     async with session_scope() as session:
         try:
-            await authorize_invocation(session, client_id, project_id, capability, action, {"screenplay_id": screenplay_id, "proposal_id": proposal_id}, approved=approved)
+            await authorize_invocation(session, client_id, project_id, capability, action, {"screenplay_id": screenplay_id, "proposal_id": proposal_id}, approval_id=approval_id)
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
         result = await (

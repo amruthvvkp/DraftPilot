@@ -108,3 +108,12 @@ nav { display: grid; gap: 7px; } nav a { color: #8f8b81; padding: 11px 12px; bor
 .user-profile-link{display:flex;align-items:center;gap:6px;text-decoration:none;color:#5a544c;font-size:12px;font-weight:500;padding:6px 10px;border-radius:99px;background:#ded8ce;transition:background .15s}
 .user-profile-link:hover{background:#d4ccc0;color:#2c2824}
 .user-avatar{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#d69a55;color:#fff;font-size:10px}
+.proposal-actions{display:flex;gap:8px;flex-wrap:wrap}
+.mcp-approvals{border:1px solid #e0a458;border-radius:12px;padding:12px;margin:12px 0;background:#fffaf2}
+.approval-expiry{font-size:12px;color:#6b6b6b;margin:4px 0 8px}
+.signin-shell{min-height:100vh;display:grid;place-items:center;background:#f6f5f2;padding:24px}
+.signin-card{width:min(400px,100%);display:grid;gap:12px;background:#fff;border:1px solid #e6e3dd;border-radius:16px;padding:28px;box-shadow:0 12px 32px rgba(0,0,0,.06)}
+.signin-card h1{margin:0;font-size:22px}
+.signin-card label{display:grid;gap:6px;font-size:13px}
+.signin-card input{padding:10px 12px;border:1px solid #d8d4cc;border-radius:10px;font:inherit}
+.signin-error{color:#b3261e;margin:0}

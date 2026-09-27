@@ -203,3 +203,29 @@ def test_scoped_edit_run_cannot_target_another_block(monkeypatch) -> None:
         },
     )
     assert response.status_code == 403
+
+
+def test_rejecting_a_pending_proposal_leaves_its_target_untouched(monkeypatch) -> None:
+    """Reject a pending proposal once; a decided proposal cannot be rejected again."""
+    proposal = AgentProposal(
+        id=21,
+        project_id=9,
+        target_kind="block",
+        target_id=11,
+        operation={"text": "HELLO"},
+        diff={},
+        before={"scene_id": 7, "text": "A door opens."},
+        base_version=3,
+    )
+    target = AsyncMock()
+    monkeypatch.setattr("draftpilot.api.agent._block_target", target)
+    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.get", AsyncMock(return_value=proposal))
+
+    client = _client()
+    rejected = client.post("/api/v1/projects/9/agent-proposals/21/reject")
+
+    assert rejected.status_code == 200
+    assert proposal.status == "rejected"
+    target.assert_not_awaited()
+    assert client.post("/api/v1/projects/9/agent-proposals/21/reject").status_code == 409
+    assert client.post("/api/v1/projects/9/agent-proposals/21/approve").status_code == 409

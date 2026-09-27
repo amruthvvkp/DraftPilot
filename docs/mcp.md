@@ -1,5 +1,27 @@
 # MCP integration
 
+## Writer approval for external writes
+
+An MCP client can never approve its own writes. Capabilities marked `approval_required` in
+`draftpilot://capabilities` (story operations, applying context, approving or rolling back
+proposals, exports, backups, restores, run control) go through two steps:
+
+1. **First call.** The client calls the tool without `approval_id`. DraftPilot checks the grant and
+   records a pending approval request, and the call fails with a message such as
+   `Writer approval is required: approval request 12 is pending … retry with approval_id=12`.
+   Nothing changes yet.
+2. **Writer decides.** The request appears under *External agent requests* in the project workspace.
+   There the writer sees the client, capability and arguments, and chooses **Approve request** or
+   **Reject**. The REST equivalents are `GET/POST /api/v1/projects/{id}/mcp-approvals[/{approval_id}/approve|reject]`.
+3. **Retry.** The client repeats the call with `approval_id=12`. The approval is bound to the client,
+   project, capability, action and a SHA-256 digest of the **full call arguments**. It is used once,
+   and it expires after `MCP__APPROVAL_TTL_SECONDS` (default 900). A changed argument, a replay, or a
+   pending, rejected or expired request is refused and audited.
+
+Creating proposals (`propose_screenplay_change`, `propose_timeline_reorder`,
+`propose_dialogue_translation`) needs no pre-approval, because a proposal changes nothing until the
+writer reviews it.
+
 ## External client smoke check
 
 The repository includes a portable smoke check for the authenticated client path. With the
@@ -38,7 +60,7 @@ returns a queued `context_generation` run; the worker produces a cited review-on
 never changes canonical context without a later typed, approved operation.
 
 `apply_context_workflow` is the explicit approval path for that operation. It creates a
-provenance-linked knowledge-graph node, requires `context.apply` plus `approved: true`, rejects
+provenance-linked knowledge-graph node, requires `context.apply` plus a writer-approved `approval_id` (see above), rejects
 duplicate application and stale source versions, refreshes RAG, and uses the same run state as the
 REST path.
 

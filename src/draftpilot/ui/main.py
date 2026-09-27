@@ -14,6 +14,7 @@ from nicegui import app, ui
 
 from draftpilot.api import router as api_router
 from draftpilot.core import telemetry
+from draftpilot.core.api_auth import open_api_warning
 from draftpilot.core.cache import close_redis, get_redis
 from draftpilot.core.config import settings
 from draftpilot.core.db import create_db_and_tables, dispose_engine
@@ -61,6 +62,8 @@ if not _FRONTEND_READY:
 async def _startup() -> None:
     """Mount assets, warm shared pools, and ensure dev tables exist."""
     register_assets()
+    if warning := open_api_warning(settings.ui.host):
+        logfire.warning(warning)
     # Warm shared pools and ensure dev tables exist (Alembic owns production).
     get_redis()
     await get_arq_pool()

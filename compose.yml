@@ -85,6 +85,8 @@ services:
     environment:
       <<: *app-env
       UI__STORAGE_SECRET: change-me-in-production
+      # Empty = open API (the UI logs a warning because :9000 is published). Set for any shared use.
+      API__TOKEN: ${API__TOKEN:-}
     extra_hosts: *extra-hosts
     volumes:
       - backup_data:/data/backups
