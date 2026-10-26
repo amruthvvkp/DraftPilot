@@ -56,6 +56,17 @@ Planned after v1 (see [plan changes](dev/v1-gap-analysis.md#plan-changes-2026-09
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
 - **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
 
+**v1.0 completion (#37, planned 2026-10-26).** Closes the gaps against the release goals; see
+[v1.0 completion](dev/v1-gap-analysis.md#v10-completion-g14g21-37):
+
+- **G14** typed story domain (characters, character timelines, locations, beats, acts, storyline);
+- **G15** manual studio: router, data layer, guided Project → Storyline → Characters → Outline → Script;
+- **G16** full MCP surface with a REST parity test;
+- **G17** AG-UI chat on PydanticAI (threads, in-chat approvals, generative UI, one chat dock);
+- **G18** `develop_story` pipeline workflow, planner, parallel specialists;
+- **G19** packaging: `draftpilot` and `draftpilot-mcp` wheels, CLI, one image, release workflow;
+- **G20/G21** end-to-end verification and docs.
+
 ## Ground-test screenplay benchmark
 
 The first serious validation project is a writer-owned 165-page feature screenplay developed in

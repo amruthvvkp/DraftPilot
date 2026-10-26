@@ -362,3 +362,176 @@ Decisions made against pydantic-ai 2.51 / temporalio 1.33, landed as G11a–G11e
   tool-calling eval on LM Studio compares accuracy, tool calls and duration (Tier 2).
 - **Docs:** user guide "Temporal UI & traces" and "Code mode"; developer guide "Durable workflows
   (Temporal)" (determinism and replay) and "Monty sandbox" (extends `docs/monty.md`).
+
+## v1.0 completion (G14–G21, #37)
+
+!!! info "Status"
+    Planned 2026-10-26. Each step ends green, references its issue and is pushed.
+
+### Context
+
+G0–G11 are done: FastAPI host, data backbone, room on Temporal, RAG, twins, evals, docs. G11 (#32) landed in `c50d31a`. Measured against the six v1.0 goals, an audit of the code found these gaps:
+
+- **The manual flow breaks.** A new project can't get its first scene by hand (`frontend/src/Workspace.tsx:324`). You can't edit the logline or description after the wizard. Acts are fixed at 3. Characters are scattered across artifacts, graph nodes and the twin, with no motive, objective or timeline fields. Beats don't link to scenes. Scenes, artifacts and graph nodes can't be deleted.
+- **MCP is incomplete.** It has 27 tools but no create, edit or delete for projects, scenes, blocks, acts, characters or locations. It also lacks proposal reject, import, revision snapshot, restore and diff, graph writes and twin refresh, and the `greet` stub is still there. It borrows private helpers from the `api.*` modules, so it can't be split into its own package.
+- **Chat isn't finished.** It uses the Vercel AI protocol (AG-UI isn't installed). There are two overlapping chat systems (`RoomChat` and the polling `CopilotPanel`). Chat isn't persisted and has no threads, generative UI or markdown. It can't create projects, artifacts or scenes, can't follow runs, and can't wait for an approval in-chat, because there are no deferred tools.
+- **Agentic gaps.** Nothing chains Project → Storyline → Characters → Outline → Script, and there's no planner and no parallel specialists.
+- **Packaging.** Runtime dependencies sit in uv groups, so a built wheel won't run. The CLI is a stub. `frontend/dist` and `migrations` live outside the package, and paths are found by walking up the folder tree. There is no release workflow, and `docs.yml` is disabled.
+- **Tests.** End-to-end tests are almost all mocked, and there are only 2 Vitest files.
+
+**Decisions (writer, 2026-10-26):**
+- PydanticAI is the only agent framework, AG-UI included. The backend uses `pydantic_ai.ui.ag_ui.AGUIAdapter`. The frontend uses only a thin AG-UI protocol client (`@ag-ui/client` for transport and types), with no CopilotKit or other agent runtime.
+- Story entities become typed tables.
+- `draftpilot-mcp` is a uv workspace member that depends on the core package.
+- I set up the release workflows and you push the tag.
+
+### Step 0 · Bookkeeping
+
+1. Run the suite, the replay tests and the lint gates (ruff, mypy, interrogate) on the staged G11 work, then commit it on `amruthvvkp/issue32` (refs #32).
+2. Open a GitHub epic issue "v1.0 completion" with a child issue for each of G14–G21 (`gh`), and branch `amruthvvkp/issue<N>`.
+3. Write this plan to `docs/dev/v1-gap-analysis.md`, in a new section "v1.0 completion (G14–G21)", and update `docs/roadmap.md`. Commit both before any code.
+
+Every step below ends green (Tier 0, replay, ruff, mypy, interrogate 100%), is committed referencing its issue, and is pushed. Agent, prompt and tool changes also run their LM Studio evals.
+
+### G14 · Typed story domain (data + core services) (#38)
+
+- **New SQLModel tables** (`models/story.py`, crud in `crud/story.py`):
+  - `Character`: name, role, logline, bio, want, need, motive, objective, flaw, arc_summary, voice, notes, version, origin.
+  - `CharacterRelationship`
+  - `CharacterTimelineEvent`: character, order or story time, optional scene, event, objective, emotional state.
+  - `Location`
+  - `StoryBeat`: act, order, title, summary, beat type, linked scene ids.
+- **Storyline fields on Project:** logline, premise, synopsis, theme, tone. Make them editable through the existing `ProjectPatch`.
+- **Act CRUD:** create, rename, reorder and delete, replacing the hardcoded 3 acts.
+- **Alembic migration**, reviewed by hand per CLAUDE.md, plus a data backfill:
+  - character artifacts and `character`/`location` graph nodes become rows;
+  - outline-artifact beats become `StoryBeat`s.
+- **One service layer, `core/story/`**, that both REST and MCP call. Move the helpers MCP currently borrows from `api.agent`, `api.artifacts`, `api.backups` and `api.timeline` into `core/`. Also add scene create, delete and move, and artifact and graph-node delete.
+- **Agent writes stay proposals.** Add new reversible `AgentProposal` kinds: `story_entity_create` and `story_entity_update` (characters, beats, timeline events, storyline fields).
+- **Twins:** the Story twin brief and the RAG index read the new tables, and the graph links to them (no parallel twin store).
+- **Tests:** CRUD, versioning (409), backfill, and proposal apply and rollback.
+
+### G15 · Manual studio (non-agentic end-to-end) (#39)
+
+- **Router and data layer:** react-router with TanStack Query, replacing the regex routing, `location.assign` and `window.location.reload()`. Cache invalidation comes from the existing SSE `subscribeProjectEvents`.
+- **A guided project shell**, shown as a stepper: **Project → Storyline → Characters → Outline → Script**, plus a "Context map" panel showing exactly what agents will see per stage, and which fields are empty.
+- **Pages:**
+  - **Storyline:** logline, premise, synopsis, theme and tone.
+  - **Characters:** a list, a detail form (motive, objective, want/need, arc, relationships) and a per-character timeline editor.
+  - **Locations.**
+  - **Outline:** any number of acts; beats you can drag and link to scenes; a manual "create scenes from beats".
+  - **Script:** create the first scene, delete and move scenes, and change block type directly (agents still go through proposals).
+- **Tests:** Vitest component tests for the new pages and the api layer. A Playwright **real-stack** journey with no mocks: create project → storyline → 2 characters with timelines → outline → scenes → write blocks → export.
+
+### G16 · Full MCP surface (parity with REST) (#40)
+
+- **New tools over `core/story` and the existing services:**
+  - project create, patch, duplicate and delete;
+  - storyline;
+  - character, location, beat, timeline event and relationship CRUD;
+  - act and scene CRUD and move;
+  - block create, patch, delete and reorder;
+  - import (Fountain, FDX, PDF);
+  - revision snapshot, restore and diff;
+  - proposal reject for both kinds;
+  - knowledge-graph node and edge writes;
+  - story-twin refresh, writer-twin read and update;
+  - artifact create and patch.
+- **Remove `greet`.**
+- **Write semantics:**
+  - External clients write directly, and every write needs the existing argument-bound `approval_id`.
+  - In-app agents get `propose_*` variants that create proposals.
+  - The capability catalog gains an entry for each new capability.
+- **Discoverable content:**
+  - one prompt per stage (`develop_storyline`, `develop_characters`, `build_outline`, `draft_script`, `review_script`), so Claude or ChatGPT can drive the whole flow;
+  - resources for characters, beats, timeline and the storyline.
+- **Tests:**
+  - every tool through an in-memory FastMCP `Client`;
+  - one end-to-end Streamable HTTP test;
+  - a **parity test** that fails when a domain REST route has no MCP tool;
+  - fix `docs/mcp.md`, which is stale (`approved: true`, tool counts).
+
+### G17 · AG-UI chat on PydanticAI (#41)
+
+- **Backend:**
+  - Add the `pydantic-ai-slim[ag-ui]` dependency.
+  - In `agents/chat.py`, replace `VercelAIAdapter` with `AGUIAdapter`. The Temporal relay (`stream_agent_events` → `transform_stream`) is kept.
+  - Role, mode and page context arrive in AG-UI `state` / `forwardedProps`, not in query params.
+- **Threads:** a new `ChatThread` table keyed by AG-UI `threadId`, plus transcript load, new, rename and delete.
+- **Human-in-the-loop:**
+  - Approval-gated tools become PydanticAI deferred tools (`requires_approval` → `DeferredToolRequests`).
+  - They surface as AG-UI interrupts, rendered as an approval card.
+  - When the writer decides, the next turn resumes with `DeferredToolResults`.
+  - This also records the `MCPApprovalRequest` decision.
+- **Shared state:** the agent emits `STATE_SNAPSHOT`/`STATE_DELTA` (pipeline stage, active plan, progress), and the UI sends page context (project, scene, selection).
+- **Frontend:**
+  - One persistent **chat dock** in the router layout, on every page. It replaces both `RoomChat.tsx` and `CopilotPanel.tsx`; the polling is retired.
+  - Markdown rendering, plus stop, retry and regenerate.
+  - A **generative-UI registry** mapping tool name or result type to a React card: character card, beat list, scene diff, proposal approve/reject, workflow progress, coverage report, plan checklist.
+  - Frontend tools exposed to the agent: `navigate`, `open_scene`, `highlight_block`.
+- **Temporal:** changing `RoomChat` means re-recording replay histories or `workflow.patched`, per the replay rule.
+- **Tests:**
+  - AG-UI stream contract (event order, interrupt and resume);
+  - Vitest for the event reducer and the registry;
+  - Playwright for chat on the real stack, using a scripted `FunctionModel` provider profile for determinism;
+  - LM Studio evals for room Q&A re-run.
+
+### G18 · Agentic completeness (#42)
+
+- **Chat tool sets** cover every G16 capability, by permission mode. Chat can create a project, develop the storyline, characters, timelines and outline, write scenes, start and follow workflows (`read_workflow_run`), and approve in-chat.
+- **A `develop_story` pipeline workflow** (Temporal parent):
+  - premise → storyline → characters (fan-out per character) → character timelines → outline (evaluator-optimizer, reusing `notes_to_outline`) → scenes (child `draft_scenes`) → coverage.
+  - Each stage ends in proposals. The workflow waits on a `proposal_decided` signal, which the proposals API sends after Postgres commits (Postgres stays the source of truth). The UI shows it as a progress card.
+- **Planner and swarm:**
+  - The showrunner gets a typed `make_plan` output (shown as a checklist through AG-UI state).
+  - Parallel `consult_many` runs specialists with `asyncio.gather`, under the shared usage budget.
+  - A new `character_developer` role spec.
+- **Evals:** new `pydantic_evals` suites (`develop_storyline`, `character_profile`, `pipeline_smoke`) on LM Studio, with baselines in `evals/baselines/`, plus replay histories for the new workflows.
+
+### G19 · Packaging and release (#43)
+
+- **uv workspace:**
+  - root `draftpilot` (core, web, worker, rag);
+  - `packages/draftpilot-mcp` (`src/draftpilot_mcp`), which moves the server out of `src/draftpilot/mcp`, re-exported for in-app agents, and depends on `draftpilot`.
+- **Dependencies:** convert the uv groups to `[project.optional-dependencies]` extras (`web`, `worker`, `rag`, `all`), and make real runtime deps of the core.
+- **CLI:** a real `draftpilot` command (`serve`, `worker`, `migrate`, `mcp`, `rag`, `version`) and `draftpilot-mcp` (stdio or http, settings via `MCP__`).
+- **Package data and paths:**
+  - Ship `frontend/dist` (built in CI) and `migrations/` as package data under `src/draftpilot/`.
+  - Alembic is driven through `importlib.resources`.
+  - Fix the path walking in `core/config.py:17` and `evals/baseline.py:10`.
+- **One multi-arch image**, `ghcr.io/amruthvvkp/draftpilot`, with the command picking the role. Compose services use it. Add `compose.release.yml` pinned to the published tag, and keep `compose.dev.yml`. Fix the stale "ARQ" comment.
+- **`.github/workflows/release.yml`**, triggered by a `v*` tag:
+  - `uv build --all-packages` and `twine check`;
+  - PyPI trusted publishing for both packages;
+  - buildx push to GHCR;
+  - a GitHub Release with the compose files attached.
+- Re-enable `docs.yml`. Check that the PyPI names are free.
+- **Checks:** install both wheels in a clean venv, run `draftpilot migrate && draftpilot serve` against compose Postgres, and confirm `uvx --from dist/draftpilot_mcp-*.whl draftpilot-mcp --help` works and that Claude Code connects over stdio.
+
+### G20 · End-to-end verification (#44)
+
+- The real-stack Playwright manual journey (G15) and chat journey (G17).
+- Claude Code connected to the `draftpilot-mcp` stdio server develops a short screenplay end to end, using only MCP tools and prompts. Record it as `scripts/mcp_journey.py`, a smoke check you can run.
+- `develop_story` on LM Studio against Big Fish-style premise inputs.
+- Rebuild the images after the settings changes. Never tear the stack down (hot reload).
+
+### G21 · Docs (#45)
+
+- User guide: the guided flow, chat and generative cards, in-chat approvals, threads.
+- `docs/mcp.md`: full tool and prompt reference, plus connecting Claude Desktop, Claude Code and ChatGPT.
+- New `docs/install.md`: pip and uvx, Docker image, compose stack.
+- Developer guide: AG-UI, the pipeline workflow, the workspace layout and how to release.
+- Update CLAUDE.md, AGENTS.md, the `.claude` skills and `docs/references.md` (AG-UI).
+
+### Order
+
+G14 → G15 and G16 (independent once G14 is in) → G17 → G18 → G19 → G20 → G21. G19's workspace split comes after G16, so the MCP move happens once. I'll ask before any outward step beyond pushing branches: no PyPI or GHCR push, and no release tag.
+
+### Verification (each step and final)
+
+- `uv run pytest tests --ignore=tests/e2e` and `uv run pytest tests/test_temporal_replay.py`
+- `uv run ruff check src migrations packages`, `uv run mypy src packages`, `uv run interrogate src migrations packages`
+- `npm --prefix frontend run test && npm --prefix frontend run build`
+- `uv run pytest tests/e2e` and `-m stack` against :9000
+- `uv run pytest -m lmstudio` and `uv run python -m draftpilot.evals <suite>` against the baselines
+- `uv build --all-packages`, then a clean-venv install smoke and `docker build` of the image
