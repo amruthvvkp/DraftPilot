@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core import temporal
+from draftpilot.core import studio, temporal
 from draftpilot.core.db import async_get_db
 from draftpilot.core.story_operations import (
     apply_story_operation,
@@ -198,3 +198,14 @@ async def apply_artifact_operation(
     await session.refresh(artifact)
     await _enqueue_index(project_id, artifact)
     return StoryArtifactRead.model_validate(artifact)
+
+
+@router.delete("/{artifact_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_artifact(
+    project_id: int,
+    artifact_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> None:
+    """Delete an artifact and drop it from other artifacts' dependencies."""
+    await studio.delete_artifact(session, project_id, artifact_id, if_match)

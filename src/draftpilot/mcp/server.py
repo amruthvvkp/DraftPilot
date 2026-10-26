@@ -148,13 +148,6 @@ async def health(_request: Request) -> JSONResponse:
 logfire.info("Telemetry setup complete")
 
 
-@mcp.tool
-def greet(name: str) -> str:
-    """Return a greeting for the given name."""
-    logfire.info("Greeting user", extra={"user_name": name})
-    return f"Hello, {name}!"
-
-
 @mcp.resource("draftpilot://capabilities")
 def capabilities_resource() -> str:
     """Publish the discoverable, non-secret capability catalog."""
@@ -1343,3 +1336,7 @@ async def review_timeline_proposal(
             else timeline_proposals.rollback(session, project_id, screenplay_id, proposal_id)
         )
     return result.model_dump(mode="json")
+
+
+# Registers the studio tools (projects, story, structure, revisions, imports, canon, twins) on ``mcp``.
+from draftpilot.mcp import studio_tools  # noqa: F401

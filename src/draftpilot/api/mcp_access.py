@@ -1,4 +1,4 @@
-"""Project-scoped MCP client and capability grant administration endpoints."""
+"""MCP client registration and capability grant administration (per project or installation-wide)."""
 
 from datetime import datetime
 
@@ -48,6 +48,14 @@ class GrantRequest(BaseModel):
 
     client_id: str
     capability: str = Field(min_length=1, max_length=120)
+    expires_at: datetime | None = None
+
+
+class InstallationGrantRequest(BaseModel):
+    """Grant a client capabilities on every project; ``["*"]`` grants the whole catalog."""
+
+    client_id: str
+    capabilities: list[str] = Field(min_length=1)
     expires_at: datetime | None = None
 
 
@@ -114,6 +122,50 @@ async def revoke_project_grant(
     """Revoke one project grant without crossing client or project boundaries."""
     grant = await session.get(MCPGrant, grant_id)
     if grant is None or grant.project_id != project_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant not found")
+    await session.delete(grant)
+    await session.commit()
+
+
+@router.get("/grants", response_model=list[MCPGrantRead])
+async def list_installation_grants(
+    client_id: str, session: AsyncSession = Depends(async_get_db), _admin: None = Depends(require_mcp_admin)
+) -> list[MCPGrantRead]:
+    """List a client's installation-wide grants (they apply to every project)."""
+    grants = await access_crud.list_grants(session, None, client_id)
+    return [MCPGrantRead.model_validate(grant) for grant in grants]
+
+
+@router.post("/grants", response_model=list[MCPGrantRead], status_code=status.HTTP_201_CREATED)
+async def create_installation_grants(
+    data: InstallationGrantRequest, session: AsyncSession = Depends(async_get_db), _admin: None = Depends(require_mcp_admin)
+) -> list[MCPGrantRead]:
+    """Trust a client installation-wide for some (or, with ``"*"``, all) capabilities."""
+    catalog = [capability.name for capability in capability_catalog()]
+    wanted = catalog if data.capabilities == ["*"] else data.capabilities
+    if set(wanted) - set(catalog):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Unknown capability")
+    client = await access_crud.get_client(session, data.client_id)
+    if client is None or client.id is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Client not found")
+    existing = {grant.capability for grant in await access_crud.list_grants(session, None, data.client_id)}
+    grants = [
+        MCPGrant(client_id=client.id, project_id=None, capability=name, expires_at=data.expires_at)
+        for name in wanted
+        if name not in existing
+    ]
+    session.add_all(grants)
+    await session.commit()
+    return [MCPGrantRead.model_validate(grant) for grant in await access_crud.list_grants(session, None, data.client_id)]
+
+
+@router.delete("/grants/{grant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_installation_grant(
+    grant_id: int, session: AsyncSession = Depends(async_get_db), _admin: None = Depends(require_mcp_admin)
+) -> None:
+    """Revoke one installation-wide grant."""
+    grant = await session.get(MCPGrant, grant_id)
+    if grant is None or grant.project_id is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant not found")
     await session.delete(grant)
     await session.commit()

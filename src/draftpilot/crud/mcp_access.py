@@ -27,11 +27,13 @@ async def get_client(session: AsyncSession, client_id: str) -> MCPClient | None:
     return result.first()
 
 
-async def list_grants(session: AsyncSession, project_id: int, client_id: str) -> list[MCPGrant]:
-    """Return unexpired grants for one client and project."""
+async def list_grants(session: AsyncSession, project_id: int | None, client_id: str) -> list[MCPGrant]:
+    """Return unexpired grants for one client covering a project (its own plus installation-wide ones)."""
+    installation = col(MCPGrant.project_id).is_(None)
+    scope = installation if project_id is None else installation | (col(MCPGrant.project_id) == project_id)
     result = await session.exec(
         select(MCPGrant).join(MCPClient).where(
-            MCPGrant.project_id == project_id,
+            scope,
             MCPClient.client_id == client_id,
             MCPClient.enabled,
         ).order_by(col(MCPGrant.capability)
@@ -89,7 +91,7 @@ def _aware(value: datetime) -> datetime:
 async def authorize_invocation(
     session: AsyncSession,
     client_id: str,
-    project_id: int,
+    project_id: int | None,
     capability: str,
     action: str,
     payload: dict[str, object],
@@ -107,7 +109,7 @@ async def authorize_invocation(
         # In-app agents hold implicit grants for the one project their run is bound to.
         grants = (
             [CapabilityGrant(client_id=client_id, project_id=project_id, capability=item.name) for item in capability_catalog()]
-            if project_id == internal.project_id
+            if project_id is not None and project_id == internal.project_id
             else []
         )
     else:
@@ -131,6 +133,8 @@ async def authorize_invocation(
             grants,
         )
         if requires_approval(capability):
+            if project_id is None:
+                raise PermissionError("Installation-level calls cannot carry a writer approval")
             digest = arguments_digest(capability, action, call_arguments)
             if approval_id is None:
                 pending = MCPApprovalRequest(
@@ -162,7 +166,7 @@ async def authorize_invocation(
         )
     )
     await session.commit()
-    if isinstance(error, ApprovalRequiredError):
+    if isinstance(error, ApprovalRequiredError) and project_id is not None:
         await events.publish(
             project_id, "approval.changed", {"approval_id": error.approval_id, "status": "pending"}
         )

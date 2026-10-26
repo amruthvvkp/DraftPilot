@@ -27,6 +27,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 |---|---|---|---|---|
 | `GET` | `/projects/{project_id}/artifacts` | List editable artifacts within project scope. |  | 200 list of `StoryArtifactRead` |
 | `POST` | `/projects/{project_id}/artifacts` | Create an editable project artifact without overwriting another artifact. | `ArtifactCreateRequest` | 201 `StoryArtifactRead` |
+| `DELETE` | `/projects/{project_id}/artifacts/{artifact_id}` | Delete an artifact and drop it from other artifacts' dependencies. |  | 204 |
 | `PATCH` | `/projects/{project_id}/artifacts/{artifact_id}` | Edit an artifact and mark its dependent artifacts stale. | `ArtifactUpdateRequest` | 200 `StoryArtifactRead` |
 | `POST` | `/projects/{project_id}/artifacts/{artifact_id}/operations` | Apply a typed story operation with optimistic concurrency and stale propagation. | `StoryOperationRequest` | 200 `StoryArtifactRead` |
 
@@ -107,6 +108,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `POST` | `/projects/{project_id}/knowledge-graph/edges` | Create an edge only when both endpoint nodes belong to the project. | `EdgeRequest` | 201 `KnowledgeEdgeRead` |
 | `DELETE` | `/projects/{project_id}/knowledge-graph/edges/{edge_id}` | Delete an edge only when it belongs to the requested project. |  | 204 |
 | `POST` | `/projects/{project_id}/knowledge-graph/nodes` | Create a node only inside the requested project. | `NodeRequest` | 201 `KnowledgeNodeRead` |
+| `DELETE` | `/projects/{project_id}/knowledge-graph/nodes/{node_id}` | Delete a canon node together with its relationships. |  | 204 |
 | `PATCH` | `/projects/{project_id}/knowledge-graph/nodes/{node_id}` | Update a project node only when its version is current. | `NodeUpdate` | 200 `KnowledgeNodeRead` |
 
 ## mcp-access
@@ -114,6 +116,9 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | Method | Path | What it does | Body | Returns |
 |---|---|---|---|---|
 | `POST` | `/mcp/clients` | Register a client without accepting or returning bearer secrets. | `ClientCreateRequest` | 201 `ClientRead` |
+| `GET` | `/mcp/grants` | List a client's installation-wide grants (they apply to every project). |  | 200 list of `MCPGrantRead` |
+| `POST` | `/mcp/grants` | Trust a client installation-wide for some (or, with ``"*"``, all) capabilities. | `InstallationGrantRequest` | 201 list of `MCPGrantRead` |
+| `DELETE` | `/mcp/grants/{grant_id}` | Revoke one installation-wide grant. |  | 204 |
 | `GET` | `/mcp/projects/{project_id}/grants` | List active grants for one client in one project. |  | 200 list of `MCPGrantRead` |
 | `POST` | `/mcp/projects/{project_id}/grants` | Create a project grant only for a registered client. | `GrantRequest` | 201 `MCPGrantRead` |
 | `DELETE` | `/mcp/projects/{project_id}/grants/{grant_id}` | Revoke one project grant without crossing client or project boundaries. |  | 204 |

@@ -1,10 +1,94 @@
 # MCP integration
 
+DraftPilot's MCP server is the one tool surface for its own agents and for external ones such as
+Claude (Desktop, Code), ChatGPT and other MCP clients. Everything a writer can do in the studio —
+from the first idea to a finished draft — is available as a tool: projects, the storyline,
+characters with their motives, objectives, relationships and timelines, locations, the outline
+(acts and beats), scenes and screenplay blocks, revisions, imports and exports, proposals, the canon
+graph, artifacts, the writers' room workflows and both twins.
+
+## Connect a client
+
+| Transport | Start it | Identity |
+|---|---|---|
+| stdio (a local process) | `uv run python -m draftpilot.mcp` | `MCP__STDIO_CLIENT_ID` (default `mcp-stdio`) |
+| Streamable HTTP | the `mcp` Compose service on `http://localhost:9001/mcp` | the bearer token: `MCP__AUTH_TOKEN`, or one of `MCP__CLIENT_TOKENS` |
+
+Claude Code, for example:
+
+```bash
+claude mcp add draftpilot -- uv --directory /path/to/DraftPilot run python -m draftpilot.mcp
+```
+
+or, over HTTP:
+
+```bash
+claude mcp add --transport http draftpilot http://localhost:9001/mcp --header "Authorization: Bearer draftpilot-local-token"
+```
+
+### Trust the client
+
+A client can do nothing until the installation grants it capabilities. Register it once and grant
+it capabilities on one project, or installation-wide (a grant without a project covers every
+project, and is required to list and create projects). Both use the admin token:
+
+```bash
+curl -X POST localhost:9000/api/v1/mcp/clients -H "Authorization: Bearer $MCP__ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"client_id": "mcp-stdio", "name": "Claude Code"}'
+curl -X POST localhost:9000/api/v1/mcp/grants -H "Authorization: Bearer $MCP__ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"client_id": "mcp-stdio", "capabilities": ["*"]}'
+```
+
+Granting a capability never skips the writer: writes marked `approval_required` still need a
+writer-decided approval for each call (below).
+
+## Develop a screenplay over MCP
+
+Five prompts walk an agent through the guided flow, each built on the tools below:
+`develop_storyline`, `develop_characters`, `build_outline`, `draft_script` and `review_script`.
+A typical session:
+
+1. `create_project` (or `list_projects`), then `read_story_context`, the compact brief every
+   DraftPilot agent receives.
+2. Storyline: `read_storyline`, then `update_project(fields={"logline", "premise", "synopsis",
+   "theme", "tone", ...})` or `propose_story_change(kind="storyline", action="update")`.
+3. Cast: `create_story_entity` / `update_story_entity` / `delete_story_entity` with
+   `kind="character" | "relationship" | "timeline_event" | "location"`, read back with
+   `list_story_entities` and `read_character` (profile, timeline and relationships together).
+4. Outline: `create_act` / `update_act` / `delete_act`, beats via `kind="beat"`, or a whole outline at
+   once with `propose_outline`; read it with `read_outline` (acts → beats → scene headings).
+5. Script: `create_scene(heading, fountain=...)`, `write_scene` (replace a scene from Fountain),
+   `move_scene`, `delete_scene`, and block-level `create_block` / `update_block` / `delete_block` /
+   `reorder_blocks`; read with `read_screenplay_scenes`.
+6. Review: `snapshot_scene`, `diff_scene_revisions`, `restore_scene_revision`; `start_room_workflow`
+   for coverage, continuity, rewrites and the audience panel; `render_screenplay_export`.
+
+Every write takes the `expected_version` you last read and fails with a conflict if the writer
+changed the target since.
+
+### Tool reference
+
+| Area | Tools |
+|---|---|
+| Projects | `list_projects`, `create_project`, `update_project`, `duplicate_project`, `delete_project`, `write_reference`, `read_project_overview` |
+| Story | `read_storyline`, `read_story_context`, `list_story_entities`, `read_character`, `read_outline`, `create_story_entity`, `update_story_entity`, `delete_story_entity`, `propose_story_change`, `propose_outline`, `apply_story_operation`, `read_project_artifacts`, `write_artifact` |
+| Structure and script | `create_act`, `update_act`, `delete_act`, `create_scene`, `write_scene`, `update_scene`, `move_scene`, `delete_scene`, `create_block`, `update_block`, `delete_block`, `reorder_blocks`, `read_screenplay_scenes`, `read_dialogue_translations`, `propose_dialogue_translation` |
+| Proposals | `list_proposals`, `propose_screenplay_change`, `review_screenplay_proposal`, `reject_proposal`, `propose_timeline_reorder`, `review_timeline_proposal`, `reject_timeline_proposal` |
+| Revisions, import and export | `snapshot_scene`, `read_scene_revisions`, `diff_scene_revisions`, `restore_scene_revision`, `import_screenplay`, `render_screenplay_export`, `create_screenplay_export`, `list_project_backups`, `create_project_backup`, `restore_project_backup` |
+| Canon, twins and search | `read_story_twin`, `refresh_story_twin_now`, `write_canon_node`, `write_canon_edge`, `read_writer_twin`, `update_writer_profile`, `remember_writer_preference`, `retrieve_project_context`, `reindex_project_search` |
+| Room and runs | `list_room_workflows`, `start_room_workflow`, `start_context_workflow`, `apply_context_workflow`, `start_evaluation`, `read_project_evaluations`, `read_workflow_run`, `control_workflow_run`, `read_monty_executions` |
+
+Resources: `draftpilot://capabilities`, `draftpilot://schemas/context`, `draftpilot://context-workflows`,
+and per project `.../storyline`, `.../characters`, `.../outline`, `.../locations`, `.../timeline`,
+`.../artifacts`, `.../context` and `.../knowledge-graph`. A parity test
+(`tests/test_mcp_studio.py`) fails when a REST operation has no MCP tool or documented exemption.
+
 ## Writer approval for external writes
 
 An MCP client can never approve its own writes. Capabilities marked `approval_required` in
-`draftpilot://capabilities` (story operations, applying context, approving or rolling back
-proposals, exports, backups, restores, run control) go through two steps:
+`draftpilot://capabilities` (project edits and deletes, story and structure writes, story operations,
+applying context, approving, rejecting or rolling back proposals, restores, exports, backups, canon,
+artifact and writer-twin writes, run control) go through these steps:
 
 1. **First call.** The client calls the tool without `approval_id`. DraftPilot checks the grant and
    records a pending approval request, and the call fails with a message such as
@@ -18,9 +102,10 @@ proposals, exports, backups, restores, run control) go through two steps:
    and it expires after `MCP__APPROVAL_TTL_SECONDS` (default 900). A changed argument, a replay, or a
    pending, rejected or expired request is refused and audited.
 
-Creating proposals (`propose_screenplay_change`, `propose_timeline_reorder`,
-`propose_dialogue_translation`) needs no pre-approval, because a proposal changes nothing until the
-writer reviews it.
+Creating proposals (`propose_story_change`, `propose_outline`, `propose_screenplay_change`,
+`propose_timeline_reorder`, `propose_dialogue_translation`) needs no pre-approval, because a proposal
+changes nothing until the writer reviews it. Creating a project, snapshotting a scene, importing a
+draft and refreshing the Story twin are not destructive and need no approval either.
 
 ## External client smoke check
 
@@ -29,7 +114,7 @@ Compose stack running and a project-scoped `outline.read` grant for the default 
 
 ```bash
 UV_CACHE_DIR=/private/tmp/draftpilot-uv-cache uv run python scripts/mcp_smoke.py
-# tools=22 resources=3 artifact_type=dict tool_type=dict
+# tools=70 resources=3 artifact_type=dict tool_type=dict
 ```
 
 Set `DRAFTPILOT_MCP_ENDPOINT`, `DRAFTPILOT_MCP_TOKEN`, and `DRAFTPILOT_MCP_RESOURCE` to target
@@ -101,12 +186,12 @@ backup volume without changing canonical screenplay data.
 source code and input values are never returned.
 `list_project_backups` lists validated backup manifests, `create_project_backup` creates an approved
 archive, `restore_project_backup` restores it into a new project, and `read_workflow_run` reads
-durable run state. Backup creation and restore require both the project grant and
-`approved: true`; they never overwrite the source project.
+durable run state. Backup creation and restore require both the project grant and a writer-approved
+`approval_id`; they never overwrite the source project.
 
 `control_workflow_run` exposes explicit `resume` and `cancel` actions. It requires the client grant
-for `runs.control` and an `approved: true` writer-consent value; every attempt is audited, and resume
-requeues the same durable run rather than creating a second run.
+for `runs.control` and a writer-approved `approval_id`; every attempt is audited, and resume
+restarts the same durable run rather than creating a second run.
 
 External clients should receive a project/client grant before invoking capabilities. The server must
 validate both scopes and approval state; a UI permission is never authoritative. Credentials belong
@@ -145,13 +230,11 @@ timeouts, output limits, and explicit consent. Project evaluations are available
 durable workflow-run service.
 
 The durable run API currently supports `GET` inspection, `POST /resume`, and `POST /cancel` under
-`/api/v1/projects/{project_id}/runs/{run_id}`. Cancellation is history-preserving and the worker
-checks the persisted state before recording success. On worker startup, runs left in `running` are
-marked queued and re-enqueued, allowing browser-disconnected or interrupted Copilot/evaluation
-work to resume without direct database intervention.
-Run responses also expose `attempt_count` and `max_attempts`. Provider or worker failures are
-persisted as queued retries and the same run id is re-enqueued until the bounded budget is
-exhausted; the final failure is durable and can be explicitly resumed by an authorized client.
+`/api/v1/projects/{project_id}/runs/{run_id}`. Every run executes as a Temporal workflow, so it
+survives worker restarts and browser disconnects; cancellation cancels the workflow and keeps the
+run's history. Run responses also expose `attempt_count` and `max_attempts`: Temporal retries the
+run's activity until that budget is exhausted, and the final failure is durable and can be explicitly
+resumed by an authorized client.
 REST run creation accepts `max_attempts` from 1 through 10 for workflow, evaluation, and context
 runs; omitted values use the default of three.
 

@@ -36,13 +36,14 @@ class MCPGrantBase(SQLModel):
 
 
 class MCPGrant(MCPGrantBase, table=True):  # type: ignore[call-arg]
-    """Grant one registered client one capability for one project."""
+    """Grant one registered client one capability for one project, or installation-wide (no project)."""
 
     __tablename__ = "mcp_grant"
 
     id: int | None = Field(default=None, primary_key=True)
     client_id: int = Field(foreign_key="mcp_client.id", index=True)
-    project_id: int = Field(foreign_key="project.id", index=True)
+    # None = installation scope: the capability on every project, plus listing and creating projects.
+    project_id: int | None = Field(default=None, foreign_key="project.id", index=True, nullable=True)
     created_at: datetime = Field(default_factory=_utcnow, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
 
 
@@ -105,7 +106,7 @@ class MCPGrantCreate(SQLModel):
     """Describe a grant to create for a registered client."""
 
     client_id: str
-    project_id: int
+    project_id: int | None = None
     capability: str
     expires_at: datetime | None = None
 
@@ -115,4 +116,4 @@ class MCPGrantRead(MCPGrantBase):
 
     id: int
     client_id: int
-    project_id: int
+    project_id: int | None

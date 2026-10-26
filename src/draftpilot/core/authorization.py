@@ -13,7 +13,7 @@ class CapabilityGrant(BaseModel):
     """Grant one client a named capability within one project scope."""
 
     client_id: str = Field(min_length=1, max_length=200)
-    project_id: int
+    project_id: int | None  # None: installation-wide
     capability: str
     expires_at: datetime | None = None
 
@@ -22,7 +22,7 @@ class CapabilityRequest(BaseModel):
     """Describe a capability invocation requiring server authorization."""
 
     client_id: str = Field(min_length=1, max_length=200)
-    project_id: int
+    project_id: int | None  # None: an installation-level action (list or create projects)
     capability: str
     # Set only by the server after verifying a writer-decided approval request.
     approved: bool = False
@@ -64,7 +64,7 @@ def authorize(request: CapabilityRequest, grants: list[CapabilityGrant]) -> None
             grant
             for grant in grants
             if grant.client_id == request.client_id
-            and grant.project_id == request.project_id
+            and (grant.project_id is None or grant.project_id == request.project_id)
             and grant.capability == request.capability
             and (grant.expires_at is None or grant.expires_at > now)
         ),

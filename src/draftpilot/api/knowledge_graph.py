@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core import temporal
+from draftpilot.core import studio, temporal
 from draftpilot.core.db import async_get_db
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import projects as projects_crud
@@ -189,3 +189,14 @@ async def delete_edge(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Graph edge not found")
     await graph_crud.delete_edge(session, edge)
     await _enqueue_delete(project_id, f"knowledge_edge:{edge_id}")
+
+
+@router.delete("/nodes/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_node(
+    project_id: int,
+    node_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> None:
+    """Delete a canon node together with its relationships."""
+    await studio.delete_node(session, project_id, node_id, if_match)
