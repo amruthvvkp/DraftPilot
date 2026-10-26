@@ -25,12 +25,13 @@ cp .env.example .env            # optional: every setting has a local default
 docker compose up --build
 ```
 
-Then open these addresses:
+No checkout needed: [Install](install.md) covers the published Compose stack, the Docker image, and
+`pip install draftpilot-studio` / `uvx draftpilot-mcp`.
 
 | Address | What it is |
 |---|---|
 | <http://localhost:9000> | The studio |
-| <http://localhost:9001/mcp> | The MCP server for Claude Code, Codex and other agents |
+| <http://localhost:9001/mcp> | The MCP server for Claude, ChatGPT, Cursor and other agents |
 | <http://localhost:8233> | The Temporal UI, which shows every room workflow and background job step by step |
 
 If `API__TOKEN` is set, the studio asks for it once and then remembers you with a secure cookie.
@@ -39,25 +40,28 @@ If `API__TOKEN` is set, the studio asks for it once and then remembers you with 
 
 1. **Create a project.** Click **New project** and give it a title. **Spark with AI** can suggest a
    logline and characters from a single line of premise.
-2. **Bring in a script, or start from nothing.**
-   - *Import:* in the workspace, click **Import** and pick a `.fountain`, `.fdx` or `.pdf`. The Big
-     Fish files in `tests/test_screenplays` are a good first test.
-   - *From notes:* open **Writers' room** and run **Notes → outline**, then **Outline → scenes**.
-   - *From scratch:* add a scene, type a heading, and write action, character and dialogue blocks.
-     ++tab++ moves between blocks, and smart typing picks the element for you.
-3. **Look at the Story twin.** Open **Story twin** to see what the room now knows: your cast, ranked
-   by how much each character speaks, and your locations.
-4. **Ask the room.** In **Writers' room**, ask the showrunner something only your script can answer,
-   such as "What does Will want from his father?". Its tools show up as it reads.
-5. **Put the room to work.** Run **Rewrite a scene** on one scene and approve or reject the result.
+2. **Follow the stepper.** Each project walks **Storyline → Characters → Outline → Script**
+   ([Develop a story](guided-flow.md)). Fill the logline and premise, add your leads with what they
+   want and need, sketch the acts and beats, then create the first scene from a beat.
+3. **Or bring in a script.** In the Script, click **Import** and pick a `.fountain`, `.fdx` or `.pdf`
+   (the Big Fish files in `tests/test_screenplays` are a good first test). The cast and locations
+   fill in by themselves.
+4. **Ask the room.** In the chat on the right, ask the showrunner something only your project can
+   answer, or ask it to develop a stage. In **Edit with approval** mode it changes things directly,
+   one approved step at a time ([Chat with the room](chat.md)).
+5. **Let the room run the pipeline.** In **Writers' room**, start **Develop the story** with an idea,
+   and approve each stage as it arrives.
 
 ## Where to go next
 
+- [Develop a story](guided-flow.md) covers the stages, the context map and the pipeline.
+- [Chat with the room](chat.md) covers roles, modes, in-chat approvals and threads.
 - [Writing in the studio](editor.md) covers the editor, drafts, snapshots, translations and exports.
 - [Story tools](story-tools.md) covers the Story twin, knowledge graph, story studio and timeline.
 - [Writers' room](writers-room.md) covers the agent team, the workflows, and reviewing proposals.
 - [Settings & appearance](settings.md) covers themes, your writer profile, memories and models.
 - [Manual test checklist](checklist.md) walks through every workflow by hand.
+- [MCP integration](mcp.md) connects Claude, ChatGPT or Cursor to develop screenplays through DraftPilot.
 - For the advanced topics, see [MCP integration](mcp.md), [Evals & usefulness](evals.md) and
   [Deployment](deployment.md).
 - To work on DraftPilot itself, start with the [Architecture](dev/architecture.md).

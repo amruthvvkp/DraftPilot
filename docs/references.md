@@ -27,6 +27,10 @@ with this project's MIT license (e.g. GPL).
   its own ReportLab PDF and safe self-contained HTML renderers. MIT, © Martin Vilcans.
   <https://github.com/vilcans/screenplain>
 
+- **AG-UI protocol** — the chat dock speaks the Agent-User Interaction protocol; the server side is
+  Pydantic AI's `pydantic_ai.ui.ag_ui` adapter, the client uses the protocol's TypeScript types.
+  MIT. <https://docs.ag-ui.com>
+
 ## Inspiration only — not used as code
 
 - **Trelby** — a mature open-source screenplay editor whose data model and multi-format

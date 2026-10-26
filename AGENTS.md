@@ -17,6 +17,8 @@ writers build, research, co-write, and evaluate screenplays alongside AI agents.
   (`OTEL__ENABLED=false`); `docker compose --profile observability up` adds a bundled Grafana
   `otel-lgtm` (:3300) to export to. Metrics, feedback and online checks live in Postgres. See `.env.example`.
 - **Docs**: Zensical (not MkDocs) — `zensical.toml`, sources in `docs/`
+- **Release**: PyPI `draftpilot-studio` + `draftpilot-mcp`, image `ghcr.io/amruthvvkp/draftpilot`,
+  tag-driven (`.github/workflows/release.yml`; see `docs/dev/releasing.md`)
 - **Tooling**: `uv` (Python pinned 3.13), `ruff`, `mypy`
 
 ## Layout
@@ -31,6 +33,8 @@ src/draftpilot/
   evals/       pydantic_evals suites on LM Studio (`python -m draftpilot.evals`) + online checks
   worker/      Temporal worker: workflows, activities, job functions
   mcp/         FastMCP server (HTTP + stdio)
+  cli.py       the `draftpilot` command; migrations/ (Alembic) ship inside the package
+packages/draftpilot-mcp/  the MCP server as its own wheel (CLI: serve, trust, config, tools)
 frontend/      React/Vite studio (src/, public/ assets; build → dist/)
 src/draftpilot/migrations/  Alembic (env.py reads settings sync DSN; SQLModel.metadata is the target)
 ```
@@ -43,10 +47,10 @@ docker compose up --build         # Studio :9000 · MCP :9001 · RAG :9010 · Te
 
 # Local dev (needs local Postgres + Redis + `temporal server start-dev`)
 uv sync --all-groups --all-packages
-uv run alembic upgrade head
-uv run python -m draftpilot.api       # API + built studio on :8000
+uv run draftpilot migrate             # alembic upgrade head (migrations live in the package)
+uv run draftpilot serve               # API + built studio on :8000
 npm --prefix frontend run dev         # React studio with Vite hot reload
-uv run python -m draftpilot.worker
+uv run draftpilot worker              # also: draftpilot mcp [--http], draftpilot rag
 
 # Tests: Tier 0 (CI) · browser e2e (stack on :9000) · Tier 1 local LM Studio
 uv run pytest tests --ignore=tests/e2e && uv run pytest tests/e2e && uv run pytest -m lmstudio

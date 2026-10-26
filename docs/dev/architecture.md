@@ -102,9 +102,17 @@ Around the script:
   the writer decides through the proposals API. `execute_workflow` runs a room run as a child
   workflow after preparing its context and model. `run_room_workflow` runs the same workflow on an
   embedded Temporal test server for evals and tests.
-- **Chat:** each turn is a short `room:chat` workflow. The API relays its Workflow Stream events
-  (`stream_agent_events`) through the Vercel adapter, which is the same SSE `useChat` has always
-  consumed, and the workflow saves the transcript and AgentRun before the stream ends.
+- **Chat (AG-UI):** each turn is a short `room:chat` workflow. The API parses the AG-UI
+  `RunAgentInput`, starts the turn and relays its Workflow Stream events (`stream_agent_events`)
+  through Pydantic AI's `AGUIAdapter` encoder. Chat agents defer approval-required MCP tools, so a
+  write ends the turn with an AG-UI interrupt; on resume, a signed *approval probe* asks the MCP
+  server to record the approval request that exact call needs (without running it), the writer's
+  decision is recorded, and the call resumes with that `approval_id`. Threads (`ChatThread`) keep the
+  full history server-side; once a thread exists the server's copy is authoritative. Studio-side
+  tools (`navigate`, `open_scene`) ride as an `ExternalToolset`.
+- **Pipeline:** `room:develop_story` chains storyline, cast, parallel timelines, a critiqued outline,
+  parallel scene drafts and coverage. Each stage proposes, then waits on `proposal_decided` signals,
+  which the proposals service sends to `run-<id>-room` after the writer decides.
 - **Measurement:** every role run is an `AgentRun`, recording tokens, tools, duration and trace id.
 
 ## Safety boundaries

@@ -47,19 +47,29 @@ migrations on first boot). Set `OTEL__ENABLED=false` to disable, or override
 `OTEL__EXPORTER_OTLP_ENDPOINT` for an external collector. **Replace the `# CHANGEME` secrets in
 `compose.yml` before any non-local use.**
 
+## Install without a checkout
+
+```bash
+pip install draftpilot-studio && draftpilot migrate && draftpilot serve   # the studio (needs Postgres, Redis, Temporal)
+uvx draftpilot-mcp config claude-code                                    # connect Claude Code to DraftPilot over MCP
+docker compose -f compose.yml -f compose.release.yml up -d               # the published full stack
+```
+
+See [Install](docs/install.md) and [MCP integration](docs/mcp.md).
+
 ## Local development
 
 Requires a local Postgres + Redis (or `docker compose up postgres redis`) and Node.js.
 
 ```bash
 uv sync --all-groups --all-packages  # app + draftpilot-mcp + every tool group
-uv run alembic upgrade head
+uv run draftpilot migrate
 npm --prefix frontend install
 npm --prefix frontend run build                        # typecheck + build -> frontend/dist
-uv run python -m draftpilot.api                        # API + studio on :8000
+uv run draftpilot serve                                # API + studio on :8000
 npm --prefix frontend run dev                          # optional Vite HMR on :5173 (proxies /api)
 uv run arq draftpilot.worker.settings.WorkerSettings   # worker (separate shell)
-uv run python -m draftpilot.mcp                        # MCP server over stdio
+uv run draftpilot mcp                                  # MCP server over stdio
 ```
 
 Settings use prefixed environment variables with a `__` delimiter — e.g. `POSTGRES__HOST`,

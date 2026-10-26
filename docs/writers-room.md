@@ -36,9 +36,10 @@ Every agent works from two "twins":
 
 ## Chat with the room
 
-From the workspace, open **Copilot** and pick a role. **Showrunner** is the one to pick when you
-don't know who to ask. Agents read your project through the same tools that external agents use
-(see [MCP integration](mcp.md)), and they can only see the project you're in.
+The chat on the right of every project page talks to the room ([Chat with the room](chat.md)).
+**Showrunner** is the one to pick when you don't know who to ask: it plans, consults several
+specialists in parallel, and answers once. Agents read your project through the same tools that
+external agents use (see [MCP integration](mcp.md)), and they can only see the project you're in.
 
 ## Room workflows
 
@@ -48,14 +49,15 @@ steps updates live.
 
 | Workflow | Who works on it | What you get |
 |---|---|---|
-| **Notes → outline** | Story editor ⇄ script doctor | A logline and beat outline, graded and revised until it reaches the target score or runs out of rounds. You get two proposals: the logline for your Brief and the beats for your Outline |
+| **Notes → outline** | Story editor ⇄ script doctor | A logline and beat outline, graded and revised until it reaches the target score or runs out of rounds. You get two proposals: the logline for your storyline and the beats for your outline |
 | **Outline → scenes** | Scene writer, one per beat in parallel | New scenes drafted from your Outline's beats, proposed as one change that appends them to the draft |
 | **Rewrite a scene** | Scene writer ⇄ script doctor | The scene rewritten to your brief, critiqued and revised, and proposed as a single reversible scene change |
-| **Character arcs** | Character specialist, one per character in parallel | Want, need, flaw, turning points and a summary for the characters you name (or the Story twin's leads), proposed into your Characters artifact |
+| **Character arcs** | Character specialist, one per character in parallel | Want, need, flaw, turning points and a summary for the characters you name (or the Story twin's leads), proposed onto each character's profile, with a timeline event per turning point |
 | **Brainstorm** | Brainstormers, one per lens in parallel, then the story architect | A ranked shortlist with reasons and a recommendation |
 | **Audience panel** | One audience evaluator per persona, in parallel | Engagement per persona, the share who would recommend it, and the sticking points they have in common |
 | **Coverage** | Coverage reader | Logline, synopsis, grades for premise, structure, character, dialogue and pacing, and a verdict |
 | **Continuity pass** | Continuity supervisor | Continuity issues with the scenes they cite. Issues that cite scenes outside your draft are dropped |
+| **Develop the story** | Story architect, character specialist, story editor ⇄ script doctor, scene writers, coverage reader | Your idea taken through storyline, cast, a timeline per lead, a critiqued outline and the first scenes, with coverage at the end. It pauses after every stage until you have decided its proposals, and builds only on what you approved ([Develop a story](guided-flow.md)) |
 
 The two loops, **Notes → outline** and **Rewrite a scene**, run as evaluator-optimizer loops. The
 drafter writes, the script doctor grades from 1 to 10, and the drafter revises until the score
