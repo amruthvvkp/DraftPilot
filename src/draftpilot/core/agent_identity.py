@@ -32,6 +32,9 @@ class InternalAgent:
     project_id: int
     role: str
     run_id: int | None = None
+    # An approval probe only authorizes: it records the writer-approval request a write needs and
+    # never runs the tool. Chat uses it to turn the writer's in-chat approval into an approval_id.
+    probe: bool = False
 
     @property
     def client_id(self) -> str:
@@ -68,7 +71,9 @@ def _signature(claims: str) -> str:
 
 def identity_meta(agent: InternalAgent) -> dict[str, Any]:
     """Return the signed request ``_meta`` that identifies an in-app agent's tool call."""
-    claims = json.dumps({"project_id": agent.project_id, "role": agent.role, "run_id": agent.run_id}, sort_keys=True)
+    claims = json.dumps(
+        {"project_id": agent.project_id, "role": agent.role, "run_id": agent.run_id, "probe": agent.probe}, sort_keys=True
+    )
     return {META_KEY: {"claims": claims, "signature": _signature(claims)}}
 
 
@@ -81,4 +86,6 @@ def agent_from_meta(meta: Any) -> InternalAgent | None:
     if not isinstance(claims, str) or not isinstance(signature, str) or not hmac.compare_digest(signature, _signature(claims)):
         return None
     data = json.loads(claims)
-    return InternalAgent(project_id=int(data["project_id"]), role=str(data["role"]), run_id=data.get("run_id"))
+    return InternalAgent(
+        project_id=int(data["project_id"]), role=str(data["role"]), run_id=data.get("run_id"), probe=bool(data.get("probe"))
+    )

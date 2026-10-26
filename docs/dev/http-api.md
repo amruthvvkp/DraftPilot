@@ -196,8 +196,12 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 
 | Method | Path | What it does | Body | Returns |
 |---|---|---|---|---|
-| `POST` | `/projects/{project_id}/room/chat` | Stream one chat turn from a room role (Vercel AI SDK v6 UI-message stream). |  | 200 |
+| `POST` | `/projects/{project_id}/room/chat` | Stream one chat turn from a room role over the AG-UI protocol. |  | 200 |
 | `GET` | `/projects/{project_id}/room/runs` | List a project's most recent measured agent runs. |  | 200 list of `AgentRunRead` |
+| `GET` | `/projects/{project_id}/room/threads` | List the project's chat threads, most recent first. |  | 200 list of `ChatThreadRead` |
+| `DELETE` | `/projects/{project_id}/room/threads/{thread_id}` | Delete a thread and its history. |  | 204 |
+| `GET` | `/projects/{project_id}/room/threads/{thread_id}` | Return a thread and its messages in AG-UI form, to reopen the conversation. |  | 200 `object` |
+| `PATCH` | `/projects/{project_id}/room/threads/{thread_id}` | Rename a thread. | `ThreadRename` | 200 `ChatThreadRead` |
 | `GET` | `/projects/{project_id}/room/workflows` | List the room workflows with each one's parameter schema. |  | 200 list of `RoomWorkflowInfo` |
 | `POST` | `/projects/{project_id}/room/workflows` | Validate, persist, and enqueue one room workflow run; its results arrive as proposals or a report. | `RoomWorkflowStart` | 202 `WorkflowRunRead` |
 

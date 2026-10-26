@@ -121,6 +121,9 @@ async def _record(database: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> di
         turn = ChatTurn(role="story_architect", prompt="Where should we open?", history=[ModelRequest(parts=[UserPromptPart(content="Where should we open?")])], deps=room)
         ids["room-chat"] = "replay-room-chat"
         await client.execute_workflow("room:chat", turn, id=ids["room-chat"], task_queue=queue)
+        threaded = ChatTurn(role="story_architect", prompt="And the ending?", history=turn.history, deps=room, thread_id="replay-thread")
+        ids["room-chat-agui"] = "replay-room-chat-agui"
+        await client.execute_workflow("room:chat", threaded, id=ids["room-chat-agui"], task_queue=queue)
         async with AsyncSession(database.bind, expire_on_commit=False) as session:
             evaluation = WorkflowRun(project_id=1, kind="evaluation", input={"screenplay_id": 1}, max_attempts=2)
             room_run = WorkflowRun(project_id=1, kind="room_workflow", input={"workflow": "coverage", "params": {}}, max_attempts=1, permission_mode="suggest")

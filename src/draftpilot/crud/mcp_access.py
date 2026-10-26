@@ -43,6 +43,9 @@ async def list_grants(session: AsyncSession, project_id: int | None, client_id: 
     return [grant for grant in result.all() if grant.expires_at is None or grant.expires_at > now]
 
 
+PROBE_NOT_NEEDED = "Approval probe: this call needs no writer approval"
+
+
 def _approval_summary(arguments: dict[str, object]) -> dict[str, object]:
     """Return a bounded, token-redacted view of call arguments for the writer's review."""
     redacted = redact_audit_payload(arguments, {"token", "api_key", "secret"})
@@ -132,11 +135,14 @@ async def authorize_invocation(
             ),
             grants,
         )
+        probing = internal is not None and internal.probe and client_id == internal.client_id
+        if probing and not requires_approval(capability):
+            raise PermissionError(PROBE_NOT_NEEDED)
         if requires_approval(capability):
             if project_id is None:
                 raise PermissionError("Installation-level calls cannot carry a writer approval")
             digest = arguments_digest(capability, action, call_arguments)
-            if approval_id is None:
+            if approval_id is None or probing:
                 pending = MCPApprovalRequest(
                     client_id=client_id,
                     project_id=project_id,

@@ -20,8 +20,15 @@ with workflow.unsafe.imports_passed_through():
     from pydantic import BaseModel
     from pydantic_ai.durable_exec.temporal import AgentEventStream
     from pydantic_ai.exceptions import AgentRunError
+    from pydantic_ai.tools import DeferredToolRequests, ToolDefinition
+    from pydantic_ai.toolsets import ExternalToolset
 
-    from draftpilot.agents.chat import ChatTurn, save_chat_turn
+    from draftpilot.agents.chat import (
+        ChatTurn,
+        reply_text,
+        save_chat_thread,
+        save_chat_turn,
+    )
     from draftpilot.agents.deps import RoomDeps
     from draftpilot.agents.runtime import (
         RunMeter,
@@ -460,22 +467,33 @@ class RoomChat:
 
     @workflow.run
     async def run(self, turn: ChatTurn) -> str:
-        """Answer the conversation, then record the AgentRun and the transcript."""
+        """Answer the conversation (or ask the writer to approve a write), then record the run, transcript and thread."""
         provider, model_name = model_identity(turn.deps.model_ref)
         meter = RunMeter(turn.deps.project_id, turn.role, "chat", provider, model_name, None, started=0.0)
         started = workflow.time()
+        agui = workflow.patched("agui-chat")
+        options = role_run_options(role_spec(turn.role), turn.deps, [str, DeferredToolRequests] if agui else str, None)
+        extra: dict[str, Any] = {}
+        if agui:
+            extra["deferred_tool_results"] = turn.deferred
+            if turn.frontend_tools:
+                extra["toolsets"] = [ExternalToolset([ToolDefinition(**tool) for tool in turn.frontend_tools], id="studio")]
         try:
             async with self.events:
-                result = await chat_agents()[turn.role].run(
-                    message_history=turn.history, **role_run_options(role_spec(turn.role), turn.deps, str, None)
-                )
+                result = await chat_agents()[turn.role].run(message_history=turn.history, **options, **extra)
         except (ActivityError, AgentRunError) as exc:
             await workflow.execute_activity(record_agent_run, meter.fields(None, exc, _ms_since(started)), **STEP_ACTIVITY)
             raise
-        reply = str(result.output)
+        reply = reply_text(result.output)
         await workflow.execute_activity(
             save_chat_turn, args=[turn, reply, meter.fields(result, None, _ms_since(started))], **STEP_ACTIVITY
         )
+        if agui and turn.thread_id:
+            await workflow.execute_activity(
+                save_chat_thread,
+                args=[turn.thread_id, turn.deps.project_id, turn.role, turn.prompt[:80], result.all_messages()],
+                **STEP_ACTIVITY,
+            )
         return reply
 
 

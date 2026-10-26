@@ -29,6 +29,7 @@ from draftpilot.models.block import (
     BlockRead,
     BlockUpdate,
 )
+from draftpilot.models.chat_thread import ChatThread, ChatThreadRead
 from draftpilot.models.copilot_message import (
     CopilotMessage,
     CopilotMessageBase,
@@ -193,6 +194,8 @@ __all__ = [
     "CharacterTimelineEventRead",
     "CharacterTimelineEventUpdate",
     "CharacterUpdate",
+    "ChatThread",
+    "ChatThreadRead",
     "CopilotMessage",
     "CopilotMessageBase",
     "CopilotMessageCreate",

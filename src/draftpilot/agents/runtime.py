@@ -18,7 +18,14 @@ from time import monotonic
 from typing import Any
 
 import logfire
-from pydantic_ai import Agent, ModelRetry, ModelSettings, RunContext, UsageLimits
+from pydantic_ai import (
+    Agent,
+    DeferredToolRequests,
+    ModelRetry,
+    ModelSettings,
+    RunContext,
+    UsageLimits,
+)
 from pydantic_ai.capabilities import ResolveModelId
 from pydantic_ai.durable_exec.temporal import TemporalDurability
 from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
@@ -43,28 +50,80 @@ READ_TOOLS = frozenset(
     {
         "read_project_overview",
         "read_story_twin",
+        "read_story_context",
+        "read_storyline",
+        "list_story_entities",
+        "read_character",
+        "read_outline",
         "read_project_artifacts",
         "read_screenplay_scenes",
         "retrieve_project_context",
         "read_dialogue_translations",
         "read_scene_revisions",
+        "diff_scene_revisions",
         "read_project_evaluations",
+        "list_proposals",
+        "list_room_workflows",
+        "read_workflow_run",
+        "read_writer_twin",
     }
 )
 PROPOSE_TOOLS = frozenset(
     {
+        "propose_story_change",
+        "propose_outline",
         "propose_screenplay_change",
         "propose_timeline_reorder",
         "propose_dialogue_translation",
-        "list_room_workflows",
         "start_room_workflow",
+        "start_evaluation",
+        "snapshot_scene",
+        "refresh_story_twin_now",
+        "reindex_project_search",
     }
 )
-EDIT_TOOLS = frozenset({"apply_story_operation", "start_context_workflow"})
+# Direct writes. Each needs the writer's approval for that exact call: in chat it is asked for
+# in place (an AG-UI interrupt), and the approval becomes the call's approval_id.
+APPROVAL_TOOLS = frozenset(
+    {
+        "update_project",
+        "write_reference",
+        "create_story_entity",
+        "update_story_entity",
+        "delete_story_entity",
+        "create_act",
+        "update_act",
+        "delete_act",
+        "create_scene",
+        "write_scene",
+        "update_scene",
+        "move_scene",
+        "delete_scene",
+        "create_block",
+        "update_block",
+        "delete_block",
+        "reorder_blocks",
+        "restore_scene_revision",
+        "review_screenplay_proposal",
+        "reject_proposal",
+        "review_timeline_proposal",
+        "reject_timeline_proposal",
+        "apply_story_operation",
+        "apply_context_workflow",
+        "write_canon_node",
+        "write_canon_edge",
+        "write_artifact",
+        "update_writer_profile",
+        "remember_writer_preference",
+        "create_project_backup",
+        "control_workflow_run",
+    }
+)
+EDIT_TOOLS = APPROVAL_TOOLS | {"start_context_workflow", "import_screenplay", "duplicate_project"}
 
 
 def tools_for_mode(permission_mode: str) -> frozenset[str]:
-    """Return the MCP tools a permission mode allows: read, then propose, then edit."""
+    """Return the MCP tools a permission mode allows: read, then propose, then edit (each write approved)."""
     if permission_mode == "project_edit":
         return READ_TOOLS | PROPOSE_TOOLS | EDIT_TOOLS
     if permission_mode in {"suggest", "scoped_edit"}:
@@ -79,8 +138,12 @@ async def _stamp_identity(ctx: RunContext[RoomDeps], call_tool: Callable[..., An
     return await call_tool(name, args, metadata=identity_meta(agent))
 
 
-def room_toolset() -> Any:
-    """Return DraftPilot's MCP server as an in-process toolset, filtered per run by ``deps``."""
+def room_toolset(*, gate_writes: bool = False) -> Any:
+    """Return DraftPilot's MCP server as an in-process toolset, filtered per run by ``deps``.
+
+    With ``gate_writes`` (chat), calls to approval-required tools are deferred for the writer's
+    in-chat approval instead of failing with a pending approval request.
+    """
     from draftpilot.mcp.server import (
         mcp,  # imported lazily: loading the server has side effects
     )
@@ -91,7 +154,10 @@ def room_toolset() -> Any:
         return deps.tools and tool.name in tools_for_mode(deps.permission_mode)
 
     toolset: MCPToolset[RoomDeps] = MCPToolset(mcp, id="draftpilot", process_tool_call=_stamp_identity)
-    return toolset.filtered(allowed)
+    filtered = toolset.filtered(allowed)
+    if not gate_writes:
+        return filtered
+    return filtered.approval_required(lambda _ctx, tool, args: tool.name in APPROVAL_TOOLS and "approval_id" not in args)
 
 
 def _context_instructions(ctx: RunContext[RoomDeps]) -> str:
@@ -107,10 +173,15 @@ def _context_instructions(ctx: RunContext[RoomDeps]) -> str:
         + (f", with selection: {deps.selection!r}" if deps.selection else "")
         + ".",
         f"Permission mode: {deps.permission_mode}. "
-        + (
-            "You may only read and advise; describe changes in prose."
-            if deps.permission_mode == "chat_only"
-            else "You may create proposals; the writer approves or rejects every one. Never claim a change is applied."
+        + {
+            "chat_only": "You may only read and advise; describe changes in prose.",
+            "project_edit": (
+                "You may change the project directly with the write tools; the writer approves each call before it runs, "
+                "so ask for one coherent change at a time. Prefer propose_* tools for large or speculative changes."
+            ),
+        }.get(
+            deps.permission_mode,
+            "You may create proposals; the writer approves or rejects every one. Never claim a change is applied.",
         ),
     ]
     if deps.scene_id:
@@ -171,13 +242,17 @@ def _durability(name: str, event_stream_topic: str | None = None) -> TemporalDur
     )
 
 
-def _build_role_agent(spec: RoleSpec, durability: TemporalDurability[RoomDeps]) -> Agent[RoomDeps, Any]:
-    """Build one role's durable agent: its spec, the writer's context, and the filtered MCP tools."""
+def _build_role_agent(spec: RoleSpec, durability: TemporalDurability[RoomDeps], *, chat: bool = False) -> Agent[RoomDeps, Any]:
+    """Build one role's durable agent: its spec, the writer's context, and the filtered MCP tools.
+
+    Chat agents can end a turn by asking for the writer's approval (``DeferredToolRequests``).
+    """
     agent: Agent[RoomDeps, Any] = Agent(
         default_ref(),
         deps_type=RoomDeps,
         name=spec.key,
-        toolsets=[room_toolset()],
+        output_type=[str, DeferredToolRequests] if chat else str,
+        toolsets=[room_toolset(gate_writes=chat)],
         retries=2,
         capabilities=[ResolveModelId(resolve_room_model), durability],
     )
@@ -209,7 +284,7 @@ def chat_agents() -> dict[str, Agent[RoomDeps, Any]]:
 
     Room workflows host no event stream, so chat has agents of its own (``chat__<role>`` activities).
     """
-    return {key: _build_role_agent(spec, _durability(f"chat__{key}", CHAT_TOPIC)) for key, spec in load_specs().items()}
+    return {key: _build_role_agent(spec, _durability(f"chat__{key}", CHAT_TOPIC), chat=True) for key, spec in load_specs().items()}
 
 
 def room_agent_activities() -> list[Callable[..., Any]]:

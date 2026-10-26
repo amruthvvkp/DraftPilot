@@ -1,10 +1,11 @@
 """Test room agents working through DraftPilot's in-process MCP server (deterministic models)."""
 
 import json
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any
 
+import httpx
 import pytest
 from _async import run_async
 from _db import memory_session
@@ -233,13 +234,11 @@ def test_approval_required_writes_become_writer_requests(room: AsyncSession) -> 
     assert artifact is not None and artifact.artifact_metadata.get("logline") is None
 
 
-def test_streamed_chat_speaks_the_vercel_protocol_and_records_the_turn(
-    room: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """POST /room/chat runs the turn as a Temporal workflow, relays AI SDK v6 events, and records the turn."""
+@contextmanager
+def _chat_app(room: AsyncSession, monkeypatch: pytest.MonkeyPatch, model: FunctionModel) -> Iterator[Callable[[list[dict[str, Any]]], list[httpx.Response]]]:
+    """Serve the room router with a scripted model; yield a function that posts AG-UI bodies on a Temporal worker."""
     from collections.abc import AsyncGenerator
 
-    import httpx
     from _temporal import temporal_worker
     from fastapi import FastAPI
 
@@ -247,20 +246,19 @@ def test_streamed_chat_speaks_the_vercel_protocol_and_records_the_turn(
     from draftpilot.api.room import router
     from draftpilot.core.config import settings
     from draftpilot.core.db import async_get_db
-    from draftpilot.models import CopilotMessage
     from draftpilot.worker.activities import all_activities
     from draftpilot.worker.workflows import all_workflows
 
     @asynccontextmanager
     async def scope() -> AsyncIterator[AsyncSession]:
-        """Hand the transcript writer the shared test session."""
+        """Hand the transcript and thread writers the shared test session."""
         yield room
 
     async def dependency() -> AsyncGenerator[AsyncSession]:
         """Yield the shared test session to the route."""
         yield room
 
-    ref = register_model(_script({"tool": "read_project_overview", "args": {"project_id": 1}}, "Open on the river."))
+    ref = register_model(model)
 
     async def describe(_profile_id: int | None = None) -> str:
         """Return the scripted model instead of reaching a provider."""
@@ -270,37 +268,115 @@ def test_streamed_chat_speaks_the_vercel_protocol_and_records_the_turn(
         """Skip retrieval."""
         return []
 
-    monkeypatch.setattr("draftpilot.agents.chat.session_scope", scope)
+    for module in ("draftpilot.agents.chat", "draftpilot.mcp.studio_tools"):
+        monkeypatch.setattr(f"{module}.session_scope", scope)
     monkeypatch.setattr("draftpilot.api.room.describe_model", describe)
     monkeypatch.setattr("draftpilot.api.room.retrieve_context", no_context)
     monkeypatch.setattr(settings.llm, "enabled", True)
     app = FastAPI()
     app.dependency_overrides[async_get_db] = dependency
     app.include_router(router, prefix="/api/v1")
-    body = {"trigger": "submit-message", "id": "chat-1", "messages": [{"id": "m1", "role": "user", "parts": [{"type": "text", "text": "Where should we open?"}]}]}
 
-    async def chat() -> httpx.Response:
-        """Serve the turn on a worker and post it through the API."""
-        async with temporal_worker(all_workflows(), all_activities()) as (client, queue):
+    def post(bodies: list[dict[str, Any]]) -> list[httpx.Response]:
+        """Post each body in turn (the next may depend on the last), all on one worker."""
 
-            async def get_client() -> object:
-                """Return the test server's client."""
-                return client
+        async def turns() -> list[httpx.Response]:
+            """Run the turns."""
+            responses: list[httpx.Response] = []
+            async with temporal_worker(all_workflows(), all_activities()) as (client, queue):
 
-            monkeypatch.setattr("draftpilot.core.temporal.get_client", get_client)
-            monkeypatch.setattr(settings.temporal, "task_queue", queue)
-            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://studio") as http:
-                return await http.post("/api/v1/projects/1/room/chat?role=story_architect", json=body)
+                async def get_client() -> object:
+                    """Return the test server's client."""
+                    return client
 
-    response = run_async(chat())
-    assert response.status_code == 200
-    assert response.headers["x-vercel-ai-ui-message-stream"] == "v1"
-    assert "Open on the river." in response.text and "[DONE]" in response.text
-    assert "read_project_overview" in response.text
+                monkeypatch.setattr("draftpilot.core.temporal.get_client", get_client)
+                monkeypatch.setattr(settings.temporal, "task_queue", queue)
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://studio") as http:
+                    for body in bodies:
+                        built = body(responses) if callable(body) else body
+                        responses.append(await http.post("/api/v1/projects/1/room/chat", json=built))
+            return responses
+
+        return run_async(turns())
+
+    yield post
+
+
+def _events(response: httpx.Response) -> list[dict[str, Any]]:
+    """Decode an AG-UI SSE response into its events."""
+    return [json.loads(line.removeprefix("data: ")) for line in response.text.splitlines() if line.startswith("data: ")]
+
+
+def _run_input(text: str | None, *, thread: str = "thread-1", resume: list[dict[str, Any]] | None = None, **props: Any) -> dict[str, Any]:
+    """Build an AG-UI RunAgentInput body."""
+    messages = [{"id": "m1", "role": "user", "content": text}] if text else []
+    body: dict[str, Any] = {"threadId": thread, "runId": f"run-{len(props)}-{text}", "state": {}, "messages": messages, "tools": [], "context": [], "forwardedProps": props}
+    if resume:
+        body["resume"] = resume
+    return body
+
+
+def test_streamed_chat_speaks_ag_ui_records_the_turn_and_keeps_the_thread(room: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST /room/chat runs the turn on Temporal, relays AG-UI events, and keeps the thread server-side."""
+    from draftpilot.models import ChatThread, CopilotMessage
+
+    model = _script({"tool": "read_project_overview", "args": {"project_id": 1}}, "Open on the river.")
+    with _chat_app(room, monkeypatch, model) as post:
+        (response,) = post([_run_input("Where should we open?", role="story_architect")])
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/event-stream")
+    kinds = [event["type"] for event in _events(response)]
+    assert kinds[0] == "RUN_STARTED" and kinds[-1] == "RUN_FINISHED"
+    assert {"TOOL_CALL_START", "TOOL_CALL_RESULT", "TEXT_MESSAGE_CONTENT"} <= set(kinds)
+    assert "Open on the river." in response.text and "read_project_overview" in response.text
     runs = run_async(room.exec(select(AgentRun))).all()
     assert [(item.kind, item.status, item.tools_used) for item in runs] == [("chat", "succeeded", ["read_project_overview"])]
     turns = run_async(room.exec(select(CopilotMessage))).all()
     assert [(item.role, item.content) for item in turns] == [("user", "Where should we open?"), ("assistant", "Open on the river.")]
+    thread = run_async(room.get(ChatThread, "thread-1"))
+    assert thread is not None and thread.title == "Where should we open?" and len(thread.messages) == 4
+
+
+def test_chat_asks_the_writer_to_approve_a_write_then_runs_it(room: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A direct write ends the turn with an AG-UI interrupt; approving resumes it with a bound approval."""
+    from draftpilot.models import Character
+
+    create = {"tool": "create_story_entity", "args": {"project_id": 1, "kind": "character", "fields": {"name": "Karl", "role": "supporting"}}}
+    model = _script(create, "Karl the giant is in the cast.")
+
+    def resume(responses: list[httpx.Response]) -> dict[str, Any]:
+        """Approve the interrupt the first turn ended with."""
+        finished = [event for event in _events(responses[-1]) if event["type"] == "RUN_FINISHED"][-1]
+        (interrupt,) = finished["outcome"]["interrupts"]
+        return _run_input(None, resume=[{"interruptId": interrupt["id"], "status": "resolved", "payload": {"approved": True}}], role="showrunner", permission_mode="project_edit")
+
+    with _chat_app(room, monkeypatch, model) as post:
+        first, second = post([_run_input("Add Karl the giant.", role="showrunner", permission_mode="project_edit"), resume])  # type: ignore[list-item]
+    assert first.status_code == second.status_code == 200, (first.text, second.text)
+    assert "interrupts" in first.text and "Karl the giant is in the cast." in second.text
+    (karl,) = run_async(room.exec(select(Character))).all()
+    assert karl.name == "Karl" and karl.source == "agent"
+    approvals = run_async(room.exec(select(MCPApprovalRequest))).all()
+    assert [(item.capability, item.status) for item in approvals] == [("story.write", "consumed")]
+
+
+def test_denied_writes_never_run(room: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Denying the interrupt tells the agent no, and nothing is written."""
+    from draftpilot.models import Character
+
+    create = {"tool": "create_story_entity", "args": {"project_id": 1, "kind": "character", "fields": {"name": "Karl"}}}
+    model = _script(create, "Understood, no Karl.")
+
+    def deny(responses: list[httpx.Response]) -> dict[str, Any]:
+        """Deny the pending interrupt."""
+        finished = [event for event in _events(responses[-1]) if event["type"] == "RUN_FINISHED"][-1]
+        (interrupt,) = finished["outcome"]["interrupts"]
+        return _run_input(None, resume=[{"interruptId": interrupt["id"], "status": "resolved", "payload": {"approved": False, "reason": "Not yet"}}], permission_mode="project_edit")
+
+    with _chat_app(room, monkeypatch, model) as post:
+        _first, second = post([_run_input("Add Karl.", permission_mode="project_edit"), deny])  # type: ignore[list-item]
+    assert "Understood, no Karl." in second.text
+    assert run_async(room.exec(select(Character))).all() == []
+    assert run_async(room.exec(select(MCPApprovalRequest))).all() == []
 
 
 def test_showrunner_delegates_to_a_specialist_and_shares_the_budget(room: AsyncSession) -> None:
