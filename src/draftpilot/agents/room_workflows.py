@@ -11,6 +11,7 @@ must pass the replay tests over ``tests/temporal_histories/``.
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
+from datetime import timedelta
 from typing import Any, ClassVar
 
 from temporalio import workflow
@@ -47,12 +48,15 @@ with workflow.unsafe.imports_passed_through():
         STEP_GUIDANCE,
         ArcParams,
         BrainstormParams,
+        Cast,
         CharacterArc,
+        CharacterTimeline,
         ContinuityParams,
         ContinuityReport,
         Coverage,
         CoverageParams,
         Critique,
+        DevelopStoryParams,
         DraftScenesParams,
         IdeaSet,
         Outline,
@@ -64,20 +68,29 @@ with workflow.unsafe.imports_passed_through():
         RoomRunInput,
         SceneDraft,
         Shortlist,
+        StorylineDraft,
+        cast_ids,
         critique_text,
         find_leads,
         known_scene_ids,
+        link_beat_scenes,
         load_scene,
         outline_beats,
         outline_text,
+        proposal_states,
         propose_arcs,
+        propose_beats,
+        propose_cast,
         propose_outline,
         propose_rewrite,
         propose_scenes,
+        propose_storyline,
+        propose_timeline,
         record_agent_run,
         record_progress,
         rewrite_facts,
         scope_text,
+        story_brief,
         summarize_panel,
     )
 
@@ -497,6 +510,187 @@ class RoomChat:
         return reply
 
 
+@workflow.defn(name="room:develop_story")
+class DevelopStory(RoomWorkflowBase):
+    """Develop a story stage by stage, pausing at each checkpoint until the writer decides its proposals.
+
+    Stages: storyline → cast (one specialist call) → a timeline per lead (in parallel) → an outline
+    through a draft-critique loop → the first beats drafted as scenes (in parallel) → coverage. Each
+    stage ends in proposals; the writer's decisions arrive as ``proposal_decided`` signals (the
+    proposals API sends them), and the next stage builds only on what the writer approved.
+    """
+
+    key = "develop_story"
+
+    def __init__(self) -> None:
+        """Track the stage and the writer's decisions."""
+        super().__init__()
+        self.stage = "starting"
+        self.decided: dict[int, str] = {}
+
+    @workflow.signal
+    def proposal_decided(self, proposal_id: int, status: str) -> None:
+        """Record the writer's decision on one of this run's proposals."""
+        self.decided[proposal_id] = status
+
+    @workflow.query
+    def current_stage(self) -> str:
+        """Return the stage the pipeline is in (or waiting at)."""
+        return self.stage
+
+    @workflow.run
+    async def run(self, run: RoomRunInput) -> dict[str, Any]:
+        """Run every requested stage."""
+        return await self.execute(run, DevelopStoryParams, self.body)
+
+    async def _checkpoint(self, stage: str, proposal_ids: list[int], params: DevelopStoryParams) -> dict[int, dict[str, Any]]:
+        """Wait until the writer has decided every proposal of a stage, then refresh the story context."""
+        self.stage = f"waiting: {stage}"
+        states: dict[int, dict[str, Any]] = await self.activity(proposal_states, self.room.project_id, proposal_ids)
+        self.decided.update({key: value["status"] for key, value in states.items() if value["status"] != "proposed"})
+
+        def all_decided() -> bool:
+            """Return whether every proposal of the stage has a decision."""
+            return all(proposal_id in self.decided for proposal_id in proposal_ids)
+
+        try:
+            await workflow.wait_condition(all_decided, timeout=timedelta(hours=params.wait_hours))
+        except TimeoutError:
+            pass
+        # Read the final states (a signal may have been lost while the worker was down).
+        states = await self.activity(proposal_states, self.room.project_id, proposal_ids)
+        if any(value["status"] == "proposed" for value in states.values()):
+            raise ApplicationError(f"Still waiting for your decisions on the {stage}", type="WaitingForWriter", non_retryable=True)
+        self.room = replace(self.room, story_brief=await self.activity(story_brief, self.room.project_id))
+        self.stage = f"done: {stage}"
+        return states
+
+    async def body(self, params: DevelopStoryParams) -> dict[str, Any]:
+        """Storyline, cast, timelines, outline, scenes, coverage — each gated on the writer."""
+        result: dict[str, Any] = {"stages": {}, "proposal_ids": []}
+
+        def record(stage: str, ids: list[int], states: dict[int, dict[str, Any]], **extra: Any) -> None:
+            """Keep what a stage proposed and what the writer decided."""
+            result["proposal_ids"].extend(ids)
+            approved = sum(state["status"] == "approved" for state in states.values())
+            result["stages"][stage] = {"proposed": len(ids), "approved": approved, **extra}
+
+        idea = params.idea
+        if "storyline" in params.stages:
+            self.stage = "storyline"
+            draft = await self.consult(
+                "storyline",
+                "story_architect",
+                "Develop this idea into a storyline: a title, a one-sentence logline, the premise (the dramatic question), "
+                f"a one-page synopsis from beginning to end, the theme and the tone.\n\nIdea:\n{idea}",
+                StorylineDraft,
+                tools=False,
+            )
+            ids = await self.activity(propose_storyline, self.room.project_id, self.room.workflow_run_id, draft)
+            record("storyline", ids, await self._checkpoint("storyline", ids, params), logline=draft.logline)
+        cast_names: list[str] = []
+        if "characters" in params.stages:
+            self.stage = "characters"
+            cast = await self.consult(
+                "cast",
+                "character_specialist",
+                f"Create the principal cast ({params.cast_size} characters, leads first) for the story in the Story twin"
+                f" (and this idea: {idea[:2000]}). For each: role, a one-line summary, want, need, motive, objective, flaw, "
+                "arc summary and voice. Make their wants collide.",
+                Cast,
+                tools=False,
+            )
+            ids = await self.activity(propose_cast, self.room.project_id, self.room.workflow_run_id, cast)
+            states = await self._checkpoint("cast", ids, params)
+            cast_names = [member.name for member in cast.characters]
+            record("characters", ids, states, cast=cast_names)
+        if "timelines" in params.stages:
+            self.stage = "timelines"
+            known: dict[str, int] = await self.activity(cast_ids, self.room.project_id, cast_names) if cast_names else {}
+            leads = list(known.items())[: min(4, max(1, params.cast_size))]
+
+            async def timeline(name: str, character_id: int) -> list[int]:
+                """Develop one lead's timeline and propose it."""
+                moments = await self.consult(
+                    f"timeline: {name}",
+                    "character_specialist",
+                    f"Trace {name}'s arc through the story as 4-8 moments in story order: when it happens, what happens, "
+                    "what they want in that moment, and how they feel.",
+                    CharacterTimeline,
+                    tools=False,
+                )
+                ids: list[int] = await self.activity(propose_timeline, self.room.project_id, self.room.workflow_run_id, character_id, name, moments)
+                return ids
+
+            ids = [item for batch in await asyncio.gather(*(timeline(name, character_id) for name, character_id in leads)) for item in batch]
+            if ids:
+                record("timelines", ids, await self._checkpoint("timelines", ids, params), characters=[name for name, _ in leads])
+        if "outline" in params.stages:
+            self.stage = "outline"
+            outline = await self.consult(
+                "outline",
+                "story_editor",
+                "Write the beat outline of this story (three acts, roughly 12-24 causally linked beats). Build on the "
+                f"approved storyline, cast and timelines in the Story twin.\n\nIdea:\n{idea[:4000]}",
+                Outline,
+                tools=False,
+            )
+            for round_number in range(1, params.outline_rounds + 1):
+                critique = await self.consult(
+                    f"critique_{round_number}",
+                    "script_doctor",
+                    f"Critique this outline for causality, stakes, escalation and payoff.\n\n{outline_text(outline)}",
+                    Critique,
+                    tools=False,
+                )
+                if critique.score >= 8:
+                    break
+                outline = await self.consult(
+                    f"revise_{round_number}",
+                    "story_editor",
+                    f"Revise this outline to address the critique. Keep what works.\n\n{outline_text(outline)}\n\n{critique_text(critique)}",
+                    Outline,
+                    tools=False,
+                )
+            ids = await self.activity(propose_beats, self.room.project_id, self.room.workflow_run_id, outline)
+            record("outline", ids, await self._checkpoint("outline", ids, params), beats=len(outline.beats))
+        if "scenes" in params.stages and params.draft_beats:
+            self.stage = "scenes"
+            beats = (await self.activity(outline_beats, self.room.project_id, None))[: params.draft_beats]
+            if beats:
+
+                async def write(index: int, beat: dict[str, Any]) -> dict[str, Any]:
+                    """Dramatise one beat as a scene."""
+                    draft = await self.consult(
+                        f"scene: {beat['title']}",
+                        "scene_writer",
+                        "Write this beat as one new screenplay scene in Fountain, heading first, true to each character's voice "
+                        f"and objective.\n\nBeat: {beat['title']} — {beat.get('summary', '')}",
+                        SceneDraft,
+                    )
+                    return {"index": index, "title": beat["title"], "beat_id": beat.get("beat_id"), **draft.model_dump()}
+
+                drafts = sorted(await asyncio.gather(*(write(index, beat) for index, beat in enumerate(beats))), key=lambda item: item["index"])
+                ids = await self.activity(propose_scenes, self.room.project_id, self.room.workflow_run_id, drafts)
+                states = await self._checkpoint("scenes", ids, params)
+                created = next((state.get("created_scene_ids") for state in states.values() if state.get("created_scene_ids")), None) or []
+                links = [[draft["beat_id"], scene_id] for draft, scene_id in zip(drafts, created, strict=False) if draft.get("beat_id")]
+                linked = await self.activity(link_beat_scenes, self.room.project_id, links) if links else 0
+                record("scenes", ids, states, drafted=len(drafts), linked=linked)
+        if "coverage" in params.stages:
+            self.stage = "coverage"
+            report = await self.consult(
+                "coverage",
+                "coverage_reader",
+                "Write studio coverage of the story so far (storyline, cast, outline and any drafted scenes): logline, "
+                "synopsis, 1-10 grades for premise, structure, character, dialogue and pacing, strengths, weaknesses, verdict.",
+                Coverage,
+            )
+            result["coverage"] = report.model_dump()
+        self.stage = "finished"
+        return result
+
+
 ROOM_WORKFLOW_CLASSES: list[type] = [
     NotesToOutline,
     DraftScenes,
@@ -506,4 +700,5 @@ ROOM_WORKFLOW_CLASSES: list[type] = [
     AudiencePanel,
     CoverageReport,
     ContinuityPass,
+    DevelopStory,
 ]

@@ -24,6 +24,7 @@ from pydantic_ai.models.function import (
 )
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from test_room_workflows import _all, project  # noqa: F401 - project is a fixture
 
 from draftpilot.agents import runtime
 from draftpilot.agents.deps import RoomDeps
@@ -412,6 +413,38 @@ def test_showrunner_delegates_to_a_specialist_and_shares_the_budget(room: AsyncS
     delegate = next(run for run in runs if run.kind == "delegate")
     assert (delegate.role, delegate.status) == ("continuity_supervisor", "succeeded")
     assert record.requests >= 3  # two showrunner requests plus the specialist's, on one shared budget
+
+
+def test_showrunner_plans_then_consults_specialists_in_parallel(project: AsyncSession) -> None:  # noqa: F811 - fixture
+    """``plan`` records a checklist; ``consult_many`` runs several specialists and labels each answer."""
+
+    def respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        """Plan, fan out to two specialists, then synthesise; specialists answer directly."""
+        if not any(tool.name == "consult_many" for tool in info.function_tools):
+            return ModelResponse(parts=[TextPart(content="Specialist answer.")])
+        done = {part.tool_name for message in messages for part in getattr(message, "parts", []) if isinstance(part, ToolReturnPart)}
+        if "plan" not in done:
+            return ModelResponse(parts=[ToolCallPart(tool_name="plan", args={"goal": "Check the cast", "steps": ["Arcs", "Continuity"]})])
+        if "consult_many" not in done:
+            briefs = [{"role": "character_specialist", "brief": "Arcs?"}, {"role": "continuity_supervisor", "brief": "Ages?"}]
+            return ModelResponse(parts=[ToolCallPart(tool_name="consult_many", args={"requests": briefs})])
+        returns = [part for message in messages for part in getattr(message, "parts", []) if isinstance(part, ToolReturnPart) and part.tool_name == "consult_many"]
+        return ModelResponse(parts=[TextPart(content=f"Both answered: {returns[0].content}")])
+
+    async def stream(messages: list[ModelMessage], info: AgentInfo) -> AsyncIterator[str]:
+        """Streaming is unused here."""
+        yield respond(messages, info).parts[0].content  # type: ignore[union-attr]
+
+    reply, record = run_async(
+        runtime.run_room_agent(
+            role_spec("showrunner"), FunctionModel(respond, stream_function=stream), RoomDeps(project_id=1, permission_mode="chat_only"),
+            "Check the cast.", provider="test", model_name="scripted",
+        )
+    )
+    assert record.tools_used == ["plan", "consult_many"]
+    assert "[Character specialist] Specialist answer." in reply and "[Continuity supervisor] Specialist answer." in reply
+    delegates = sorted(run.role for run in _all(project, AgentRun) if run.kind == "delegate")
+    assert delegates == ["character_specialist", "continuity_supervisor"]
 
 
 def test_showrunner_is_told_to_retry_on_an_unknown_specialist(room: AsyncSession) -> None:

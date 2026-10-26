@@ -8,6 +8,7 @@ identity, bound to one project. Every run is measured as an ``AgentRun`` (model,
 duration, trace id).
 """
 
+import asyncio
 import json
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
@@ -331,8 +332,16 @@ SPECIALISTS = frozenset(
 )
 
 
+@dataclass
+class Consultation:
+    """One brief for one specialist."""
+
+    role: str
+    brief: str
+
+
 def _add_consult_tool(agent: Agent[RoomDeps, Any]) -> None:
-    """Give the showrunner a tool to delegate one brief to one specialist."""
+    """Give the showrunner tools to plan, and to delegate briefs to one or several specialists."""
 
     # A consultation runs a whole specialist, so its activity gets a model-sized timeout.
     @agent.tool(metadata={"temporal": ActivityConfig(start_to_close_timeout=timedelta(seconds=settings.temporal.model_timeout_seconds * 2))})
@@ -365,6 +374,26 @@ def _add_consult_tool(agent: Agent[RoomDeps, Any]) -> None:
                 raise
         await meter.finish(result)
         return f"[{spec.label}] {result.output}"
+
+    @agent.tool(metadata={"temporal": ActivityConfig(start_to_close_timeout=timedelta(seconds=settings.temporal.model_timeout_seconds * 3))})
+    async def consult_many(ctx: RunContext[RoomDeps], requests: list[Consultation]) -> list[str]:
+        """Ask several specialists at once (in parallel), each with their own self-contained brief.
+
+        Use it when the parts are independent: e.g. the character specialist on arcs and the
+        continuity supervisor on facts. Each answer is labelled with its specialist.
+        """
+        if not requests or len(requests) > 6:
+            raise ModelRetry("Send between 1 and 6 consultations")
+        answers = await asyncio.gather(*(consult(ctx, item.role, item.brief) for item in requests), return_exceptions=True)
+        return [answer if isinstance(answer, str) else f"[{item.role}] failed: {answer}" for item, answer in zip(requests, answers, strict=True)]
+
+    @agent.tool_plain
+    def plan(steps: list[str], goal: str = "") -> dict[str, Any]:
+        """Write down your plan for a multi-step job before starting it; the writer sees it as a checklist.
+
+        Call it again with the updated list as steps are done (prefix finished steps with "✓ ").
+        """
+        return {"goal": goal, "steps": steps[:20], "done": sum(step.startswith("✓") for step in steps)}
 
 
 def usage_limits(spec: RoleSpec) -> UsageLimits:

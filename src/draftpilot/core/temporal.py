@@ -104,3 +104,16 @@ async def cancel_run(run_id: int | None) -> None:
         await (await get_client()).get_workflow_handle(run_workflow_id(run_id)).cancel()
     except Exception as exc:  # noqa: BLE001 - the Postgres status is authoritative for the UI
         logfire.warning("Workflow cancel for run {run_id} skipped: {exc}", run_id=run_id, exc=str(exc))
+
+
+async def signal_run(run_id: int | None, signal: str, *args: Any) -> bool:
+    """Signal a run's room workflow (best effort); a run that has finished or has none is left alone."""
+    if run_id is None:
+        return False
+    try:
+        handle = (await get_client()).get_workflow_handle(f"{run_workflow_id(run_id)}-room")
+        await handle.signal(signal, args=list(args))
+    except Exception as exc:  # noqa: BLE001 - most runs are not waiting; Postgres stays authoritative
+        logfire.debug("Signal {signal} to run {run_id} skipped: {exc}", signal=signal, run_id=run_id, exc=str(exc))
+        return False
+    return True

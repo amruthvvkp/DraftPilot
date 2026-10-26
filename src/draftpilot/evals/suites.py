@@ -10,10 +10,17 @@ from pydantic_evals.evaluators import LLMJudge
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.runtime import run_role
 from draftpilot.agents.specs import role_spec
-from draftpilot.agents.workflows import WorkflowDeps, run_room_workflow, scene_fountain
+from draftpilot.agents.workflows import (
+    Cast,
+    StorylineDraft,
+    WorkflowDeps,
+    run_room_workflow,
+    scene_fountain,
+)
 from draftpilot.core.db import session_scope
 from draftpilot.core.screenplay.hydrate import blocks_for_scene
 from draftpilot.evals.evaluators import (
+    CastDeveloped,
     CritiqueImproved,
     FoundPlanted,
     KeepsCast,
@@ -21,6 +28,7 @@ from draftpilot.evals.evaluators import (
     NoHallucinatedScenes,
     OutlineShape,
     Shorter,
+    StorylineComplete,
     UsedTools,
     ValidScene,
 )
@@ -189,6 +197,60 @@ async def continuity(project: EvalProject, model: Any, name: str, judge: Any) ->
     return dataset, task
 
 
+async def storyline(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+    """Develop the lighthouse notes into a storyline (logline, premise, synopsis, theme, tone)."""
+    dataset = Dataset[Any, Any, Any](
+        name="storyline",
+        cases=[Case(name="lighthouse", inputs=NOTES, evaluators=(MentionsAny(["mara", "light", "storm"], minimum=2),))],
+        evaluators=[
+            StorylineComplete(),
+            LLMJudge(
+                rubric="The storyline is specific and dramatic: the logline names a protagonist, a goal and an obstacle; "
+                "the synopsis runs from beginning to end; theme and tone fit the writer's notes, which it never contradicts.",
+                model=judge, include_input=True,
+            ),
+        ],
+    )
+
+    async def task(notes: str) -> dict[str, Any]:
+        """Ask the story architect for a storyline."""
+        draft: StorylineDraft
+        draft, record = await run_role(role_spec("story_architect"), model, _room(project),
+                                       f"Develop these notes into a storyline.\n\nNotes:\n{notes}", StorylineDraft,
+                                       provider="lm_studio", model_name=name, kind="eval", tools=False)
+        _measure(record)
+        return draft.model_dump()
+
+    return dataset, task
+
+
+async def cast(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+    """Build the lighthouse cast: profiles with want, need, motive, objective, flaw and arc."""
+    dataset = Dataset[Any, Any, Any](
+        name="cast",
+        cases=[Case(name="lighthouse", inputs=NOTES)],
+        evaluators=[
+            CastDeveloped(),
+            LLMJudge(
+                rubric="The characters' wants collide; each has an inner need distinct from their want; the cast serves "
+                "the writer's notes and includes the characters the notes name.",
+                model=judge, include_input=True,
+            ),
+        ],
+    )
+
+    async def task(notes: str) -> dict[str, Any]:
+        """Ask the character specialist for the principal cast."""
+        result: Cast
+        result, record = await run_role(role_spec("character_specialist"), model, _room(project),
+                                        f"Create the principal cast (3-5 characters, leads first) for these notes.\n\nNotes:\n{notes}", Cast,
+                                        provider="lm_studio", model_name=name, kind="eval", tools=False)
+        _measure(record)
+        return result.model_dump()
+
+    return dataset, task
+
+
 SUITES: dict[str, Suite] = {
     suite.name: suite
     for suite in (
@@ -196,5 +258,7 @@ SUITES: dict[str, Suite] = {
         Suite("rewrite", "Scene rewrites to a brief through the draft-critique loop", rewrite),
         Suite("outline", "Notes → outline from scratch", outline),
         Suite("continuity", "Catching a planted timeline contradiction", continuity),
+        Suite("storyline", "Notes → storyline (logline, premise, synopsis, theme, tone)", storyline),
+        Suite("cast", "Notes → a principal cast with motives and objectives", cast),
     )
 }

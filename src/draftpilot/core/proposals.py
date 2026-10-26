@@ -6,7 +6,7 @@ from typing import Any, cast
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.core import events, indexing
+from draftpilot.core import events, indexing, temporal
 from draftpilot.core.agent_roles import normalize_permission_mode
 from draftpilot.core.errors import Conflict, Forbidden, Invalid, NotFound
 from draftpilot.core.scene_proposals import (
@@ -269,7 +269,7 @@ async def create_proposal(session: AsyncSession, project_id: int, data: Proposal
     return AgentProposalRead.model_validate(proposal)
 
 
-async def approve(session: AsyncSession, project_id: int, proposal_id: int) -> AgentProposalRead:
+async def _approve(session: AsyncSession, project_id: int, proposal_id: int) -> AgentProposalRead:
     """Apply a typed proposal only when its target version is unchanged."""
     proposal = await proposals_crud.get(session, proposal_id)
     if proposal is None or proposal.project_id != project_id:
@@ -399,7 +399,7 @@ async def approve(session: AsyncSession, project_id: int, proposal_id: int) -> A
     return AgentProposalRead.model_validate(proposal)
 
 
-async def reject(session: AsyncSession, project_id: int, proposal_id: int) -> AgentProposalRead:
+async def _reject(session: AsyncSession, project_id: int, proposal_id: int) -> AgentProposalRead:
     """Reject a pending proposal without touching its target."""
     proposal = await proposals_crud.get(session, proposal_id)
     if proposal is None or proposal.project_id != project_id:
@@ -497,3 +497,19 @@ async def rollback(session: AsyncSession, project_id: int, proposal_id: int) -> 
     return AgentProposalRead.model_validate(proposal)
 
 
+
+
+async def _decided(proposal: AgentProposalRead) -> AgentProposalRead:
+    """Tell the run that made a proposal (a waiting room workflow) that the writer decided it."""
+    await temporal.signal_run(proposal.run_id, "proposal_decided", proposal.id, proposal.status)
+    return proposal
+
+
+async def approve(session: AsyncSession, project_id: int, proposal_id: int) -> AgentProposalRead:
+    """Apply a typed proposal only when its target version is unchanged, and tell its run."""
+    return await _decided(await _approve(session, project_id, proposal_id))
+
+
+async def reject(session: AsyncSession, project_id: int, proposal_id: int) -> AgentProposalRead:
+    """Reject a pending proposal without touching its target, and tell its run."""
+    return await _decided(await _reject(session, project_id, proposal_id))

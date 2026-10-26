@@ -16,6 +16,7 @@ from datetime import timedelta
 from statistics import mean
 from typing import Any, Literal
 
+import logfire
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel.ext.asyncio.session import AsyncSession
 from temporalio import activity
@@ -24,6 +25,7 @@ from temporalio.common import RetryPolicy
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.core import events
 from draftpilot.core.db import session_scope
+from draftpilot.core.errors import NotFound
 from draftpilot.core.scene_proposals import (
     append_operation,
     parse_scene_fountain,
@@ -36,7 +38,7 @@ from draftpilot.core.screenplay.schema import ActDoc, BlockType, ScreenplayDoc
 from draftpilot.core.story import entities as story_entities
 from draftpilot.core.story.proposals import propose_outline as propose_outline_beats
 from draftpilot.core.story.proposals import propose_story_change
-from draftpilot.core.twins import normalize_cue, working_screenplay
+from draftpilot.core.twins import normalize_cue, story_twin_brief, working_screenplay
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
@@ -240,6 +242,68 @@ class CoverageParams(BaseModel):
     """Write studio coverage of the working draft."""
 
     focus: str = Field(default="", max_length=2000)
+
+
+class StorylineDraft(BaseModel):
+    """A developed storyline: what the film is about, in a few precise fields."""
+
+    title: str = Field(min_length=1, max_length=200)
+    logline: str = Field(min_length=1, max_length=500)
+    premise: str = Field(min_length=1, max_length=2000, description="The dramatic question and why it matters.")
+    synopsis: str = Field(min_length=1, max_length=6000, description="A one-page synopsis, beginning to end.")
+    theme: str = Field(min_length=1, max_length=1000)
+    tone: str = Field(min_length=1, max_length=500)
+
+
+class CastMember(BaseModel):
+    """One character as the room proposes them."""
+
+    name: str = Field(min_length=1, max_length=200)
+    role: str = Field(default="supporting", description="protagonist, antagonist, supporting or minor")
+    summary: str = Field(min_length=1, max_length=1000)
+    want: str = Field(min_length=1, max_length=1000, description="The conscious, external goal.")
+    need: str = Field(min_length=1, max_length=1000, description="The inner truth they must accept.")
+    motive: str = Field(default="", max_length=1000)
+    objective: str = Field(default="", max_length=1000, description="What they concretely pursue in the story.")
+    flaw: str = Field(default="", max_length=1000)
+    arc_summary: str = Field(default="", max_length=2000)
+    voice: str = Field(default="", max_length=1000)
+
+
+class Cast(BaseModel):
+    """The principal cast."""
+
+    characters: list[CastMember] = Field(min_length=1, max_length=8)
+
+
+class TimelineMoment(BaseModel):
+    """One moment of a character's personal timeline."""
+
+    story_time: str = Field(default="", max_length=100)
+    title: str = Field(min_length=1, max_length=300)
+    objective: str = Field(default="", max_length=1000)
+    emotional_state: str = Field(default="", max_length=300)
+
+
+class CharacterTimeline(BaseModel):
+    """A character's arc as moments in story order."""
+
+    moments: list[TimelineMoment] = Field(min_length=2, max_length=10)
+
+
+PipelineStage = Literal["storyline", "characters", "timelines", "outline", "scenes", "coverage"]
+PIPELINE_STAGES: tuple[PipelineStage, ...] = ("storyline", "characters", "timelines", "outline", "scenes", "coverage")
+
+
+class DevelopStoryParams(BaseModel):
+    """Develop a story from an idea through storyline, cast, timelines, outline and first scenes."""
+
+    idea: str = Field(min_length=1, max_length=20_000, description="The premise, notes or pitch to develop.")
+    stages: list[PipelineStage] = Field(default_factory=lambda: list(PIPELINE_STAGES))
+    cast_size: int = Field(default=4, ge=1, le=8)
+    outline_rounds: int = Field(default=1, ge=0, le=3)
+    draft_beats: int = Field(default=3, ge=0, le=12, description="How many outline beats to draft as scenes.")
+    wait_hours: int = Field(default=72, ge=1, le=24 * 30, description="How long to wait for the writer at each checkpoint.")
 
 
 class ContinuityParams(BaseModel):
@@ -462,8 +526,12 @@ async def load_scene(project_id: int, scene_id: int) -> str:
 
 @activity.defn(name="room_outline_beats")
 async def outline_beats(project_id: int, outline_artifact_id: int | None) -> list[dict[str, Any]]:
-    """Return the beats stored on the project's outline artifact (or the one named)."""
+    """Return the outline's beats: the typed beats (with their ids), else those on the outline artifact."""
     async with session_scope() as session:
+        if outline_artifact_id is None:
+            beats = await story_entities.list_entities(session, project_id, "beat")
+            if beats:
+                return [{"title": beat.title, "summary": beat.summary or beat.title, "beat_id": beat.id} for beat in beats if beat.status != "cut"]
         artifacts = await artifacts_crud.list_for_project(session, project_id)
     outline = next(
         (item for item in artifacts if item.id == outline_artifact_id or (outline_artifact_id is None and item.kind == "outline")),
@@ -587,6 +655,118 @@ async def propose_scenes(project_id: int, run_id: int | None, drafts: list[dict[
     return [proposal.id or 0]
 
 
+@activity.defn(name="room_story_brief")
+async def story_brief(project_id: int) -> str:
+    """Return the current Story twin brief (it changes as the writer approves each stage)."""
+    async with session_scope() as session:
+        return await story_twin_brief(session, project_id)
+
+
+@activity.defn(name="room_propose_storyline")
+async def propose_storyline(project_id: int, run_id: int | None, draft: StorylineDraft) -> list[int]:
+    """Propose the developed storyline as one storyline change."""
+    async with session_scope() as session:
+        proposal = await propose_story_change(
+            session, project_id, "storyline", "update", draft.model_dump(), run_id=run_id, summary=f"Storyline: {draft.logline}"
+        )
+    return [proposal.id or 0]
+
+
+@activity.defn(name="room_propose_beats")
+async def propose_beats(project_id: int, run_id: int | None, outline: Outline) -> list[int]:
+    """Propose an outline's beats (without its logline) as the project outline."""
+    async with session_scope() as session:
+        proposal = await propose_outline_beats(
+            session, project_id, [beat.model_dump() for beat in outline.beats], run_id=run_id, summary=f"{len(outline.beats)}-beat outline"
+        )
+    return [proposal.id or 0]
+
+
+@activity.defn(name="room_propose_cast")
+async def propose_cast(project_id: int, run_id: int | None, cast: Cast) -> list[int]:
+    """Propose each cast member (a new character, or an update to one who already exists)."""
+    ids: list[int] = []
+    async with session_scope() as session:
+        existing = {row.name.casefold(): row for row in await story_entities.list_entities(session, project_id, "character")}
+        for member in cast.characters:
+            fields = {key: value for key, value in member.model_dump().items() if value}
+            row = existing.get(member.name.casefold())
+            if row is None:
+                proposal = await propose_story_change(session, project_id, "character", "create", fields, run_id=run_id, summary=f"New character: {member.name}")
+            else:
+                fields.pop("name", None)
+                proposal = await propose_story_change(
+                    session, project_id, "character", "update", fields, entity_id=row.id, run_id=run_id, summary=f"Develop {row.name}"
+                )
+            ids.append(proposal.id or 0)
+    return ids
+
+
+@activity.defn(name="room_proposal_states")
+async def proposal_states(project_id: int, proposal_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Return each proposal's status and what approving it created (by proposal id)."""
+    async with session_scope() as session:
+        rows = [await proposals_crud.get(session, proposal_id) for proposal_id in proposal_ids]
+    return {
+        row.id or 0: {"status": row.status, "target_kind": row.target_kind, "target_id": row.target_id, "created_id": row.diff.get("created_id"), "created_scene_ids": row.diff.get("created_scene_ids")}
+        for row in rows
+        if row is not None and row.project_id == project_id
+    }
+
+
+@activity.defn(name="room_cast_ids")
+async def cast_ids(project_id: int, names: list[str]) -> dict[str, int]:
+    """Return the ids of the named characters that now exist."""
+    async with session_scope() as session:
+        rows = await story_entities.list_entities(session, project_id, "character")
+    wanted = {name.casefold() for name in names}
+    return {row.name: row.id or 0 for row in rows if row.name.casefold() in wanted}
+
+
+@activity.defn(name="room_propose_timeline")
+async def propose_timeline(project_id: int, run_id: int | None, character_id: int, name: str, timeline: CharacterTimeline) -> list[int]:
+    """Propose a character's timeline moments, in order."""
+    ids: list[int] = []
+    async with session_scope() as session:
+        for position, moment in enumerate(timeline.moments):
+            proposal = await propose_story_change(
+                session,
+                project_id,
+                "timeline_event",
+                "create",
+                {"character_id": character_id, "position": position, **moment.model_dump()},
+                run_id=run_id,
+                summary=f"{name}: {moment.title}",
+            )
+            ids.append(proposal.id or 0)
+    return ids
+
+
+@activity.defn(name="room_link_beat_scenes")
+async def link_beat_scenes(project_id: int, links: list[list[int]]) -> int:
+    """Link approved scenes to the beats they dramatise (``[beat_id, scene_id]`` pairs) and mark the beats drafted."""
+    linked = 0
+    async with session_scope() as session:
+        for beat_id, scene_id in links:
+            try:
+                beat = await story_entities.get_entity(session, project_id, "beat", beat_id)
+            except NotFound:
+                logfire.info("Beat {beat_id} is gone; its scene stays unlinked", beat_id=beat_id)
+                continue
+            await story_entities.update_entity(
+                session,
+                project_id,
+                "beat",
+                beat_id,
+                {"scene_ids": sorted({*beat.scene_ids, scene_id}), "status": "drafted"},
+                expected_version=None,
+                require_version=False,
+                source="agent",
+            )
+            linked += 1
+    return linked
+
+
 ROOM_ACTIVITIES: list[Callable[..., Any]] = [
     record_progress,
     record_agent_run,
@@ -598,6 +778,14 @@ ROOM_ACTIVITIES: list[Callable[..., Any]] = [
     propose_arcs,
     propose_rewrite,
     propose_scenes,
+    story_brief,
+    propose_beats,
+    propose_storyline,
+    propose_cast,
+    proposal_states,
+    cast_ids,
+    propose_timeline,
+    link_beat_scenes,
 ]
 
 
@@ -634,6 +822,14 @@ ROOM_WORKFLOWS: dict[str, RoomWorkflow] = {
         RoomWorkflow("audience_panel", "Audience panel", "Test the script on a panel of viewer personas.", PanelParams, ("audience_evaluator",), False),
         RoomWorkflow("coverage", "Coverage", "Studio-style coverage with graded craft and a verdict.", CoverageParams, ("coverage_reader",), False),
         RoomWorkflow("continuity", "Continuity pass", "Find timeline, character, prop and fact inconsistencies.", ContinuityParams, ("continuity_supervisor",), False),
+        RoomWorkflow(
+            "develop_story",
+            "Develop the story",
+            "From an idea to storyline, cast, character timelines, a critiqued outline and first scenes — pausing for your approval after each stage.",
+            DevelopStoryParams,
+            ("story_architect", "character_specialist", "story_editor", "script_doctor", "scene_writer", "coverage_reader"),
+            True,
+        ),
     )
 }
 

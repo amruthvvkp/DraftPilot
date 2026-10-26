@@ -137,3 +137,30 @@ class NoHallucinatedScenes(Evaluator[Any, Any, Any]):
         """Check the dropped-issue count."""
         dropped = int(ctx.output.get("dropped", 0))
         return EvaluationReason(dropped == 0, f"{dropped} issues cited scenes outside the draft")
+
+
+@dataclass
+class StorylineComplete(Evaluator[Any, Any, Any]):
+    """Every storyline field is filled and the logline is one sentence."""
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
+        """Check the fields and the logline length."""
+        output = ctx.output or {}
+        missing = [name for name in ("title", "logline", "premise", "synopsis", "theme", "tone") if not str(output.get(name, "")).strip()]
+        sentences = str(output.get("logline", "")).count(". ") + 1
+        ok = not missing and sentences <= 2 and len(str(output.get("synopsis", ""))) >= 300
+        return EvaluationReason(value=ok, reason=f"missing={missing} logline_sentences={sentences}")
+
+
+@dataclass
+class CastDeveloped(Evaluator[Any, Any, Any]):
+    """Every cast member has a distinct want, a need and an objective, and there is one protagonist."""
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
+        """Check the profiles."""
+        cast = list((ctx.output or {}).get("characters", []))
+        complete = all(member.get("want") and member.get("need") and member.get("objective") for member in cast)
+        wants = {str(member.get("want", "")).casefold() for member in cast}
+        leads = sum(str(member.get("role", "")).casefold() == "protagonist" for member in cast)
+        ok = len(cast) >= 3 and complete and len(wants) == len(cast) and leads >= 1
+        return EvaluationReason(value=ok, reason=f"cast={len(cast)} complete={complete} distinct_wants={len(wants)} protagonists={leads}")

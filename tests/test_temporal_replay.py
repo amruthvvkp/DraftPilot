@@ -28,7 +28,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from temporalio.client import WorkflowHistory
+from temporalio.client import WorkflowFailureError, WorkflowHistory
 from temporalio.worker import Replayer
 from test_room_workflows import (  # noqa: F401 - project is a fixture
     SCENE,
@@ -60,6 +60,7 @@ PAYLOADS: dict[str, Any] = {
     "SceneDraft": lambda _count: {"fountain": SCENE, "rationale": "Tighter."},
     "Reaction": lambda _count: {"persona": "?", "engagement": 7, "would_recommend": True, "lost_at": ["act 2"]},
     "Coverage": lambda _count: {"logline": "L", "synopsis": "S", "premise": 8, "structure": 6, "character": 9, "dialogue": 7, "pacing": 5, "verdict": "consider"},
+    "StorylineDraft": lambda _count: {"title": "T", "logline": "L", "premise": "P", "synopsis": "S", "theme": "Th", "tone": "To"},
     "ContinuityReport": lambda _count: {"issues": [{"scene_ids": [1], "kind": "fact", "description": "The river changes name."}]},
 }
 
@@ -124,6 +125,11 @@ async def _record(database: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> di
         threaded = ChatTurn(role="story_architect", prompt="And the ending?", history=turn.history, deps=room, thread_id="replay-thread")
         ids["room-chat-agui"] = "replay-room-chat-agui"
         await client.execute_workflow("room:chat", threaded, id=ids["room-chat-agui"], task_queue=queue)
+        # The pipeline waits at its first checkpoint; with no writer decision it stops after the wait (time-skipped).
+        ids["room-develop_story"] = "replay-room-develop_story"
+        pipeline = RoomRunInput(workflow="develop_story", params={"idea": "A tall tale.", "stages": ["storyline"], "wait_hours": 1}, room=room)
+        with pytest.raises(WorkflowFailureError):
+            await client.execute_workflow("room:develop_story", pipeline, id=ids["room-develop_story"], task_queue=queue)
         async with AsyncSession(database.bind, expire_on_commit=False) as session:
             evaluation = WorkflowRun(project_id=1, kind="evaluation", input={"screenplay_id": 1}, max_attempts=2)
             room_run = WorkflowRun(project_id=1, kind="room_workflow", input={"workflow": "coverage", "params": {}}, max_attempts=1, permission_mode="suggest")
