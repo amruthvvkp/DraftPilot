@@ -53,8 +53,11 @@ export default function OutlinePage() {
   // Beat writes run one at a time, each against the freshest cached version, so quick edits never race into a 409.
   const writes = useRef<Promise<unknown>>(Promise.resolve())
   const latest = (beatId: number) => queryClient.getQueryData<Beat[]>(keys.beats(projectId))?.find(item => item.id === beatId)
+  // Edits shown optimistically but not saved yet; a save that returns earlier must not undo them.
+  const pending = useRef(new Map<number, BeatFields[]>())
   function storeBeat(saved: Beat): void {
-    queryClient.setQueryData<Beat[]>(keys.beats(projectId), current => current?.map(item => item.id === saved.id ? saved : item))
+    const unsaved = Object.assign({}, ...(pending.current.get(saved.id) ?? [])) as BeatFields
+    queryClient.setQueryData<Beat[]>(keys.beats(projectId), current => current?.map(item => item.id === saved.id ? { ...saved, ...unsaved } : item))
   }
   function enqueue(change: () => Promise<unknown>, fallback: string): Promise<boolean> {
     const next = writes.current.then(() => run(change, fallback))
@@ -63,8 +66,18 @@ export default function OutlinePage() {
   }
 
   function saveBeat(beat: Beat, fields: BeatFields): void {
-    void enqueue(async () => storeBeat(await storyApi.updateBeat(projectId, latest(beat.id) ?? beat, fields)), 'Unable to save the beat')
-      .then(ok => { if (!ok) void refreshBeats() })
+    // Show the change at once; the version stays the server's until the save returns (or is rolled back on failure).
+    queryClient.setQueryData<Beat[]>(keys.beats(projectId), current => current?.map(item => item.id === beat.id ? { ...item, ...fields } : item))
+    const queue = pending.current.get(beat.id) ?? []
+    queue.push(fields)
+    pending.current.set(beat.id, queue)
+    const done = (): void => { queue.splice(queue.indexOf(fields), 1) }
+    void enqueue(async () => {
+      const saved = await storyApi.updateBeat(projectId, latest(beat.id) ?? beat, fields)
+      done()
+      storeBeat(saved)
+    }, 'Unable to save the beat')
+      .then(ok => { if (!ok) { done(); void refreshBeats() } })
   }
 
   function moveBeat(beatId: number, actId: number | null, index: number): void {

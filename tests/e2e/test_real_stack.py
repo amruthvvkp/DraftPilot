@@ -59,7 +59,7 @@ def test_big_fish_from_import_to_cleanup(signed_in: Page, base_url: str) -> None
 
     # Import through the workspace's file picker.
     page.locator("input[type=file]").set_input_files(str(BIG_FISH))
-    expect(page.get_by_text("191 scenes", exact=False)).to_be_visible(timeout=60_000)
+    expect(page.get_by_text("191 scenes", exact=True)).to_be_visible(timeout=60_000)
     _open_imported_draft(page)
     expect(page.get_by_text("This is a Southern story", exact=False)).to_be_visible(timeout=30_000)
 
