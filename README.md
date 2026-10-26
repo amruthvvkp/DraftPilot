@@ -52,7 +52,7 @@ migrations on first boot). Set `OTEL__ENABLED=false` to disable, or override
 Requires a local Postgres + Redis (or `docker compose up postgres redis`) and Node.js.
 
 ```bash
-uv sync --all-groups                                   # or --group web for just the app
+uv sync --all-groups --all-packages  # app + draftpilot-mcp + every tool group
 uv run alembic upgrade head
 npm --prefix frontend install
 npm --prefix frontend run build                        # typecheck + build -> frontend/dist

@@ -10,7 +10,7 @@ def test_migrations_have_one_linear_head() -> None:
     """Keep schema history mergeable with exactly one current head."""
     root = Path(__file__).parents[1]
     config = Config(str(root / "alembic.ini"))
-    config.set_main_option("script_location", str(root / "migrations"))
+    config.set_main_option("script_location", str(root / "src" / "draftpilot" / "migrations"))
     script = ScriptDirectory.from_config(config)
     heads = script.get_heads()
     assert len(heads) == 1

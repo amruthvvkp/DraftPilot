@@ -24,3 +24,9 @@
 **/secrets.dev.yaml
 **/values.dev.yaml
 LICENSE
+**/dist
+src/draftpilot/studio
+site
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

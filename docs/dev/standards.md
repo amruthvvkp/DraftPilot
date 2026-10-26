@@ -5,8 +5,8 @@
 - **Types:** annotate every function signature, parameters and return type, using modern syntax
   (`X | None`, builtin generics). `uv run mypy src` must stay clean.
 - **Docstrings:** every module, class and function (nested ones too) gets a one-line
-  imperative docstring. `uv run interrogate src migrations` enforces 100%.
-- **Lint:** `uv run ruff check src tests migrations`.
+  imperative docstring. `uv run interrogate src` enforces 100%.
+- **Lint:** `uv run ruff check src tests`.
 - **Settings:** each settings group has its own `env_prefix` (`LLM__`, `RAG__`, `OTEL__`, ...).
   Never read bare environment names. Unknown settings are rejected, so after adding one, rebuild the
   images before `docker compose up -d` (the `migrate` container bakes in the code).

@@ -1,54 +1,54 @@
-"""Application settings loaded from environment variables and pyproject.toml."""
+"""Application settings loaded from environment variables (and the installed package's metadata)."""
 
+from importlib import metadata
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import Field, SecretStr, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-try:
-    import tomllib as toml
-except ImportError:
-    import toml  # type: ignore
-
-
 __all__ = ["settings"]
 
-_ROOT = Path(__file__).parent.parent.parent.parent
-_PYPROJECT_TOML = _ROOT / "pyproject.toml"
+_PACKAGE = Path(__file__).resolve().parent.parent
+_ROOT = _PACKAGE.parent.parent  # the repository, in a source checkout
 
 
-_pyproject_toml_cache = None
+def _distribution() -> metadata.PackageMetadata | None:
+    """Return the installed distribution's metadata, if DraftPilot is installed."""
+    try:
+        return metadata.metadata("draftpilot")
+    except metadata.PackageNotFoundError:
+        return None
 
 
-def get_pyproject_toml_content() -> dict[str, Any]:
-    """Return the parsed pyproject.toml, caching it after the first read."""
-    global _pyproject_toml_cache
-    if _pyproject_toml_cache is None:
-        _pyproject_toml_cache = toml.loads(_PYPROJECT_TOML.read_text())
-    return _pyproject_toml_cache
+def _studio_build() -> Path:
+    """Return the built studio: the copy shipped inside the package, else the checkout's ``frontend/dist``."""
+    packaged = _PACKAGE / "studio"
+    return packaged if (packaged / "index.html").is_file() else _ROOT / "frontend" / "dist"
 
 
 class Metadata(BaseSettings):
-    """Project metadata sourced from pyproject.toml."""
+    """Project metadata from the installed distribution."""
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def name(self) -> str:
         """Return the project name."""
-        return get_pyproject_toml_content()["project"]["name"]
+        return "draftpilot"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def version(self) -> str:
         """Return the project version."""
-        return get_pyproject_toml_content()["project"]["version"]
+        found = _distribution()
+        return found["Version"] if found else "0+unknown"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def description(self) -> str:
         """Return the project description."""
-        return get_pyproject_toml_content()["project"]["description"]
+        found = _distribution()
+        return found["Summary"] if found else "DraftPilot"
 
 
 class OTELConfig(BaseSettings):
@@ -250,7 +250,7 @@ class WebSettings(BaseSettings):
     title: str = "DraftPilot"
     reload: bool = False
     # Built React studio served by the web process (``npm --prefix frontend run build``).
-    frontend_dist: Path = _ROOT / "frontend" / "dist"
+    frontend_dist: Path = Field(default_factory=_studio_build)
     # Fail at startup when the build is missing (the production image); dev and tests tolerate it.
     require_frontend: bool = False
 

@@ -26,6 +26,13 @@ x-app-env: &app-env
   OTEL__ENABLED: ${OTEL__ENABLED:-false}
   OTEL__EXPORTER_OTLP_ENDPOINT: ${OTEL__EXPORTER_OTLP_ENDPOINT:-http://otel-lgtm:4318}
 
+# Every DraftPilot service runs the same image (Dockerfile, target runtime); the command picks the role.
+# compose.release.yml swaps the local build for the published ghcr.io image.
+x-app-build: &app-build
+  context: .
+  dockerfile: ./Dockerfile
+  target: runtime
+
 # Lets containers reach a collector running on the host (works on Linux too).
 x-extra-hosts: &extra-hosts
   - "host.docker.internal:host-gateway"
@@ -64,11 +71,9 @@ services:
       retries: 10
 
   migrate:
-    image: draftpilot-ui
-    build:
-      context: .
-      dockerfile: ./Dockerfile.ui
-    command: ["uv", "run", "alembic", "upgrade", "head"]
+    image: ${DRAFTPILOT_IMAGE:-draftpilot}:${DRAFTPILOT_VERSION:-local}
+    build: *app-build
+    command: ["migrate"]
     environment:
       <<: *app-env
     depends_on:
@@ -76,14 +81,12 @@ services:
         condition: service_healthy
 
   ui:
-    image: draftpilot-ui
+    image: ${DRAFTPILOT_IMAGE:-draftpilot}:${DRAFTPILOT_VERSION:-local}
+    build: *app-build
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: ./Dockerfile.ui
     ports:
       - "${DRAFTPILOT_UI_PORT:-9000}:8000"
-    command: ["uv", "run", "python", "-m", "draftpilot.api"]
+    command: ["serve"]
     environment:
       <<: *app-env
       # Empty = open API (the UI logs a warning because :9000 is published). Set for any shared use.
@@ -117,11 +120,10 @@ services:
         condition: service_healthy
 
   worker:
-    image: draftpilot-worker
+    image: ${DRAFTPILOT_IMAGE:-draftpilot}:${DRAFTPILOT_VERSION:-local}
+    build: *app-build
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: ./Dockerfile.worker
+    command: ["worker"]
     environment:
       <<: *app-env
     extra_hosts: *extra-hosts
@@ -136,27 +138,12 @@ services:
         condition: service_completed_successfully
 
   mcp:
-    image: draftpilot-mcp
+    image: ${DRAFTPILOT_IMAGE:-draftpilot}:${DRAFTPILOT_VERSION:-local}
+    build: *app-build
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: ./Dockerfile.mcp
     ports:
       - "${DRAFTPILOT_MCP_PORT:-9001}:8000"
-    command:
-      [
-        "uv",
-        "run",
-        "fastmcp",
-        "run",
-        "src/draftpilot/mcp/server.py:mcp",
-        "--transport",
-        "http",
-        "--host",
-        "0.0.0.0",
-        "--port",
-        "8000",
-      ]
+    command: ["mcp", "--http", "--host", "0.0.0.0", "--port", "8000"]
     environment:
       <<: *app-env
       MCP__AUTH_TOKEN: ${MCP__AUTH_TOKEN:-draftpilot-local-token}
@@ -170,11 +157,10 @@ services:
       retries: 12
 
   rag:
-    image: draftpilot-rag
+    image: ${DRAFTPILOT_IMAGE:-draftpilot}:${DRAFTPILOT_VERSION:-local}
+    build: *app-build
     restart: unless-stopped
-    build:
-      context: .
-      dockerfile: ./Dockerfile.rag
+    command: ["rag", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "${DRAFTPILOT_RAG_PORT:-9010}:8000"
     environment:

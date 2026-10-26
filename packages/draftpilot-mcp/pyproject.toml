@@ -1,0 +1,31 @@
+[project]
+name = "draftpilot-mcp"
+version = "0.1.0"
+description = "DraftPilot's MCP server: develop screenplays from Claude, ChatGPT or any MCP client"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "MIT"
+authors = [{ name = "Amruth Vithala", email = "amruthvvkp@gmail.com" }]
+keywords = ["mcp", "model-context-protocol", "screenplay", "screenwriting", "ai-agents"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: End Users/Desktop",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Text Editors",
+]
+dependencies = ["draftpilot==0.1.0"]
+
+[project.urls]
+Homepage = "https://github.com/amruthvvkp/DraftPilot"
+Documentation = "https://github.com/amruthvvkp/DraftPilot/blob/main/docs/mcp.md"
+Repository = "https://github.com/amruthvvkp/DraftPilot"
+
+[project.scripts]
+draftpilot-mcp = "draftpilot_mcp.cli:main"
+
+[tool.uv.sources]
+draftpilot = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"

@@ -1,0 +1,22 @@
+# Run the published DraftPilot stack without building anything:
+#
+#   docker compose -f compose.yml -f compose.release.yml up -d
+#
+# Every service uses ghcr.io/amruthvvkp/draftpilot (set DRAFTPILOT_VERSION to pin a release, e.g. 0.1.0),
+# and Postgres comes from the official pgvector image.
+
+x-release: &release
+  image: ghcr.io/amruthvvkp/draftpilot:${DRAFTPILOT_VERSION:-latest}
+  build: !reset null
+  pull_policy: missing
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    build: !reset null
+  migrate: *release
+  ui: *release
+  worker: *release
+  mcp: *release
+  rag: *release
+  e2e: !reset null

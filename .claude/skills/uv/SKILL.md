@@ -18,28 +18,25 @@ pip-tools, pipx, pyenv, virtualenv, poetry, etc. **DraftPilot is a uv project**
 Dependencies are organized into groups in `pyproject.toml`. Install what you need:
 
 ```bash
-uv sync --all-groups      # everything (app + worker + mcp + rag + dev tooling)
-uv sync --group web       # web app: fastapi, uvicorn, pydantic-ai (+temporal), sqlmodel, asyncpg, redis, alembic, otel
-uv sync --group worker    # Temporal worker (includes the web group)
-uv sync --group mcp       # FastMCP 4 server (includes web + otel)
-uv sync --group rag       # standalone RAG service
-uv sync --group dev       # lint + test + e2e (Playwright) + docs tooling
+uv sync --all-groups --all-packages  # the app (runtime deps) + draftpilot-mcp + every tool group
+uv sync                   # the app and the dev group (lint, test, e2e, docs)
+uv sync --no-dev          # runtime only, as the Docker image installs it
 ```
 
 - `debugpy` — added to images only when `INSTALL_DEBUGPY=true` (see `compose.dev.yml`).
 - `otel` — Logfire instrumentation extras; pulled in via the `web` group.
 
-Add a dependency to a specific group: `uv add --group web <pkg>`. Frontend (npm) dependencies live
+Runtime dependencies are `[project.dependencies]` (`uv add <pkg>`); tooling goes in a group (`uv add --group test <pkg>`). `packages/draftpilot-mcp` is a workspace member (`uv add --package draftpilot-mcp <pkg>`). Frontend (npm) dependencies live
 in `frontend/package.json`, not in uv.
 
 ## Key commands
 
 ```bash
 uv add <pkg>                 # add a dependency (never pip install)
-uv add --group web <pkg>     # add to a specific group
+uv add --group test <pkg>    # add a tooling dependency to a group
 uv remove <pkg>              # remove a dependency
 uv lock                      # refresh the lockfile
-uv sync --all-groups         # install from the lockfile
+uv sync --all-groups --all-packages         # install from the lockfile
 uv run <command>             # run inside the project environment
 uv run python -c "..."       # run Python in the environment (never bare python)
 uvx <tool>@<version> <args>  # run a CLI tool without installing it

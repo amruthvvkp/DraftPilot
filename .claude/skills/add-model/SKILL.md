@@ -36,7 +36,7 @@ description: Scaffold a new SQLModel domain model for DraftPilot with its CRUD h
    uv run alembic upgrade head
    ```
 
-   Review the generated file in `migrations/versions/` before committing.
+   Review the generated file in `src/draftpilot/migrations/versions/` before committing.
 
 5. **Verify** — `uv run python -c "import draftpilot.models; from sqlmodel import SQLModel; print(sorted(SQLModel.metadata.tables))"`,
    then `uv run interrogate src` and `uv run --group dev mypy src`.

@@ -32,7 +32,7 @@ src/draftpilot/
   worker/      Temporal worker: workflows, activities, job functions
   mcp/         FastMCP server (HTTP + stdio)
 frontend/      React/Vite studio (src/, public/ assets; build → dist/)
-migrations/    Alembic (env.py reads settings sync DSN; SQLModel.metadata is the target)
+src/draftpilot/migrations/  Alembic (env.py reads settings sync DSN; SQLModel.metadata is the target)
 ```
 
 ## Run
@@ -42,7 +42,7 @@ migrations/    Alembic (env.py reads settings sync DSN; SQLModel.metadata is the
 docker compose up --build         # Studio :9000 · MCP :9001 · RAG :9010 · Temporal UI :8233
 
 # Local dev (needs local Postgres + Redis + `temporal server start-dev`)
-uv sync --all-groups
+uv sync --all-groups --all-packages
 uv run alembic upgrade head
 uv run python -m draftpilot.api       # API + built studio on :8000
 npm --prefix frontend run dev         # React studio with Vite hot reload
@@ -60,7 +60,7 @@ docker compose -f compose.yml -f compose.dev.yml up --build
 
 - **Docstrings**: every module, class, function, method, and nested function gets a concise
   **one-line** Sphinx-style docstring (imperative mood). Interrogate enforces 100%
-  (`[tool.interrogate]`, `fail-under = 100`) — `uv run interrogate src migrations` must pass.
+  (`[tool.interrogate]`, `fail-under = 100`) — `uv run interrogate src` must pass.
 - **Type hints**: annotate every function/method signature — all parameters and the return type
   (`-> None` when nothing is returned). Use modern syntax (`X | None`, `list[...]`, builtin
   generics). `uv run mypy src` must stay clean. Note: SQLModel `table=True` classes carry a

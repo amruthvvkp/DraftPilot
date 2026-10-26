@@ -39,10 +39,12 @@ the next load.
 Auth is on the `/api/v1` router, not the app, so the shell and its token prompt load without
 credentials. MCP runs as its own service with its own bearer auth.
 
-`Dockerfile.ui` builds `frontend/` in a Node stage and copies `frontend/dist` into the image at
-`WEB__FRONTEND_DIST` (default `/app/frontend/dist`). The image sets `WEB__REQUIRE_FRONTEND=true`,
-so the web process refuses to start without a build. Local runs, tests and `compose.dev.yml` (which
-bind-mounts the host's `frontend/dist`) leave it `false`, and the API serves without a build.
+The `Dockerfile` builds `frontend/` in a Node stage, copies the build into the package
+(`src/draftpilot/studio/`), and installs the `draftpilot` and `draftpilot-mcp` wheels into the
+`runtime` image, which every Compose service runs with its own command (`draftpilot serve`,
+`worker`, `migrate`, `mcp --http`, `rag`). Its `dev` target is the source tree installed editable,
+for `compose.dev.yml`. `WEB__FRONTEND_DIST` defaults to the packaged build, else the checkout's
+`frontend/dist`, and `WEB__REQUIRE_FRONTEND=true` in the runtime image refuses to start without it.
 
 ### Durable execution
 

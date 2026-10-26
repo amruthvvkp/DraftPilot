@@ -17,7 +17,7 @@ Postgres via SQLModel + asyncpg (async app engine) with Alembic for migrations. 
   `models/base.py` has `TimestampMixin`. `models/__init__.py` imports all so every table
   lands on `SQLModel.metadata`.
 - `crud/` — thin async helpers per model (`create`/`get`/`list_*`/`update`/`delete`).
-- `migrations/` — Alembic; `env.py` reads `settings.postgres.sync_dsn` (psycopg) and targets
+- `src/draftpilot/migrations/` — Alembic; `env.py` reads `settings.postgres.sync_dsn` (psycopg) and targets
   `SQLModel.metadata`.
 
 ## Conventions / gotchas
@@ -42,7 +42,7 @@ uv run alembic revision --autogenerate -m "describe change"
 uv run alembic upgrade head
 ```
 
-Review the generated file in `migrations/versions/` before committing. To regenerate from
+Review the generated file in `src/draftpilot/migrations/versions/` before committing. To regenerate from
 scratch against a throwaway DB, start a temporary `postgres:16-alpine`, point the
 `POSTGRES__*` env at it (inline the vars — zsh does not word-split `$VAR`), autogenerate,
 then remove the container.
