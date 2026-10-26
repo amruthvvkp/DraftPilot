@@ -89,7 +89,7 @@ def test_big_fish_from_import_to_cleanup(signed_in: Page, base_url: str) -> None
     # The writers' room lists its workflows.
     page.goto(f"{base_url}/projects/{project['id']}/room")
     expect(page.get_by_role("tab", name=re.compile("Rewrite a scene"))).to_be_visible()
-    expect(page.get_by_role("region", name="Room chat")).to_be_visible()
+    expect(page.get_by_role("complementary", name="Chat")).to_be_visible()
 
     # Exports render.
     screenplays = page.request.get(f"{base_url}/api/v1/projects/{project['id']}/workspace").json()["screenplays"]

@@ -20,6 +20,7 @@ export function mockApi(routes: Record<string, Handler | object | string | numbe
     const route = routes[`${method} ${url.pathname}${url.search}`] ?? routes[`${method} ${url.pathname}`]
     if (route === undefined) return new Response(JSON.stringify({ detail: 'Not mocked' }), { status: 404 })
     const result = typeof route === 'function' ? (route as Handler)(call) : route
+    if (result instanceof Response) return result
     const isReply = result !== null && typeof result === 'object' && typeof (result as Reply).status === 'number' && !('id' in (result as object))
     const reply: Reply = isReply ? result as Reply : { body: result }
     if (reply.status === 204) return new Response(null, { status: 204 })
@@ -27,6 +28,11 @@ export function mockApi(routes: Record<string, Handler | object | string | numbe
   })
   vi.stubGlobal('fetch', fetchMock)
   return { calls, fetchMock }
+}
+
+/** An AG-UI SSE response body made of the given events. */
+export function sse(events: object[]): Response {
+  return new Response(events.map(event => `data: ${JSON.stringify(event)}\n\n`).join(''), { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
 }
 
 /** Stand-in EventSource so tests can push live-sync events. */

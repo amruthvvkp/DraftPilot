@@ -105,7 +105,6 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
-    expect(page.get_by_text("artifact:3 · v2")).to_be_visible()
     # A writer's type change is a direct, versioned block edit (agents still go through proposals).
     with page.expect_request(lambda request: request.method == "PATCH" and request.url.endswith("/scenes/7/blocks/20")) as patched:
         page.get_by_label("Format action").select_option("dialogue")
@@ -171,40 +170,39 @@ def test_story_artifact_workspace_is_editable(page: Page) -> None:
     page.get_by_role("button", name="Apply structured decision").click()
 
 
-def test_copilot_turn_polls_durable_run(page: Page) -> None:
-    """Submit a Copilot turn and reload its persisted assistant response."""
+def test_chat_dock_sends_the_studio_focus(page: Page) -> None:
+    """The chat dock on the story studio sends the selected artifact as its focus and streams the AG-UI reply."""
     artifact = {"id": 31, "project_id": 9001, "kind": "brief", "title": "First pass", "content": "A family returns.", "version": 2, "stale": False, "depends_on": [], "artifact_metadata": {}}
-    assistant = {"id": 32, "project_id": 9001, "role": "assistant", "content": "The reveal needs a setup.", "page": "studio", "artifact": None, "selection": None, "instruction_layers": {}, "citations": [], "active_tools": [], "created_at": "2026-01-01T00:00:00Z"}
-    message_reads = 0
+    bodies: list[dict[str, object]] = []
+
+    def chat(route: Route) -> None:
+        """Validate the context envelope and answer."""
+        bodies.append(route.request.post_data_json)
+        events = [
+            {"type": "RUN_STARTED", "threadId": "t", "runId": "r1"},
+            {"type": "TEXT_MESSAGE_START", "messageId": "m1", "role": "assistant"},
+            {"type": "TEXT_MESSAGE_CONTENT", "messageId": "m1", "delta": "The reveal needs a setup."},
+            {"type": "TEXT_MESSAGE_END", "messageId": "m1"},
+            {"type": "RUN_FINISHED", "threadId": "t", "runId": "r1", "outcome": {"type": "success"}},
+        ]
+        route.fulfill(status=200, headers={"content-type": "text/event-stream"}, body="".join(f"data: {json.dumps(event)}\n\n" for event in events))
 
     page.route("**/api/v1/projects/9001/artifacts", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps([artifact])))
-    page.route("**/api/v1/projects/9001/artifacts/31", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps(artifact)))
     page.route("**/api/v1/projects/9001/agent-proposals", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
-    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"story_architect","label":"Story architect","description":"Shape the story.","default_permission":"chat_only"}]'))
+    page.route("**/api/v1/projects/9001/room/threads**", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.route("**/api/v1/projects/9001/room/chat", chat)
+    page.route("**/api/v1/agents/roles", lambda route: route.fulfill(status=200, content_type="application/json", body='[{"key":"showrunner","label":"Showrunner","description":"","default_permission":"chat_only"}]'))
     page.route("**/api/v1/settings/providers", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
-
-    def messages(route: Route) -> None:
-        """Return the assistant only after the durable run completes."""
-        nonlocal message_reads
-        message_reads += 1
-        route.fulfill(status=200, content_type="application/json", body=json.dumps([assistant] if message_reads > 1 else []))
-
-    page.route("**/api/v1/projects/9001/copilot/messages", messages)
-    def respond(route: Route) -> None:
-        """Validate the context envelope sent by the story-studio Copilot."""
-        payload = route.request.post_data_json
-        assert payload["page"] == "/projects/9001/studio"
-        assert payload["artifact"] == "brief"
-        assert payload["selection"] == "First pass"
-        route.fulfill(status=202, content_type="application/json", body=json.dumps({"message": {"id": 30, "project_id": 9001, "role": "user", "content": "Find the gap.", "page": "studio", "artifact": "brief", "selection": "First pass", "instruction_layers": {"agent_role": "story_architect", "permission_mode": "chat_only", "provider_profile_id": None}, "citations": [], "active_tools": [], "created_at": "2026-01-01T00:00:00Z"}, "run": {"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "queued", "result": None, "error": None}}))
-
-    page.route("**/api/v1/projects/9001/copilot/messages/respond-async", respond)
-    page.route("**/api/v1/projects/9001/runs/44", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "succeeded", "result": {"assistant_message_id": 32}, "error": None})))
-    page.route("**/api/v1/capabilities*", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
+    page.set_viewport_size({"width": 1500, "height": 900})  # wide enough for the chat dock to start open
     page.goto("/projects/9001/studio")
-    page.get_by_label("Copilot message").fill("Find the gap.")
-    page.get_by_role("button", name="Send").click()
-    expect(page.get_by_text("The reveal needs a setup.")).to_be_visible()
+    expect(page.get_by_label("Artifact title")).to_have_value("First pass")
+    dock = page.get_by_role("complementary", name="Chat")
+    dock.get_by_label("Message the room").fill("Find the gap.")
+    dock.get_by_role("button", name="Send").click()
+    expect(dock.get_by_text("The reveal needs a setup.")).to_be_visible()
+    props = bodies[0]["forwardedProps"]
+    assert props["page"] == "/projects/9001/studio"  # type: ignore[index]
+    assert props["artifact"] == "brief" and props["selection"] == "First pass"  # type: ignore[index]
 
 
 def test_context_page_creates_typed_knowledge_node(page: Page) -> None:

@@ -20,7 +20,6 @@ import {
   subscribeProjectEvents,
   WorkflowRun,
 } from './api'
-import RoomChat from './RoomChat'
 import './room.css'
 
 type Json = Record<string, unknown>
@@ -36,7 +35,8 @@ const ACTIVE = new Set(['queued', 'running'])
 
 /** Return a field's default value in the form's editing representation. */
 function initialValue(schema: JsonSchema): string | string[] {
-  if (schema.type === 'array') return Array.isArray(schema.default) ? (schema.default as unknown[]).map(String) : []
+  if (schema.type === 'array' && Array.isArray(schema.default)) return (schema.default as unknown[]).map(String)
+  if (schema.type === 'array') return schema.items?.enum ? schema.items.enum.map(String) : []
   return schema.default === undefined || schema.default === null ? '' : String(schema.default)
 }
 
@@ -135,7 +135,7 @@ export default function WritersRoom({ projectId }: { projectId: number }) {
           <button className="button primary" type="submit" disabled={busy || missing}>{busy ? 'Starting…' : `Start ${selected.label.toLowerCase()}`}</button>
         </form>}
       </section>
-      <div className="room-side"><RoomChat projectId={projectId} />
+      <div className="room-side"><p className="room-chat-hint">Talk to the room in the chat dock on the right; it follows you to every page.</p>
       <section className="room-runs" aria-label="Room runs">
         <p className="eyebrow">RUNS / {runs.length}</p>
         {runs.length === 0 && <p className="empty-copy">No room runs yet. Pick a workflow and start one; you can leave the page while it works.</p>}
@@ -160,17 +160,33 @@ function ParamField({ name, field, required, value, scenes, onChange }: { name: 
   const label = `${field.title ?? name}${required ? '' : ' (optional)'}`
   if (name === 'scene_id') return <label>{label}<select aria-label={field.title ?? name} value={String(value)} onChange={event => onChange(event.target.value)}><option value="">Choose a scene</option>{scenes.map((scene, index) => <option key={scene.id} value={scene.id}>{index + 1}. {scene.heading}</option>)}</select></label>
   if (name === 'scene_ids') return <label>{label}<select multiple aria-label={field.title ?? name} value={Array.isArray(value) ? value : []} onChange={event => onChange([...event.target.selectedOptions].map(option => option.value))}>{scenes.map((scene, index) => <option key={scene.id} value={scene.id}>{index + 1}. {scene.heading}</option>)}</select><small>Leave empty for the whole script.</small></label>
+  if (field.type === 'array' && field.items?.enum) {
+    const chosen = Array.isArray(value) ? value : []
+    return <fieldset className="room-choices" aria-label={field.title ?? name}><legend>{label}</legend>
+      {field.items.enum.map(option => String(option)).map(option => <label key={option} className="check-row"><input type="checkbox" checked={chosen.includes(option)}
+        onChange={() => onChange(chosen.includes(option) ? chosen.filter(item => item !== option) : [...chosen, option])} />{option.replace(/_/g, ' ')}</label>)}
+    </fieldset>
+  }
   if (field.type === 'integer') return <label>{label}<input type="number" aria-label={field.title ?? name} min={field.minimum} max={field.maximum} value={String(value)} onChange={event => onChange(event.target.value)} /></label>
   if (field.type === 'array') return <label>{label}<textarea aria-label={field.title ?? name} value={Array.isArray(value) ? value.join('\n') : value} onChange={event => onChange(event.target.value.split('\n'))} placeholder="One per line" /></label>
   const long = (field.maxLength ?? 0) > 300
   return <label>{label}{long ? <textarea aria-label={field.title ?? name} value={String(value)} onChange={event => onChange(event.target.value)} /> : <input aria-label={field.title ?? name} value={String(value)} onChange={event => onChange(event.target.value)} />}</label>
 }
 
+/** Where an active run is: waiting for the writer's decisions, or the step it last finished. */
+export function runStage(run: WorkflowRun, trail: TrailStep[], proposals: AgentProposal[]): string {
+  if (!ACTIVE.has(run.status)) return ''
+  const last = trail[trail.length - 1]?.step
+  if (proposals.some(proposal => proposal.status === 'proposed')) return `Waiting for your decisions${last ? ` · ${last.replace(/_/g, ' ')}` : ''}`
+  return last ? `Stage: ${last.replace(/_/g, ' ')}` : 'Starting'
+}
+
 function RunCard({ run, label, open, proposals, rated, onToggle, onCancel, onApprove, onReject, onRollback, onRate }: { run: WorkflowRun; label: string; open: boolean; proposals: AgentProposal[]; rated?: 1 | -1; onToggle: () => void; onCancel: () => void; onApprove: (id: number) => void; onReject: (id: number) => void; onRollback: (id: number) => void; onRate: (rating: 1 | -1) => void }) {
   const result = (run.result ?? {}) as Json
   const trail = (Array.isArray(result.trail) ? result.trail : []) as TrailStep[]
+  const stage = runStage(run, trail, proposals)
   return <article className={`room-run ${run.status}`}>
-    <button className="room-run-head" onClick={onToggle} aria-expanded={open}><strong>{label}</strong><span className={`run-status ${run.status}`}>{run.status}{ACTIVE.has(run.status) && trail.length ? ` · step ${trail.length}` : ''}</span><small>#{run.id}{run.created_at ? ` · ${new Date(run.created_at).toLocaleString()}` : ''}</small></button>
+    <button className="room-run-head" onClick={onToggle} aria-expanded={open}><strong>{label}</strong><span className={`run-status ${run.status}`}>{run.status}{ACTIVE.has(run.status) && trail.length ? ` · step ${trail.length}` : ''}</span>{stage && <span className="run-stage">{stage}</span>}<small>#{run.id}{run.created_at ? ` · ${new Date(run.created_at).toLocaleString()}` : ''}</small></button>
     {open && <div className="room-run-body">
       {trail.length > 0 && <ol className="room-trail">{trail.map((step, index) => <li key={index}><span>{ROLE_LABELS[step.role] ?? step.role}</span> {step.step}<small>{(step.duration_ms / 1000).toFixed(1)} s</small></li>)}{ACTIVE.has(run.status) && <li className="working">working…</li>}</ol>}
       {ACTIVE.has(run.status) && <button className="button quiet" onClick={onCancel}>Cancel run</button>}

@@ -1,9 +1,14 @@
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { Link, NavLink, Outlet } from 'react-router'
+import { readDockOpen } from '../chat/dockState'
 import { useProjectLiveSync } from '../data/liveSync'
 import { useBeats, useCharacters, useStoryline, useWorkspace } from '../data/queries'
 import { projectStages, type Stage } from './progress'
 import { useProjectId } from './useProjectId'
 import './project.css'
+
+// The dock (AG-UI client, Markdown) loads in its own chunk so the studio itself stays light.
+const ChatDock = lazy(() => import('../chat/ChatDock'))
 
 const STATE_MARK: Record<Stage['state'], string> = { empty: '○', started: '◐', done: '●' }
 const STATE_TEXT: Record<Stage['state'], string> = { empty: 'not started', started: 'in progress', done: 'complete' }
@@ -29,8 +34,18 @@ export default function ProjectLayout() {
   const workspace = useWorkspace(projectId).data
   const stages = projectStages({ projectId, storyline, characters, beats, workspace })
   const base = `/projects/${projectId}`
-  return <div className="project-shell">
-    <header className="project-bar">
+  const shell = useRef<HTMLDivElement>(null)
+  const bar = useRef<HTMLElement>(null)
+  // The dock sits under the sticky bar; keep its offset equal to the bar's (it wraps on narrow screens).
+  useEffect(() => {
+    const element = bar.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => shell.current?.style.setProperty('--project-bar-height', `${element.offsetHeight}px`))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  return <div className="project-shell" ref={shell}>
+    <header className="project-bar" ref={bar}>
       <Link className="project-bar-home" to="/projects">All projects</Link>
       <strong className="project-bar-title">{storyline?.title ?? workspace?.project.title ?? ''}</strong>
       <nav className="project-steps" aria-label="Project steps">
@@ -47,8 +62,7 @@ export default function ProjectLayout() {
     </header>
     <div className="project-body">
       <div className="project-main"><Outlet /></div>
-      {/* G17 mounts the persistent AG-UI chat dock in this rail; until then the page-level chat panels stay where they are. */}
-      <div className="project-chat-rail" id="chat-dock" data-slot="chat" />
+      <div className="project-chat-rail" id="chat-dock"><Suspense fallback={<div className={readDockOpen() ? 'chat-dock-placeholder open' : 'chat-dock-placeholder'} />}><ChatDock projectId={projectId} /></Suspense></div>
     </div>
   </div>
 }

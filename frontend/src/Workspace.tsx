@@ -6,7 +6,7 @@ import { CLIENT_ID, createProjectBackup, deleteProjectBlock, getDialogueTranslat
 import { errorMessage, keys, useWorkspace } from './data/queries'
 import { storyApi } from './storyApi'
 import Timeline from './Timeline'
-import CopilotPanel from './CopilotPanel'
+import { useChatFocus } from './chat/focus'
 import McpApprovals from './McpApprovals'
 import RevisionPanel from './RevisionPanel'
 import BlockCreationPanel from './BlockCreationPanel'
@@ -103,7 +103,6 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
   const [backupsOpen, setBackupsOpen] = useState(false)
   const [importStatus, setImportStatus] = useState('')
   const [sceneHeading, setSceneHeading] = useState('')
-  const [proposalRefresh, setProposalRefresh] = useState(0)
   const [activeBlockId, setActiveBlockId] = useState<number | null>(null)
   const [deletingScene, setDeletingScene] = useState<Scene | null>(null)
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.workspaces(projectId) })
@@ -120,7 +119,6 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
   // Live sync: the project shell refetches the workspace; here we only surface what changed elsewhere.
   useEffect(() => subscribeProjectEvents(projectId, event => {
     if (event.client === CLIENT_ID) return
-    if (event.kind === 'proposal.changed' || event.kind === 'run.changed') setProposalRefresh(value => value + 1)
     if (event.kind === 'scene.changed') setNotice('Screenplay updated from another session or agent')
   }), [projectId])
 
@@ -138,6 +136,12 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
   }, [workspace])
 
   const selectedScene: Scene | undefined = workspace?.scenes.find(scene => scene.id === selectedId)
+  useChatFocus('screenplay', selectedScene?.heading ?? null, selectedScene?.id ?? null)
+  // Follow ?scene= when it changes while the editor is open (the chat's open_scene tool, links from the outline).
+  const sceneParam = Number(params.get('scene'))
+  useEffect(() => {
+    if (sceneParam && workspace?.scenes.some(scene => scene.id === sceneParam)) setSelectedId(sceneParam)
+  }, [sceneParam, workspace])
   useEffect(() => { setSceneHeading(selectedScene?.heading ?? '') }, [selectedScene?.id, selectedScene?.heading])
   useEffect(() => { setProjectInstruction(workspace?.project.project_instruction ?? '') }, [workspace?.project.id, workspace?.project.project_instruction])
   useEffect(() => { setSceneInstruction(selectedScene?.scene_instruction ?? '') }, [selectedScene?.id, selectedScene?.scene_instruction])
@@ -370,7 +374,6 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
         </div>
         {selectedScene && workspace.screenplay && <RevisionPanel projectId={projectId} sceneId={selectedScene.id} sceneVersion={selectedScene.version} screenplayId={workspace.screenplay.id} />}
         <McpApprovals projectId={projectId} />
-        <CopilotPanel projectId={projectId} page={`/projects/${projectId}/workspace`} artifact="screenplay" selection={selectedScene?.heading ?? null} refreshToken={proposalRefresh} />
       </aside>
     </div>}
     {deletingScene && <ConfirmDialog title={`Delete ${deletingScene.heading}?`} confirmLabel="Delete scene" onCancel={() => setDeletingScene(null)} onConfirm={() => deleteScene(deletingScene)}>

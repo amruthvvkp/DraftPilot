@@ -5,8 +5,8 @@ The workspace has three columns:
 - on the left, the **navigator**: your scenes with their estimated runtime, and a pacing gauge
   against the format's target length;
 - in the middle, the **page**;
-- on the right, the **context rail**: instructions, translations, snapshots, creative context and
-  Copilot.
+- on the right, the **context rail** (instructions, translations, snapshots, creative context) and
+  the **chat** with the room ([Chat with the room](chat.md)).
 
 ## Screenplay elements
 

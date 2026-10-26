@@ -35,7 +35,7 @@ models, so this checklist is the one place where the real model, real data and y
 - [ ] ++tab++ moves from block to block, and character names autocomplete.
 - [ ] Smart typing: type `CUT TO:` into an action line and leave it, and it becomes a transition. `EDWARD`
       becomes a character cue, and `(beat)` a parenthetical. Ordinary action is never retyped.
-- [ ] Change a block's type and **Review format**; approve the proposal in Copilot.
+- [ ] Change a block's type from its picker; it changes at once (agents still propose instead).
 - [ ] Page breaks show as dividers, text is never squeezed, and block tools appear on hover.
 - [ ] Save a snapshot, change the scene, diff the two, and restore blocks only.
 - [ ] Export PDF, Fountain, FDX and HTML; each opens and looks right.
@@ -51,11 +51,16 @@ models, so this checklist is the one place where the real model, real data and y
 
 ## 5. The room: chat
 
-- [ ] **Writers' room → Talk to the room**, as the showrunner: "What does Will want from Edward?"
+- [ ] Open the **chat** on the right, as the showrunner: "What does Will want from Edward?"
       Tool chips appear (Story twin, scenes, a specialist consult), and the answer cites scenes.
 - [ ] As the script editor: "What is the heading of the second scene?" The answer is *INT. WILL'S
       BEDROOM - NIGHT (1973)*.
-- [ ] Switch **May** to *Propose changes* and ask for a small fix; a proposal appears for review.
+- [ ] In *Propose* mode, ask for a small fix; a proposal card appears with Approve and Reject.
+- [ ] In *Edit with approval* mode, ask to add a character; an approval card shows the exact call.
+      Approve it: the character appears on the Characters page. Deny another: nothing is written.
+- [ ] Start a new thread, rename it, switch back: the old conversation is still there.
+- [ ] Ask the showrunner to "plan and then check the cast's arcs and continuity": a plan checklist
+      appears, and two specialists answer in parallel.
 
 ## 6. The room: workflows
 

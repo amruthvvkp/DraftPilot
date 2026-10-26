@@ -32,6 +32,10 @@ export const keys = {
   beats: (projectId: number) => ['project', projectId, 'beats'] as const,
   twin: (projectId: number) => ['project', projectId, 'twin'] as const,
   artifacts: (projectId: number) => ['project', projectId, 'artifacts'] as const,
+  proposals: (projectId: number) => ['project', projectId, 'proposals'] as const,
+  runs: (projectId: number) => ['project', projectId, 'runs'] as const,
+  run: (projectId: number, runId: number) => ['project', projectId, 'runs', runId] as const,
+  threads: (projectId: number) => ['project', projectId, 'threads'] as const,
 }
 
 const STORY_KIND_KEYS: Record<string, (projectId: number) => QueryKey[]> = {
@@ -63,6 +67,11 @@ export function staleKeysFor(projectId: number, event: Pick<ProjectEvent, 'kind'
       return [keys.twin(projectId), keys.characters(projectId), keys.locations(projectId)]
     case 'artifact.changed':
       return [keys.artifacts(projectId)]
+    case 'proposal.changed':
+      return [keys.proposals(projectId)]
+    case 'run.changed':
+    case 'workflow.progress':
+      return [keys.runs(projectId)]
     default:
       return []
   }

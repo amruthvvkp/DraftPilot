@@ -20,7 +20,6 @@
 .project-tools a.active{background:transparent;color:var(--accent-strong);font-weight:700;text-decoration:underline}
 .project-body{display:grid;grid-template-columns:minmax(0,1fr) auto}
 .project-main{min-width:0}
-.project-chat-rail:empty{display:none}
 
 .story-page{min-height:calc(100vh - 60px);padding:28px max(20px,4vw) 80px;color:var(--ink)}
 .story-head h1{margin:6px 0;font-size:32px;letter-spacing:-.04em}
@@ -124,3 +123,15 @@
   .story-detail .story-form,.event-fields{grid-template-columns:1fr}
   .project-tools{margin-left:0}
 }
+
+/* Chat dock rail, and pages whose own chat panels moved into the dock. */
+.chat-dock-placeholder{width:48px;height:100%}.chat-dock-placeholder.open{width:380px}
+.project-chat-rail{position:sticky;top:var(--project-bar-height,0px);align-self:start;height:calc(100vh - var(--project-bar-height,0px));z-index:5}
+.room-chat-hint{padding:12px 14px;background:var(--surface);border:1px dashed var(--line-strong);border-radius:8px;color:var(--ink-muted);font-size:12px}
+.run-stage{margin-left:6px;color:var(--ink-muted);font-size:10px}
+.room-choices{display:grid;gap:4px;margin:0;padding:8px;border:1px solid var(--line);border-radius:4px}
+.room-choices legend{color:var(--ink-muted);font-size:11px}
+/* The page-level chat panels are gone: their columns close up. */
+.artifact-grid{grid-template-columns:240px minmax(420px,1fr)}
+.context-grid{grid-template-columns:minmax(0,1fr)}
+@media(max-width:1100px){.chat-dock-placeholder.open{width:320px}}

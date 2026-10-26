@@ -616,7 +616,7 @@ export function getAgentRoles(): Promise<AgentRole[]> {
   return request<AgentRole[]>('/api/v1/agents/roles')
 }
 
-export type JsonSchema = { type?: string; title?: string; description?: string; default?: unknown; minimum?: number; maximum?: number; maxLength?: number; items?: JsonSchema; properties?: Record<string, JsonSchema>; required?: string[]; anyOf?: JsonSchema[]; $ref?: string }
+export type JsonSchema = { type?: string; title?: string; description?: string; default?: unknown; enum?: unknown[]; minimum?: number; maximum?: number; maxLength?: number; items?: JsonSchema; properties?: Record<string, JsonSchema>; required?: string[]; anyOf?: JsonSchema[]; $ref?: string }
 
 export type RoomWorkflow = { key: string; label: string; description: string; roles: string[]; proposes: boolean; params_schema: JsonSchema }
 

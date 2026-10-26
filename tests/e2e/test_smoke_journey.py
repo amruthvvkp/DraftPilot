@@ -155,9 +155,10 @@ def test_writer_smoke_journey_from_project_to_recovery(page: Page) -> None:
             break
         page.wait_for_timeout(100)
     assert any(patch.get("element_type") == "transition" for patch in block_patches), "changing a block's type is a direct edit"
+    page.get_by_role("complementary", name="Chat").get_by_role("button", name="✦ Chat").click()  # proposals wait in the chat dock
     expect(page.get_by_text("#701 block")).to_be_visible()
     page.get_by_role("button", name="Approve change").click()
-    page.get_by_role("button", name="Rollback").click()
+    page.get_by_role("button", name="Roll back").click()
     page.get_by_role("navigation", name="Project tools").get_by_role("button", name="Timeline").click()
     page.get_by_role("button", name="Review reorder").click()
     page.get_by_role("button", name="Approve reorder").click()

@@ -2,7 +2,6 @@ import { Link } from 'react-router'
 import { type FormEvent, useEffect, useState } from 'react'
 import AppearancePanel from './AppearancePanel'
 import { addWriterMemory, createProviderProfile, forgetWriterMemory, getWriterProfile, listDefaultModels, listProfileModels, listProviderProfiles, listWriterMemories, ModelOption, ProviderProfile, saveWriterProfile, testProviderProfile, updateProviderProfile, WriterMemory, WriterProfile } from './api'
-import CopilotPanel from './CopilotPanel'
 import './provider-settings.css'
 
 const initial = { name: '', provider: 'lm_studio', model: 'auto', base_url: '', api_key: '', enabled: true }
@@ -179,6 +178,6 @@ export default function ProviderSettings() {
         {memories.length === 0 && <p className="settings-empty">Nothing yet. Add preferences the room should always respect.</p>}
         <ul className="memory-list">{memories.map(memory => <li key={memory.id}><span className={`memory-kind ${memory.kind}`}>{memory.kind}</span><span>{memory.text}</span><small>{memory.source}{memory.project_id ? ' · this project' : ''}</small><button className="mini-button" aria-label={`Forget ${memory.text}`} onClick={() => void forget(memory.id)}>Forget</button></li>)}</ul>
       </section>
-    </main><aside className="settings-copilot"><CopilotPanel page="/settings" artifact="provider_settings" /></aside>
+    </main>
   </div>
 }
