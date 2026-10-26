@@ -54,8 +54,8 @@ def test_fountain_rewrite_parses_to_one_scene_without_ids() -> None:
 @pytest.fixture
 def seeded(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, AsyncSession]:
     """Serve the proposal router over one seeded scene with a translated block."""
-    monkeypatch.setattr("draftpilot.api.agent.scene_changed", AsyncMock())
-    monkeypatch.setattr("draftpilot.api.agent.events.publish", AsyncMock())
+    monkeypatch.setattr("draftpilot.core.proposals.scene_changed", AsyncMock())
+    monkeypatch.setattr("draftpilot.core.proposals.events.publish", AsyncMock())
     monkeypatch.setattr("draftpilot.crud.agent_proposals.events.publish", AsyncMock())
     context = memory_session()
     session = run_async(context.__aenter__())

@@ -9,6 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.screenplay.adapters.fountain import parse_fountain
 from draftpilot.core.screenplay.hydrate import save_screenplay_doc
+from draftpilot.core.story import entities
 from draftpilot.core.twins import (
     extract_story_twin,
     normalize_cue,
@@ -18,7 +19,6 @@ from draftpilot.core.twins import (
     writer_twin_brief,
 )
 from draftpilot.crud import blocks as blocks_crud
-from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.models import (
     AgentProposal,
@@ -90,29 +90,38 @@ def test_story_twin_is_derived_from_the_big_fish_script() -> None:
 
 
 def test_twin_keeper_is_idempotent_and_never_overwrites_the_writer() -> None:
-    """Refreshing twice changes nothing; a writer-edited node keeps the writer's description."""
+    """Refreshing twice changes nothing; a writer-edited character keeps the writer's profile."""
 
     async def scenario() -> None:
-        """Refresh, edit one node as the writer, refresh again."""
+        """Refresh, edit one character as the writer, refresh again."""
         async with memory_session() as session:
             project_id = await _big_fish(session)
             first = await refresh_story_twin(session, project_id)
             assert first["characters"] > 20 and first["locations"] > 20
-            nodes = await graph_crud.list_nodes(session, project_id)
-            versions = {node.id: node.version for node in nodes}
+            rows = await entities.list_entities(session, project_id, "character")
+            assert all(row.source == "twin" for row in rows)
+            places = await entities.list_entities(session, project_id, "location")
+            versions = {row.id: row.version for row in rows} | {-(row.id or 0): row.version for row in places}
             again = await refresh_story_twin(session, project_id)
             assert again == {**first, "removed": 0}
-            assert {node.id: node.version for node in await graph_crud.list_nodes(session, project_id)} == versions
-            edward = next(node for node in nodes if node.kind == "character" and node.label == "Edward")
-            edward.description = "A storyteller whose tall tales hide his truth."
-            edward.node_metadata = {**edward.node_metadata, "writer_edited": True}
-            session.add(edward)
-            await session.commit()
+            after = await entities.list_entities(session, project_id, "character")
+            after_places = await entities.list_entities(session, project_id, "location")
+            assert {row.id: row.version for row in after} | {-(row.id or 0): row.version for row in after_places} == versions
+            edward = next(row for row in rows if row.name == "Edward")
+            await entities.update_entity(
+                session,
+                project_id,
+                "character",
+                edward.id or 0,
+                {"summary": "A storyteller whose tall tales hide his truth.", "want": "To be remembered as a legend."},
+                expected_version=edward.version,
+            )
             await refresh_story_twin(session, project_id)
-            refreshed = next(node for node in await graph_crud.list_nodes(session, project_id) if node.id == edward.id)
-            assert refreshed.description == "A storyteller whose tall tales hide his truth."
+            refreshed = await entities.get_entity(session, project_id, "character", edward.id or 0)
+            assert refreshed.summary == "A storyteller whose tall tales hide his truth."
+            assert refreshed.writer_edited and refreshed.dialogue_lines > 0
             brief = await story_twin_brief(session, project_id)
-            assert "Edward" in brief and "A storyteller" in brief and "Key locations:" in brief
+            assert "Edward" in brief and "To be remembered as a legend." in brief and "Key locations:" in brief
 
     run_async(scenario())
 

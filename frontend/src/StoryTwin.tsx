@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { getStoryTwin, refreshStoryTwin, StoryTwin, subscribeProjectEvents, TwinNode, updateKnowledgeNode } from './api'
+import { getStoryTwin, refreshStoryTwin, StoryTwin, subscribeProjectEvents } from './api'
+import { Character, Location, storyApi } from './storyApi'
 import './room.css'
 
-const count = (node: TwinNode, key: string) => Number(node.node_metadata[key] ?? 0)
-const scenes = (node: TwinNode) => (Array.isArray(node.node_metadata.scene_ids) ? node.node_metadata.scene_ids.length : 0)
+const owned = (row: Character | Location) => row.source !== 'twin' || row.writer_edited
 
 /** The Story twin: what the room knows about your cast and world, derived from the draft and editable by you. */
 export default function StoryTwinPage({ projectId }: { projectId: number }) {
@@ -26,13 +26,12 @@ export default function StoryTwinPage({ projectId }: { projectId: number }) {
     try { await refreshStoryTwin(projectId); await load() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to refresh') } finally { setBusy(false) }
   }
 
-  async function saveNote(node: TwinNode, description: string): Promise<void> {
-    if (description === (node.description ?? '')) return
-    try { await updateKnowledgeNode(projectId, node.id, node.version, { description }); await load() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to save the note') }
+  async function save(change: () => Promise<unknown>): Promise<void> {
+    try { await change(); await load() } catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to save the note') }
   }
 
-  const match = (node: TwinNode) => node.label.toLowerCase().includes(query.toLowerCase())
-  const topLines = Math.max(1, ...(twin?.characters ?? []).map(node => count(node, 'dialogue_lines')))
+  const match = (row: Character | Location) => row.name.toLowerCase().includes(query.toLowerCase())
+  const topLines = Math.max(1, ...(twin?.characters ?? []).map(row => row.dialogue_lines))
   return <div className="room-page twin-page">
     <header className="room-head"><a className="room-back" href={`/projects/${projectId}`}>← Workspace</a><p className="eyebrow warm">STORY TWIN</p><h1>What the room knows</h1>
       <p>Derived from your working draft and refreshed a few seconds after you edit. Every agent reads this before it works. Write your own note on any character or place: the room keeps it and never overwrites it.</p>
@@ -41,16 +40,16 @@ export default function StoryTwinPage({ projectId }: { projectId: number }) {
     {error && <p className="notice" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">×</button></p>}
     {twin && <div className="twin-grid">
       <section aria-label="Characters"><p className="eyebrow">CHARACTERS / {twin.characters.length}</p>
-        {twin.characters.filter(match).map(node => <article className="twin-card" key={node.id}>
-          <div className="twin-card-head"><strong>{node.label}</strong>{Boolean(node.node_metadata.writer_edited) && <span className="badge proposes" title="You wrote this note">your note</span>}<small>{count(node, 'dialogue_lines')} lines · {scenes(node)} scenes</small></div>
-          <div className="twin-bar" aria-hidden="true"><span style={{ width: `${(count(node, 'dialogue_lines') / topLines) * 100}%` }} /></div>
-          <textarea aria-label={`Note on ${node.label}`} defaultValue={node.description ?? ''} onBlur={event => void saveNote(node, event.target.value)} rows={2} />
+        {twin.characters.filter(match).map(row => <article className="twin-card" key={row.id}>
+          <div className="twin-card-head"><strong><a href={`/projects/${projectId}/characters/${row.id}`}>{row.name}</a></strong>{owned(row) && <span className="badge proposes" title="You wrote or edited this">yours</span>}<small>{row.dialogue_lines} lines · {row.scene_ids.length} scenes</small></div>
+          <div className="twin-bar" aria-hidden="true"><span style={{ width: `${(row.dialogue_lines / topLines) * 100}%` }} /></div>
+          <textarea aria-label={`Note on ${row.name}`} defaultValue={row.summary} onBlur={event => { if (event.target.value !== row.summary) void save(() => storyApi.updateCharacter(projectId, row, { summary: event.target.value })) }} rows={2} />
         </article>)}
       </section>
       <section aria-label="Locations"><p className="eyebrow">LOCATIONS / {twin.locations.length}</p>
-        {twin.locations.filter(match).map(node => <article className="twin-card" key={node.id}>
-          <div className="twin-card-head"><strong>{node.label}</strong>{Boolean(node.node_metadata.writer_edited) && <span className="badge proposes">your note</span>}<small>{(node.node_metadata.int_ext as string[] | undefined)?.join('/') || '—'} · {(node.node_metadata.times as string[] | undefined)?.join(', ') || 'any time'} · {scenes(node)} scenes</small></div>
-          <textarea aria-label={`Note on ${node.label}`} defaultValue={node.description ?? ''} onBlur={event => void saveNote(node, event.target.value)} rows={1} />
+        {twin.locations.filter(match).map(row => <article className="twin-card" key={row.id}>
+          <div className="twin-card-head"><strong>{row.name}</strong>{owned(row) && <span className="badge proposes">yours</span>}<small>{row.int_ext.join('/') || '—'} · {row.times.join(', ') || 'any time'} · {row.scene_ids.length} scenes</small></div>
+          <textarea aria-label={`Note on ${row.name}`} defaultValue={row.description} onBlur={event => { if (event.target.value !== row.description) void save(() => storyApi.updateLocation(projectId, row, { description: event.target.value })) }} rows={1} />
         </article>)}
       </section>
     </div>}

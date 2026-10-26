@@ -194,7 +194,7 @@ export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   if (!headers.has('Content-Type') && !(init?.body instanceof FormData)) headers.set('Content-Type', 'application/json')
   headers.set('X-DraftPilot-Client', CLIENT_ID)
@@ -644,7 +644,7 @@ export function listDeletedProjects(): Promise<DeletedProject[]> {
 }
 
 export type TwinNode = KnowledgeGraph['nodes'][number] & { node_metadata: Record<string, unknown> }
-export type StoryTwin = { screenplay_id: number | null; characters: TwinNode[]; locations: TwinNode[]; canon: TwinNode[]; brief: string }
+export type StoryTwin = { screenplay_id: number | null; characters: import('./storyApi').Character[]; locations: import('./storyApi').Location[]; canon: TwinNode[]; brief: string }
 
 export function getStoryTwin(projectId: number): Promise<StoryTwin> {
   return request<StoryTwin>(`/api/v1/projects/${projectId}/twin`)

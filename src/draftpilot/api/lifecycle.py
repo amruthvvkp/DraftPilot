@@ -6,13 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from draftpilot.api.backups import (
-    _enqueue_restored_artifacts,
-    _project_payload,
-    restore_backup_payload,
-)
 from draftpilot.core import events, temporal
 from draftpilot.core.db import async_get_db
+from draftpilot.core.project_backup import (
+    enqueue_restored_documents,
+    project_payload,
+    restore_payload,
+)
 from draftpilot.core.project_lifecycle import (
     delete_project,
     deleted_project_backups,
@@ -51,7 +51,7 @@ async def dismiss_deleted(project_id: int, session: AsyncSession = Depends(async
 @router.delete("/{project_id}")
 async def delete_project_route(project_id: int, session: AsyncSession = Depends(async_get_db)) -> dict[str, Any]:
     """Back up and delete a project with everything in it; restore it later from the backup."""
-    payload = await _project_payload(session, project_id)
+    payload = await project_payload(session, project_id)
     try:
         result = await delete_project(session, project_id, payload)
     except LookupError as exc:
@@ -66,10 +66,10 @@ async def duplicate_project(
     project_id: int, data: DuplicateRequest | None = None, session: AsyncSession = Depends(async_get_db)
 ) -> ProjectRead:
     """Copy a project's brief, references, artifacts and every draft into a new project."""
-    payload = await _project_payload(session, project_id)
+    payload = await project_payload(session, project_id)
     payload["project"]["title"] = (data.title if data and data.title else f"{payload['project']['title']} (copy)")[:200]
-    project = await restore_backup_payload(session, payload)
-    await _enqueue_restored_artifacts(session, project.id or 0)
+    project = await restore_payload(session, payload)
+    await enqueue_restored_documents(session, project.id or 0)
     await temporal.start_best_effort("reindex_project", project.id, description="RAG reindex enqueue")
     await temporal.start_best_effort("refresh_story_twin", project.id, description="Story twin refresh enqueue")
     return ProjectRead.model_validate(project)

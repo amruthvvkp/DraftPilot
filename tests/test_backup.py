@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from _async import run_async
 
-from draftpilot.api.backups import restore_backup_payload
 from draftpilot.core.backup import BackupError, read_backup, write_backup
+from draftpilot.core.project_backup import restore_payload as restore_backup_payload
 from draftpilot.models import Project, StoryArtifact
 
 

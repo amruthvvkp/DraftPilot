@@ -203,43 +203,41 @@ def test_scene_update_requires_matching_if_match(
     assert response.status_code == 409
 
 
-def test_scene_creation_requires_the_requested_screenplay_and_act(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_scene_creation_requires_the_requested_screenplay_and_act(monkeypatch: pytest.MonkeyPatch) -> None:
     """Create a scene only when both screenplay and act belong to the project."""
-    project = Project(id=9, title="Story")
-    screenplay = Screenplay(id=2, project_id=9, title="Story")
-    act = Act(id=4, screenplay_id=2, position=0)
-    created = Scene(id=7, act_id=4, heading="EXT. GARDEN - DAY", position=1)
+    from _async import run_async
+    from _db import memory_session
+    from sqlmodel.ext.asyncio.session import AsyncSession
 
-    async def get_project(_session: _Session, _project_id: int) -> Project:
-        """Return the project fixture."""
-        return project
+    monkeypatch.setattr("draftpilot.core.story.structure.scene_changed", AsyncMock())
+    context = memory_session()
+    session = run_async(context.__aenter__())
 
-    async def get_screenplay(_session: _Session, _screenplay_id: int) -> Screenplay:
-        """Return the screenplay fixture."""
-        return screenplay
+    async def seed() -> None:
+        """Persist a project with one draft and one act, plus a foreign draft."""
+        session.add_all([Project(id=9, title="Story"), Project(id=10, title="Other")])
+        await session.flush()
+        session.add_all([Screenplay(id=2, project_id=9, title="Story"), Screenplay(id=3, project_id=10, title="Other")])
+        await session.flush()
+        session.add_all([Act(id=4, screenplay_id=2, position=0), Act(id=5, screenplay_id=3, position=0)])
+        await session.commit()
 
-    async def get_act(_session: _Session, _act_id: int) -> Act:
-        """Return the act fixture."""
-        return act
+    run_async(seed())
+    app = FastAPI()
 
-    async def create_scene(_session: _Session, _data: object) -> Scene:
-        """Return the created scene fixture."""
-        return created
+    async def dependency() -> AsyncGenerator[AsyncSession]:
+        """Yield the seeded session."""
+        yield session
 
-    monkeypatch.setattr("draftpilot.api.projects.projects_crud.get", get_project)
-    monkeypatch.setattr("draftpilot.api.projects.screenplays_crud.get", get_screenplay)
-    monkeypatch.setattr("draftpilot.api.projects.acts_crud.get", get_act)
-    monkeypatch.setattr("draftpilot.api.projects.scenes_crud.create", create_scene)
-    monkeypatch.setattr("draftpilot.api.projects.scene_changed", AsyncMock())
-    response = client.post(
-        "/api/v1/projects/9/screenplays/2/scenes",
-        json={"act_id": 4, "heading": "EXT. GARDEN - DAY", "position": 1},
-    )
+    app.dependency_overrides[async_get_db] = dependency
+    app.include_router(router, prefix="/api/v1")
+    client = TestClient(app)
+    response = client.post("/api/v1/projects/9/screenplays/2/scenes", json={"act_id": 4, "heading": "EXT. GARDEN - DAY"})
     assert response.status_code == 201
-    assert response.json()["id"] == 7
     assert response.json()["heading"] == "EXT. GARDEN - DAY"
+    assert client.post("/api/v1/projects/9/screenplays/2/scenes", json={"act_id": 5, "heading": "X"}).status_code == 404
+    assert client.post("/api/v1/projects/9/screenplays/3/scenes", json={"act_id": 4, "heading": "X"}).status_code == 404
+    run_async(context.__aexit__(None, None, None))
 
 
 def test_project_instruction_update_requires_matching_if_match(

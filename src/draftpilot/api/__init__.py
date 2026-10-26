@@ -25,6 +25,7 @@ from draftpilot.api.providers import router as providers_router
 from draftpilot.api.retrieval import router as retrieval_router
 from draftpilot.api.room import router as room_router
 from draftpilot.api.runs import router as runs_router
+from draftpilot.api.story import router as story_router
 from draftpilot.api.timeline import router as timeline_router
 from draftpilot.api.twins import project_router as twin_router
 from draftpilot.api.twins import writer_router
@@ -45,6 +46,7 @@ protected = APIRouter(dependencies=[Depends(require_api_auth), Depends(bind_requ
 protected.include_router(lifecycle_router)  # before projects_router: /projects/deleted must win over /{project_id}
 protected.include_router(projects_router)
 protected.include_router(runs_router)
+protected.include_router(story_router)
 protected.include_router(timeline_router)
 protected.include_router(artifacts_router)
 protected.include_router(exports_router)

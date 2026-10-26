@@ -368,6 +368,11 @@ Decisions made against pydantic-ai 2.51 / temporalio 1.33, landed as G11a–G11e
 !!! info "Status"
     Planned 2026-10-26. Each step ends green, references its issue and is pushed.
 
+| Step | Status | Notes |
+|---|---|---|
+| G14 · Typed story domain | ✅ done | `Character`, `CharacterRelationship`, `CharacterTimelineEvent`, `Location`, `StoryBeat` tables plus storyline fields (premise, synopsis, theme, tone); migration `a1b2c3d4e5f6` backfills Twin Keeper graph nodes and outline-artifact beats (Big Fish copy: 48 characters, 148 locations). One service layer (`core/story/`, `core/proposals.py`, `core/timeline_proposals.py`, `core/project_backup.py`, `core/errors.py`) shared by REST and MCP; MCP no longer imports `api.*`. Act CRUD, scene create (incl. the first scene), move and delete. Story proposals (`character`/`location`/`beat`/`timeline_event`/`relationship` create·update·delete, `storyline`, whole `outline`) apply as the writer and roll back; `character_arcs` and `notes_to_outline` now propose onto them. The Twin Keeper derives into the tables and never overwrites writer edits; the agent brief carries storyline, cast (motives, objectives, arcs, timelines), places and beats. Backups carry the story with remapped links |
+| G15 · Manual studio | ⏳ next | |
+
 ### Context
 
 G0–G11 are done: FastAPI host, data backbone, room on Temporal, RAG, twins, evals, docs. G11 (#32) landed in `c50d31a`. Measured against the six v1.0 goals, an audit of the code found these gaps:

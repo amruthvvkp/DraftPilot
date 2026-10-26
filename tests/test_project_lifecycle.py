@@ -45,8 +45,8 @@ def studio(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[tuple[Te
     enqueue = AsyncMock()
     monkeypatch.setattr("draftpilot.core.temporal.start_best_effort", enqueue)
     monkeypatch.setattr("draftpilot.api.lifecycle.events.publish", AsyncMock())
-    monkeypatch.setattr("draftpilot.api.backups._enqueue_restored_artifacts", AsyncMock())
-    monkeypatch.setattr("draftpilot.api.lifecycle._enqueue_restored_artifacts", AsyncMock())
+    monkeypatch.setattr("draftpilot.api.backups.enqueue_restored_documents", AsyncMock())
+    monkeypatch.setattr("draftpilot.api.lifecycle.enqueue_restored_documents", AsyncMock())
     context = memory_session()
     session = run_async(context.__aenter__())
 
@@ -104,7 +104,7 @@ def _count(session: AsyncSession, model: type, *where: object) -> int:
 def test_every_project_table_is_covered() -> None:
     """New tables that hold project data are picked up automatically, children before parents."""
     names = [table.name for table in project_tables()]
-    assert {"block", "scene", "act", "screenplay", "agent_run", "agent_feedback", "workflow_run", "knowledge_node", "mcp_approval_request"} <= set(names)
+    assert {"block", "scene", "act", "screenplay", "agent_run", "agent_feedback", "workflow_run", "knowledge_node", "character", "character_timeline_event", "story_beat", "location", "mcp_approval_request"} <= set(names)
     assert names.index("block") < names.index("scene") < names.index("act") < names.index("screenplay")
     assert names.index("agent_feedback") < names.index("agent_run") < names.index("workflow_run")
 
@@ -117,7 +117,7 @@ def test_delete_backs_up_then_removes_everything_and_can_be_restored(studio: tup
     assert deleted.status_code == 200, deleted.text
     body = deleted.json()
     assert body["title"] == "Big Fish" and body["backup"].endswith(".json.gz")
-    assert body["removed"]["block"] > 2000 and body["removed"]["knowledge_node"] > 20
+    assert body["removed"]["block"] > 2000 and body["removed"]["character"] > 20
     enqueue.assert_any_await("purge_rag_project", 1, description="RAG project purge enqueue")
     session.expire_all()
     assert _count(session, Project) == 1 and _count(session, Scene) == 1 < scenes_before

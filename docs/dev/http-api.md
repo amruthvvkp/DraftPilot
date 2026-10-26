@@ -142,12 +142,17 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `POST` | `/projects/deleted/{project_id}/dismiss` | Hide a deleted project from "Recently deleted" (its backups remain on disk). |  | 200 `object` |
 | `POST` | `/projects/wizard/assist` | Generate structured project wizard fields using configured LLM or fallback. | `WizardAssistRequest` | 200 `WizardAssistResponse` |
 | `DELETE` | `/projects/{project_id}` | Back up and delete a project with everything in it; restore it later from the backup. |  | 200 `object` |
-| `PATCH` | `/projects/{project_id}` | Update project instructions and metadata with optimistic concurrency. | `ProjectUpdate` | 200 `ProjectRead` |
+| `PATCH` | `/projects/{project_id}` | Update project metadata and storyline with optimistic concurrency. | `ProjectUpdate` | 200 `ProjectRead` |
+| `POST` | `/projects/{project_id}/acts` | Add an act to a draft (default: the project's first draft, at the end). | `ActInput` | 201 `ActRead` |
+| `DELETE` | `/projects/{project_id}/acts/{act_id}` | Delete an act, moving its scenes to ``move_scenes_to`` when it has any. |  | 204 |
+| `PATCH` | `/projects/{project_id}/acts/{act_id}` | Rename or reorder an act. | `ActPatch` | 200 `ActRead` |
 | `POST` | `/projects/{project_id}/artwork` | Store bounded validated artwork without exposing an arbitrary filesystem path. |  | 200 `ProjectRead` |
 | `POST` | `/projects/{project_id}/duplicate` | Copy a project's brief, references, artifacts and every draft into a new project. |  | 201 `ProjectRead` |
 | `GET` | `/projects/{project_id}/references` | List typed creative references within project scope. |  | 200 list of `ProjectReferenceRead` |
 | `DELETE` | `/projects/{project_id}/references/{reference_id}` | Delete one project reference without crossing project boundaries. |  | 204 |
 | `PATCH` | `/projects/{project_id}/references/{reference_id}` | Update one typed reference with optimistic concurrency. | `ProjectReferenceUpdate` | 200 `ProjectReferenceRead` |
+| `POST` | `/projects/{project_id}/scenes` | Create a scene in the project's draft (the first scene of a new project included). | `SceneAppend` | 201 `SceneRead` |
+| `DELETE` | `/projects/{project_id}/scenes/{scene_id}` | Delete a scene with its blocks and revisions. |  | 204 |
 | `PATCH` | `/projects/{project_id}/scenes/{scene_id}` | Update a project scene only when the caller holds its current version. | `SceneUpdate` | 200 `SceneRead` |
 | `POST` | `/projects/{project_id}/scenes/{scene_id}/blocks` | Create a semantic screenplay block under a versioned scene. | `BlockInput` | 201 `BlockRead` |
 | `PUT` | `/projects/{project_id}/scenes/{scene_id}/blocks/order` | Reorder a scene's blocks; the request must list exactly the scene's current blocks. | `BlockOrder` | 200 list of `BlockRead` |
@@ -155,6 +160,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `PATCH` | `/projects/{project_id}/scenes/{scene_id}/blocks/{block_id}` | Update a semantic screenplay block with optimistic concurrency. | `BlockUpdate` | 200 `BlockRead` |
 | `GET` | `/projects/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations` | List linked translations for a dialogue block within its project. |  | 200 list of `DialogueTranslationRead` |
 | `PUT` | `/projects/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations/{language}` | Save a dialogue variant while preserving the authoritative source block. | `TranslationInput` | 200 `DialogueTranslationRead` |
+| `POST` | `/projects/{project_id}/scenes/{scene_id}/move` | Move a scene within its act or to another act of the same draft. | `SceneMove` | 200 `SceneRead` |
 | `GET` | `/projects/{project_id}/scenes/{scene_id}/revisions` | List revisions only when the scene belongs to the requested project. |  | 200 list of `SceneRevisionRead` |
 | `POST` | `/projects/{project_id}/scenes/{scene_id}/revisions` | Capture an immutable scene snapshot for diff, rollback, or naming. |  | 201 `SceneRevisionDetail` |
 | `GET` | `/projects/{project_id}/scenes/{scene_id}/revisions/{revision_id}/diff/{other_revision_id}` | Return a bounded unified diff between two revisions of one project scene. |  | 200 `object` |
@@ -199,6 +205,34 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `GET` | `/projects/{project_id}/runs/{run_id}` | Return a run only within its project scope. |  | 200 `WorkflowRunRead` |
 | `POST` | `/projects/{project_id}/runs/{run_id}/cancel` | Cancel a queued or running project workflow without deleting its history. |  | 200 `WorkflowRunRead` |
 | `POST` | `/projects/{project_id}/runs/{run_id}/resume` | Requeue a non-terminal or failed run for worker resumption. |  | 202 `WorkflowRunRead` |
+
+## story
+
+| Method | Path | What it does | Body | Returns |
+|---|---|---|---|---|
+| `GET` | `/projects/{project_id}/beats` | List outline beats in order. |  | 200 list of `StoryBeatRead` |
+| `POST` | `/projects/{project_id}/beats` | Add an outline beat. | `StoryBeatCreate` | 201 `StoryBeatRead` |
+| `DELETE` | `/projects/{project_id}/beats/{beat_id}` | Delete a beat. |  | 204 |
+| `PATCH` | `/projects/{project_id}/beats/{beat_id}` | Update a beat (including its act, order and linked scenes) with optimistic concurrency. | `StoryBeatUpdate` | 200 `StoryBeatRead` |
+| `GET` | `/projects/{project_id}/characters` | List characters in cast order. |  | 200 list of `CharacterRead` |
+| `POST` | `/projects/{project_id}/characters` | Create a character profile. | `CharacterCreate` | 201 `CharacterRead` |
+| `DELETE` | `/projects/{project_id}/characters/{character_id}` | Delete a character with their timeline and relationships. |  | 204 |
+| `GET` | `/projects/{project_id}/characters/{character_id}` | Return one character. |  | 200 `CharacterRead` |
+| `PATCH` | `/projects/{project_id}/characters/{character_id}` | Update a character profile with optimistic concurrency. | `CharacterUpdate` | 200 `CharacterRead` |
+| `GET` | `/projects/{project_id}/characters/{character_id}/timeline` | List one character's timeline events in story order. |  | 200 list of `CharacterTimelineEventRead` |
+| `GET` | `/projects/{project_id}/locations` | List locations. |  | 200 list of `LocationRead` |
+| `POST` | `/projects/{project_id}/locations` | Create a location. | `LocationCreate` | 201 `LocationRead` |
+| `DELETE` | `/projects/{project_id}/locations/{location_id}` | Delete a location. |  | 204 |
+| `PATCH` | `/projects/{project_id}/locations/{location_id}` | Update a location with optimistic concurrency. | `LocationUpdate` | 200 `LocationRead` |
+| `GET` | `/projects/{project_id}/relationships` | List character relationships, optionally those touching one character. |  | 200 list of `CharacterRelationshipRead` |
+| `POST` | `/projects/{project_id}/relationships` | Relate two characters. | `CharacterRelationshipCreate` | 201 `CharacterRelationshipRead` |
+| `DELETE` | `/projects/{project_id}/relationships/{relationship_id}` | Delete a relationship. |  | 204 |
+| `PATCH` | `/projects/{project_id}/relationships/{relationship_id}` | Update a relationship with optimistic concurrency. | `CharacterRelationshipUpdate` | 200 `CharacterRelationshipRead` |
+| `GET` | `/projects/{project_id}/storyline` | Return the project's logline, premise, synopsis, theme, tone and outline text. |  | 200 `object` |
+| `GET` | `/projects/{project_id}/timeline-events` | List character timeline events, optionally for one character. |  | 200 list of `CharacterTimelineEventRead` |
+| `POST` | `/projects/{project_id}/timeline-events` | Add an event to a character's timeline. | `CharacterTimelineEventCreate` | 201 `CharacterTimelineEventRead` |
+| `DELETE` | `/projects/{project_id}/timeline-events/{event_id}` | Delete a timeline event. |  | 204 |
+| `PATCH` | `/projects/{project_id}/timeline-events/{event_id}` | Update a timeline event with optimistic concurrency. | `CharacterTimelineEventUpdate` | 200 `CharacterTimelineEventRead` |
 
 ## timeline
 

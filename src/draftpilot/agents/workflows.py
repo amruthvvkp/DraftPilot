@@ -33,9 +33,11 @@ from draftpilot.core.scene_proposals import (
 from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.hydrate import scene_to_doc
 from draftpilot.core.screenplay.schema import ActDoc, BlockType, ScreenplayDoc
+from draftpilot.core.story import entities as story_entities
+from draftpilot.core.story.proposals import propose_outline as propose_outline_beats
+from draftpilot.core.story.proposals import propose_story_change
 from draftpilot.core.twins import normalize_cue, working_screenplay
 from draftpilot.crud import agent_proposals as proposals_crud
-from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import scenes as scenes_crud
 from draftpilot.crud import story_artifacts as artifacts_crud
 from draftpilot.crud import workflow_runs as runs_crud
@@ -391,10 +393,10 @@ async def _propose_artifact(
 
 
 async def lead_characters(session: AsyncSession, project_id: int, top: int) -> list[str]:
-    """Return the Story twin's leads: characters with the most dialogue."""
-    nodes = [node for node in await graph_crud.list_nodes(session, project_id) if node.kind == "character"]
-    nodes.sort(key=lambda node: int(node.node_metadata.get("dialogue_lines") or 0), reverse=True)
-    return [node.label for node in nodes[:top]]
+    """Return the leads: protagonists first, then the characters with the most dialogue."""
+    rows = await story_entities.list_entities(session, project_id, "character")
+    rows.sort(key=lambda row: (row.role != "protagonist", -row.dialogue_lines, row.position))
+    return [row.name for row in rows[:top]]
 
 
 async def _project_scene(session: AsyncSession, project_id: int, scene_id: int) -> Scene:
@@ -481,50 +483,64 @@ async def known_scene_ids(project_id: int) -> list[int]:
 
 @activity.defn(name="room_propose_outline")
 async def propose_outline(project_id: int, run_id: int | None, outline: Outline) -> list[int]:
-    """Propose the logline into the brief and the beats into the outline artifact."""
+    """Propose the logline onto the storyline and the beats as the outline."""
     async with session_scope() as session:
-        brief = await _artifact(session, project_id, "brief", "Brief")
-        outline_artifact = await _artifact(session, project_id, "outline", "Outline")
-        return [
-            await _propose_artifact(session, project_id, run_id, brief, {"content": outline.logline}, "Logline from your notes"),
-            await _propose_artifact(
-                session,
-                project_id,
-                run_id,
-                outline_artifact,
-                {
-                    "content": markdown_outline(outline),
-                    "artifact_metadata": {
-                        **outline_artifact.artifact_metadata,
-                        "beats": [{**beat.model_dump(), "sequence": index} for index, beat in enumerate(outline.beats, 1)],
-                    },
-                },
-                f"{len(outline.beats)}-beat outline",
-            ),
-        ]
+        logline = await propose_story_change(
+            session, project_id, "storyline", "update", {"logline": outline.logline}, run_id=run_id, summary="Logline from your notes"
+        )
+        beats = await propose_outline_beats(
+            session,
+            project_id,
+            [beat.model_dump() for beat in outline.beats],
+            run_id=run_id,
+            summary=f"{len(outline.beats)}-beat outline",
+        )
+        return [logline.id or 0, beats.id or 0]
 
 
 @activity.defn(name="room_propose_arcs")
 async def propose_arcs(project_id: int, run_id: int | None, arcs: list[dict[str, Any]]) -> list[int]:
-    """Propose every arc into the characters artifact."""
+    """Propose each arc onto its character profile, plus a timeline event per turning point."""
+    proposal_ids: list[int] = []
     async with session_scope() as session:
-        artifact = await _artifact(session, project_id, "character", "Characters")
-        summary = [
-            {"character": item["character"], "want": item["want"], "need": item["need"], "turning_points": item["turning_points"]}
-            for item in arcs
-        ]
-        proposal = await _propose_artifact(
-            session,
-            project_id,
-            run_id,
-            artifact,
-            {
-                "content": "\n\n".join(f"**{item['character']}** — {item['arc_summary']}" for item in arcs),
-                "artifact_metadata": {**artifact.artifact_metadata, "character_arcs": summary},
-            },
-            f"Arcs for {', '.join(item['character'] for item in arcs)}",
-        )
-    return [proposal]
+        cast_rows = {row.name.casefold(): row for row in await story_entities.list_entities(session, project_id, "character")}
+        for item in arcs:
+            fields = {
+                "want": item["want"],
+                "need": item["need"],
+                "arc_summary": item["arc_summary"],
+                **({"flaw": item["flaw"]} if item.get("flaw") else {}),
+            }
+            row = cast_rows.get(str(item["character"]).casefold())
+            if row is None:
+                turning = "\n".join(f"- {point}" for point in item.get("turning_points") or [])
+                proposal = await propose_story_change(
+                    session,
+                    project_id,
+                    "character",
+                    "create",
+                    {"name": item["character"], **fields, **({"notes": f"Turning points:\n{turning}"} if turning else {})},
+                    run_id=run_id,
+                    summary=f"New character {item['character']} with an arc",
+                )
+                proposal_ids.append(proposal.id or 0)
+                continue
+            proposal = await propose_story_change(
+                session, project_id, "character", "update", fields, entity_id=row.id, run_id=run_id, summary=f"Arc for {row.name}"
+            )
+            proposal_ids.append(proposal.id or 0)
+            for position, point in enumerate(item.get("turning_points") or []):
+                event = await propose_story_change(
+                    session,
+                    project_id,
+                    "timeline_event",
+                    "create",
+                    {"character_id": row.id, "position": position, "title": str(point)[:300]},
+                    run_id=run_id,
+                    summary=f"{row.name}: turning point {position + 1}",
+                )
+                proposal_ids.append(event.id or 0)
+    return proposal_ids
 
 
 @activity.defn(name="room_propose_rewrite")

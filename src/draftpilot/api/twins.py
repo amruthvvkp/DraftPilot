@@ -10,6 +10,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core import events
 from draftpilot.core.db import async_get_db
+from draftpilot.core.story import entities as story_entities
 from draftpilot.core.twins import (
     get_writer_profile,
     learned_decisions,
@@ -21,7 +22,9 @@ from draftpilot.core.twins import (
 from draftpilot.crud import knowledge_graph as graph_crud
 from draftpilot.crud import projects as projects_crud
 from draftpilot.models import (
+    CharacterRead,
     KnowledgeNodeRead,
+    LocationRead,
     WriterMemory,
     WriterMemoryBase,
     WriterMemoryRead,
@@ -37,8 +40,8 @@ class StoryTwinRead(BaseModel):
     """The Story twin: characters, locations, canon, and the brief agents receive."""
 
     screenplay_id: int | None
-    characters: list[KnowledgeNodeRead]
-    locations: list[KnowledgeNodeRead]
+    characters: list[CharacterRead]
+    locations: list[LocationRead]
     canon: list[KnowledgeNodeRead]
     brief: str
 
@@ -54,17 +57,13 @@ async def read_story_twin(project_id: int, session: AsyncSession = Depends(async
     """Return the Story twin, ranked: characters by dialogue, locations by scene count."""
     await _require_project(session, project_id)
     nodes = [KnowledgeNodeRead.model_validate(node, from_attributes=True) for node in await graph_crud.list_nodes(session, project_id)]
+    characters = await story_entities.list_entities(session, project_id, "character")
+    locations = await story_entities.list_entities(session, project_id, "location")
     draft = await working_screenplay(session, project_id)
     return StoryTwinRead(
         screenplay_id=draft.id if draft else None,
-        characters=sorted(
-            (node for node in nodes if node.kind == "character"),
-            key=lambda node: -int(node.node_metadata.get("dialogue_lines", 0)),
-        ),
-        locations=sorted(
-            (node for node in nodes if node.kind == "location"),
-            key=lambda node: -len(node.node_metadata.get("scene_ids", [])),
-        ),
+        characters=[CharacterRead.model_validate(row) for row in sorted(characters, key=lambda row: -row.dialogue_lines)],
+        locations=[LocationRead.model_validate(row) for row in sorted(locations, key=lambda row: -len(row.scene_ids))],
         canon=[node for node in nodes if node.kind not in {"character", "location"}],
         brief=await story_twin_brief(session, project_id),
     )

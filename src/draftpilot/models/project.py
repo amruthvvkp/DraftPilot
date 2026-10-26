@@ -21,6 +21,10 @@ class ProjectBase(SQLModel):
     logline: str | None = Field(default=None, max_length=500)
     description: str | None = Field(default=None)
     story_outline: str | None = Field(default=None)
+    premise: str | None = Field(default=None)
+    synopsis: str | None = Field(default=None)
+    theme: str | None = Field(default=None, max_length=1000)
+    tone: str | None = Field(default=None, max_length=500)
     visual_style: str | None = Field(default=None, max_length=300)
     camera_type: str | None = Field(default=None, max_length=200)
     screening_type: ScreeningType | None = Field(default=None)
@@ -74,6 +78,10 @@ class ProjectUpdate(SQLModel):
     logline: str | None = None
     description: str | None = None
     story_outline: str | None = None
+    premise: str | None = None
+    synopsis: str | None = None
+    theme: str | None = None
+    tone: str | None = None
     visual_style: str | None = None
     camera_type: str | None = None
     screening_type: ScreeningType | None = None

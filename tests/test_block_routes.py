@@ -20,7 +20,7 @@ from draftpilot.models import Act, Block, Project, Scene, Screenplay
 def seeded(monkeypatch: pytest.MonkeyPatch) -> tuple[TestClient, AsyncSession, AsyncMock]:
     """Serve the projects router over a seeded in-memory database."""
     changed = AsyncMock()
-    monkeypatch.setattr("draftpilot.api.projects.scene_changed", changed)
+    monkeypatch.setattr("draftpilot.core.story.structure.scene_changed", changed)
     context = memory_session()
     session = run_async(context.__aenter__())
 

@@ -19,7 +19,7 @@ from draftpilot.evals.evaluators import (
     speakers,
 )
 from draftpilot.evals.harness import eval_project
-from draftpilot.models import KnowledgeNode
+from draftpilot.models import Character
 
 
 def _ctx(output: Any, **attributes: Any) -> Any:
@@ -62,8 +62,8 @@ def test_the_harness_is_isolated_and_searchable() -> None:
             async with session_scope() as session:
                 from sqlmodel import select
 
-                leads = (await session.exec(select(KnowledgeNode).where(KnowledgeNode.kind == "character"))).all()
-                assert {"Edward", "Will"} <= {node.label for node in leads}
+                leads = (await session.exec(select(Character).where(Character.project_id == project.project_id))).all()
+                assert {"Edward", "Will"} <= {row.name for row in leads}
             from draftpilot.core import events, temporal
 
             await events.publish(project.project_id, "scene.changed", {})  # swallowed, never reaches Redis

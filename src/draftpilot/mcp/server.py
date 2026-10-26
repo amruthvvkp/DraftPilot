@@ -18,18 +18,15 @@ from starlette.responses import JSONResponse
 
 from draftpilot.agents.workflow_runner import create_room_workflow_run
 from draftpilot.agents.workflows import ROOM_WORKFLOWS
-from draftpilot.api.agent import approve_agent_proposal, rollback_agent_proposal
-from draftpilot.api.artifacts import _enqueue_index
-from draftpilot.api.backups import (
-    _enqueue_restored_artifacts,
-    _project_payload,
-    restore_backup_payload,
+from draftpilot.core import (
+    events,
+    indexing,
+    proposals,
+    rag_client,
+    telemetry,
+    temporal,
+    timeline_proposals,
 )
-from draftpilot.api.timeline import (
-    approve_timeline_proposal,
-    rollback_timeline_proposal,
-)
-from draftpilot.core import events, rag_client, telemetry, temporal
 from draftpilot.core.agent_identity import (
     acting_as,
     agent_from_meta,
@@ -47,6 +44,11 @@ from draftpilot.core.context_workflows import (
 from draftpilot.core.db import session_scope
 from draftpilot.core.exports import ExportError, write_export
 from draftpilot.core.mcp_auth import client_id_for_token
+from draftpilot.core.project_backup import (
+    enqueue_restored_documents,
+    project_payload,
+    restore_payload,
+)
 from draftpilot.core.scene_proposals import (
     parse_scene_fountain,
     rewrite_operation,
@@ -59,6 +61,7 @@ from draftpilot.core.screenplay.hydrate import block_to_doc, load_screenplay_doc
 from draftpilot.core.screenplay.pdf import render_pdf
 from draftpilot.core.screenplay.schema import ActDoc, SceneDoc, ScreenplayDoc
 from draftpilot.core.screenplay.timeline import propose_reorder
+from draftpilot.core.story import entities as story_entities
 from draftpilot.core.story_operations import apply_story_operation as apply_operation
 from draftpilot.core.story_operations import validate_story_operation
 from draftpilot.core.twins import story_twin_brief, writer_twin_brief
@@ -448,7 +451,7 @@ async def apply_story_operation(
         await artifacts_crud.mark_dependents_stale(session, project_id, [artifact_id])
         await session.commit()
         await session.refresh(artifact)
-    await _enqueue_index(project_id, artifact)
+    await indexing.index_document(project_id, f"artifact:{artifact.id}", artifact.kind, artifact.content, artifact.version)
     await events.publish(project_id, "artifact.changed", {"artifact_id": artifact.id, "version": artifact.version})
     return StoryArtifactRead.model_validate(artifact).model_dump(mode="json")
 
@@ -567,29 +570,34 @@ async def read_story_twin(project_id: int, ctx: Context) -> dict[str, object]:
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
         nodes = await graph_crud.list_nodes(session, project_id)
+        characters = await story_entities.list_entities(session, project_id, "character")
+        locations = await story_entities.list_entities(session, project_id, "location")
         story = await story_twin_brief(session, project_id)
         writer = await writer_twin_brief(session, project_id)
 
-    def summary(node: Any) -> dict[str, object]:
+    def entity(row: Any) -> dict[str, object]:
         """Keep the fields an agent needs to reason and cite."""
-        meta = node.node_metadata
         return {
-            "node_id": node.id,
-            "label": node.label,
-            "description": node.description,
-            "dialogue_lines": meta.get("dialogue_lines"),
-            "scene_ids": (meta.get("scene_ids") or [])[:60],
-            "first_scene_id": meta.get("first_scene_id"),
-            "writer_owned": meta.get("source") != "twin_keeper" or bool(meta.get("writer_edited")),
+            "id": row.id,
+            "name": row.name,
+            "summary": getattr(row, "summary", None) or getattr(row, "description", ""),
+            "dialogue_lines": getattr(row, "dialogue_lines", None),
+            "scene_ids": row.scene_ids[:60],
+            "writer_owned": row.source != "twin" or row.writer_edited,
+            "version": row.version,
         }
 
-    characters = sorted((n for n in nodes if n.kind == "character"), key=lambda n: -int(n.node_metadata.get("dialogue_lines", 0)))
-    locations = sorted((n for n in nodes if n.kind == "location"), key=lambda n: -len(n.node_metadata.get("scene_ids", [])))
+    characters.sort(key=lambda row: -row.dialogue_lines)
+    locations.sort(key=lambda row: -len(row.scene_ids))
     result: dict[str, object] = {
         "project_id": project_id,
-        "characters": [summary(node) for node in characters[:60]],
-        "locations": [summary(node) for node in locations[:60]],
-        "canon": [summary(node) for node in nodes if node.kind not in {"character", "location"}][:60],
+        "characters": [entity(row) for row in characters[:60]],
+        "locations": [entity(row) for row in locations[:60]],
+        "canon": [
+            {"node_id": node.id, "kind": node.kind, "label": node.label, "description": node.description}
+            for node in nodes
+            if node.kind not in {"character", "location"}
+        ][:60],
         "story_brief": story,
         "writer_brief": writer,
     }
@@ -963,7 +971,7 @@ async def create_project_backup(
         project = await projects_crud.get(session, project_id)
         if project is None:
             raise ValueError("Project not found")
-        payload = await _project_payload(session, project_id)
+        payload = await project_payload(session, project_id)
         filename, manifest = write_backup(
             settings.backup.root,
             project_id,
@@ -1011,10 +1019,10 @@ async def restore_project_backup(
             )
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
-        restored = await restore_backup_payload(session, envelope.payload)
+        restored = await restore_payload(session, envelope.payload)
         if restored.id is None:
             raise ValueError("Restored project has no identifier")
-        await _enqueue_restored_artifacts(session, restored.id)
+        await enqueue_restored_documents(session, restored.id)
     if restored.id is None:
         raise ValueError("Restored project has no identifier")
     return {"source_project_id": project_id, "project_id": restored.id}
@@ -1303,9 +1311,9 @@ async def review_screenplay_proposal(
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
         result = await (
-            approve_agent_proposal(project_id, proposal_id, session)
+            proposals.approve(session, project_id, proposal_id)
             if action == "approve"
-            else rollback_agent_proposal(project_id, proposal_id, session)
+            else proposals.rollback(session, project_id, proposal_id)
         )
     return result.model_dump(mode="json")
 
@@ -1330,8 +1338,8 @@ async def review_timeline_proposal(
         except PermissionError as exc:
             raise ValueError(str(exc)) from exc
         result = await (
-            approve_timeline_proposal(project_id, screenplay_id, proposal_id, session)
+            timeline_proposals.approve(session, project_id, screenplay_id, proposal_id)
             if action == "approve"
-            else rollback_timeline_proposal(project_id, screenplay_id, proposal_id, session)
+            else timeline_proposals.rollback(session, project_id, screenplay_id, proposal_id)
         )
     return result.model_dump(mode="json")

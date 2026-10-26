@@ -1,9 +1,9 @@
 """The room's two digital twins: the Story twin (the project) and the Writer twin (the writer).
 
-The Story twin is a live, structured mirror of the screenplay kept in the knowledge graph:
-characters (from character cues) and locations (from scene headings), each linked to the
-scenes they appear in. The Twin Keeper re-derives them after edits; nodes the writer created
-or edited are never overwritten. The Writer twin combines the writer's own profile and
+The Story twin is the project's structured story context: the storyline, characters (with their
+motives, objectives and timelines), locations, outline beats and canon. The Twin Keeper derives
+characters (from character cues) and locations (from scene headings) from the draft after edits;
+rows the writer created or edited are never overwritten. The Writer twin combines the writer's own profile and
 memories with what the room has learned from their approve/reject decisions. Both are
 summarised into compact briefs that every room agent receives.
 """
@@ -13,7 +13,6 @@ import string
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlmodel import col, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -26,9 +25,14 @@ from draftpilot.models import (
     AgentProposal,
     Block,
     BlockType,
+    Character,
+    CharacterTimelineEvent,
     KnowledgeNode,
+    Location,
+    Project,
     Scene,
     Screenplay,
+    StoryBeat,
     WriterMemory,
     WriterProfile,
 )
@@ -145,12 +149,22 @@ async def working_screenplay(session: AsyncSession, project_id: int) -> Screenpl
 
 
 def _derived(node: KnowledgeNode) -> bool:
-    """Return whether a node is owned by the Twin Keeper (not created or edited by the writer)."""
+    """Return whether a graph node is owned by the Twin Keeper (not created or edited by the writer)."""
     return node.node_metadata.get("source") == TWIN_KEEPER and not node.node_metadata.get("writer_edited")
 
 
+def _owned_by_keeper(row: Character | Location) -> bool:
+    """Return whether a character/location row is derived and untouched by the writer."""
+    return row.source == "twin" and not row.writer_edited
+
+
 async def refresh_story_twin(session: AsyncSession, project_id: int) -> dict[str, int]:
-    """Re-derive character and location nodes from the working draft; keep writer-owned nodes."""
+    """Re-derive characters and locations from the working draft; never overwrite writer edits.
+
+    Derived statistics (cue, dialogue lines, scenes) always refresh. A row's prose fields are
+    only written while it is still keeper-owned, and only keeper-owned rows are removed when
+    they disappear from the draft.
+    """
     screenplay = await working_screenplay(session, project_id)
     if screenplay is None:
         return {"characters": 0, "locations": 0, "removed": 0}
@@ -158,100 +172,170 @@ async def refresh_story_twin(session: AsyncSession, project_id: int) -> dict[str
     blocks = await blocks_crud.list_for_scenes(session, [scene.id for scene in scenes if scene.id is not None])
     characters, locations = extract_story_twin(scenes, blocks)
     headings = {scene.id: scene.heading for scene in scenes}
-    nodes = await graph_crud.list_nodes(session, project_id)
-    existing = {(node.kind, node.label.casefold()): node for node in nodes}
     now = datetime.now(UTC)
-    seen: set[int] = set()
-
-    def upsert(kind: str, label: str, metadata: dict[str, Any], description: str) -> None:
-        """Create a twin node, or refresh the derived facts of an existing one."""
-        node = existing.get((kind, label.casefold()))
-        if node is None:
-            session.add(
-                KnowledgeNode(
-                    project_id=project_id,
-                    kind=kind,
-                    label=label,
-                    description=description,
-                    node_metadata={"source": TWIN_KEEPER, **metadata},
-                )
+    existing_characters = list(
+        (await session.exec(select(Character).where(Character.project_id == project_id))).all()
+    )
+    by_cue = {normalize_cue(row.cue or row.name): row for row in existing_characters}
+    by_name = {row.name.casefold(): row for row in existing_characters}
+    seen_characters: set[int] = set()  # object identities of rows still in the draft
+    for rank, stats in enumerate(characters):
+        row = by_cue.get(stats.name) or by_name.get(display_name(stats.name).casefold())
+        first = stats.first_scene_id
+        summary = (
+            f"Speaks {stats.dialogue_lines} lines across {len(stats.scene_ids)} scenes; first in "
+            f"{headings.get(first) or 'the opening, before the first scene heading'}."
+        )
+        if row is None:
+            row = Character(
+                project_id=project_id,
+                name=display_name(stats.name),
+                cue=stats.name,
+                summary=summary,
+                role="supporting" if rank else "protagonist",
+                source="twin",
+                position=len(existing_characters) + rank,
             )
-            return
-        seen.add(node.id or 0)
-        merged = {**node.node_metadata, **metadata}
-        if merged != node.node_metadata:
-            node.node_metadata = merged
-            node.version += 1
-            node.updated_at = now
-            if _derived(node):
-                node.description = description
-            session.add(node)
-
-    for character in characters:
-        first = character.first_scene_id
-        upsert(
-            "character",
-            display_name(character.name),
-            {
-                "cue": character.name,
-                "dialogue_lines": character.dialogue_lines,
-                "scene_ids": character.scene_ids,
-                "first_scene_id": first,
-                "screenplay_id": screenplay.id,
-            },
-            f"Speaks {character.dialogue_lines} lines across {len(character.scene_ids)} scenes; first in "
-            f"{headings.get(first) or 'the opening, before the first scene heading'}.",
+            existing_characters.append(row)
+        elif (row.cue, row.dialogue_lines, row.scene_ids) == (stats.name, stats.dialogue_lines, stats.scene_ids) and (
+            not _owned_by_keeper(row) or row.summary == summary
+        ):
+            seen_characters.add(id(row))
+            continue
+        else:
+            row.version += 1
+            row.updated_at = now
+            if _owned_by_keeper(row):
+                row.summary = summary
+        row.cue = stats.name
+        row.dialogue_lines = stats.dialogue_lines
+        row.scene_ids = stats.scene_ids
+        session.add(row)
+        seen_characters.add(id(row))
+    existing_locations = list((await session.exec(select(Location).where(Location.project_id == project_id))).all())
+    by_heading = {(row.heading_location or row.name).upper(): row for row in existing_locations}
+    seen_locations: set[int] = set()
+    for place in locations:
+        description = (
+            f"{'/'.join(sorted(place.int_ext)) or 'Location'} in {len(place.scene_ids)} scenes"
+            + (f" ({', '.join(sorted(place.times))})" if place.times else "")
+            + "."
         )
-    for location in locations:
-        upsert(
-            "location",
-            display_name(location.name),
-            {
-                "heading_location": location.name,
-                "int_ext": sorted(location.int_ext),
-                "times": sorted(location.times),
-                "scene_ids": location.scene_ids,
-                "screenplay_id": screenplay.id,
-            },
-            f"{'/'.join(sorted(location.int_ext)) or 'Location'} in {len(location.scene_ids)} scenes"
-            + (f" ({', '.join(sorted(location.times))})" if location.times else "")
-            + ".",
-        )
+        location = by_heading.get(place.name)
+        derived = (sorted(place.int_ext), sorted(place.times), place.scene_ids)
+        if location is None:
+            location = Location(
+                project_id=project_id,
+                name=display_name(place.name),
+                heading_location=place.name,
+                description=description,
+                source="twin",
+                position=len(existing_locations),
+            )
+            existing_locations.append(location)
+        elif (location.int_ext, location.times, location.scene_ids) == derived and (
+            not _owned_by_keeper(location) or location.description == description
+        ):
+            seen_locations.add(id(location))
+            continue
+        else:
+            location.version += 1
+            location.updated_at = now
+            if _owned_by_keeper(location):
+                location.description = description
+        location.heading_location = place.name
+        location.int_ext, location.times, location.scene_ids = derived
+        session.add(location)
+        seen_locations.add(id(location))
     removed = 0
-    current = {("character", display_name(item.name).casefold()) for item in characters} | {
-        ("location", display_name(item.name).casefold()) for item in locations
-    }
-    for node in nodes:
-        if node.kind in {"character", "location"} and _derived(node) and (node.kind, node.label.casefold()) not in current:
-            await session.delete(node)
+    for character in existing_characters:
+        if character.id is not None and id(character) not in seen_characters and _owned_by_keeper(character):
+            await session.delete(character)
+            removed += 1
+    for location in existing_locations:
+        if location.id is not None and id(location) not in seen_locations and _owned_by_keeper(location):
+            await session.delete(location)
             removed += 1
     await session.commit()
     return {"characters": len(characters), "locations": len(locations), "removed": removed}
 
 
+def _clip(text: str, limit: int = 240) -> str:
+    """Shorten prose for the compact brief."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+
 async def story_twin_brief(session: AsyncSession, project_id: int, limit: int = 12) -> str:
-    """Summarise the Story twin for agent instructions: main characters, key locations, canon."""
-    nodes = await graph_crud.list_nodes(session, project_id)
-    characters = sorted(
-        (node for node in nodes if node.kind == "character"),
-        key=lambda node: -int(node.node_metadata.get("dialogue_lines", 0)),
-    )
-    locations = sorted(
-        (node for node in nodes if node.kind == "location"), key=lambda node: -len(node.node_metadata.get("scene_ids", []))
-    )
-    canon = [node for node in nodes if node.kind not in {"character", "location"}]
-    lines: list[str] = []
-    if characters:
-        lines.append(
-            "Main characters: "
-            + "; ".join(
-                f"{node.label} ({node.node_metadata.get('dialogue_lines', '?')} lines)"
-                + (f" — {node.description}" if node.description and not _derived(node) else "")
-                for node in characters[:limit]
+    """Summarise the Story twin for agent instructions: storyline, cast, places, outline, canon."""
+    project = await session.get(Project, project_id)
+    characters = list(
+        (
+            await session.exec(
+                select(Character).where(Character.project_id == project_id).order_by(col(Character.position), col(Character.id))
             )
+        ).all()
+    )
+    # Writer-developed characters first, then by how much they speak.
+    characters.sort(key=lambda row: (row.source == "twin" and not row.writer_edited, -row.dialogue_lines, row.position))
+    locations = sorted(
+        (await session.exec(select(Location).where(Location.project_id == project_id))).all(),
+        key=lambda row: (row.source == "twin" and not row.writer_edited, -len(row.scene_ids)),
+    )
+    beats = list(
+        (
+            await session.exec(
+                select(StoryBeat).where(StoryBeat.project_id == project_id).order_by(col(StoryBeat.position), col(StoryBeat.id))
+            )
+        ).all()
+    )
+    events_by_character: dict[int, list[CharacterTimelineEvent]] = {}
+    for event in (
+        await session.exec(
+            select(CharacterTimelineEvent)
+            .where(CharacterTimelineEvent.project_id == project_id)
+            .order_by(col(CharacterTimelineEvent.position))
         )
+    ).all():
+        events_by_character.setdefault(event.character_id, []).append(event)
+    lines: list[str] = []
+    if project is not None:
+        for label, value in (
+            ("Logline", project.logline),
+            ("Premise", project.premise),
+            ("Theme", project.theme),
+            ("Tone", project.tone),
+            ("Synopsis", project.synopsis),
+        ):
+            if value:
+                lines.append(f"{label}: {_clip(value, 600 if label == 'Synopsis' else 300)}")
+    if characters:
+        lines.append("Characters:")
+        for row in characters[:limit]:
+            facts = [
+                f"{label} {_clip(value, 160)}"
+                for label, value in (
+                    ("want:", row.want),
+                    ("need:", row.need),
+                    ("motive:", row.motive),
+                    ("objective:", row.objective),
+                    ("flaw:", row.flaw),
+                    ("arc:", row.arc_summary),
+                )
+                if value
+            ]
+            stats = f"{row.dialogue_lines} lines" if row.dialogue_lines else "not yet in the script"
+            head = f"- {row.name} ({row.role}; {stats})"
+            body = "; ".join(facts) or (_clip(row.summary, 160) if row.summary and not _owned_by_keeper(row) else "")
+            timeline = events_by_character.get(row.id or 0, [])
+            if timeline:
+                body += ("; " if body else "") + "timeline: " + " → ".join(_clip(event.title, 60) for event in timeline[:6])
+            lines.append(head + (f": {body}" if body else ""))
     if locations:
-        lines.append("Key locations: " + ", ".join(node.label for node in locations[:limit]))
+        lines.append("Key locations: " + ", ".join(row.name for row in locations[:limit]))
+    if beats:
+        lines.append("Outline beats: " + " | ".join(f"{index + 1}. {_clip(beat.title, 80)}" for index, beat in enumerate(beats[: limit * 2])))
+    canon = [node for node in await graph_crud.list_nodes(session, project_id) if node.kind not in {"character", "location"}]
     if canon:
         lines.append("Canon notes: " + "; ".join(f"{node.kind}: {node.label}" for node in canon[:limit]))
     return "\n".join(lines)

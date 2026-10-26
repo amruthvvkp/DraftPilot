@@ -28,16 +28,18 @@ from draftpilot.agents.workflows import (
     summarize_panel,
     validate_params,
 )
+from draftpilot.core import proposals as proposals_service
 from draftpilot.models import (
     Act,
     AgentProposal,
     AgentRun,
     Block,
-    KnowledgeNode,
+    Character,
     Project,
     Scene,
     Screenplay,
     StoryArtifact,
+    StoryBeat,
 )
 
 SCENE = "INT. RIVER BANK - DAY\n\nEdward wades in.\n\nEDWARD\nThere she is.\n"
@@ -110,9 +112,7 @@ def project(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[AsyncSe
         session.add(Block(scene_id=scene.id or 0, text="The river is wide.", origin="human"))
         session.add(StoryArtifact(project_id=project.id or 0, kind="brief", title="Brief", content="A tall tale."))
         for label, lines in (("Will", 145), ("Edward", 307), ("Karl", 12)):
-            session.add(
-                KnowledgeNode(project_id=project.id or 0, kind="character", label=label, node_metadata={"dialogue_lines": lines})
-            )
+            session.add(Character(project_id=project.id or 0, name=label, dialogue_lines=lines, source="twin"))
         await session.commit()
         await session.close()
 
@@ -181,13 +181,19 @@ def test_notes_to_outline_revises_until_the_critique_passes_then_proposes(projec
     assert result["rounds"] == 1 and result["outline"]["logline"].endswith("(revised)")
     proposals = _all(project, AgentProposal)
     assert [proposal.id for proposal in proposals] == result["proposal_ids"]
-    assert all(proposal.status == "proposed" and proposal.target_kind == "artifact" for proposal in proposals)
-    brief, outline = (next(a for a in _all(project, StoryArtifact) if a.id == p.target_id) for p in proposals)
-    assert brief.content == "A tall tale."  # untouched until the writer approves
-    assert outline.kind == "outline" and outline.content == ""
-    assert proposals[0].before == {"content": "A tall tale."}
-    assert [beat["sequence"] for beat in proposals[1].operation["artifact_metadata"]["beats"]] == [1, 2, 3]
-    assert "## Act 2" in proposals[1].operation["content"]
+    assert all(proposal.status == "proposed" for proposal in proposals)
+    logline, outline = proposals
+    assert logline.target_kind == "storyline" and logline.operation["fields"]["logline"].endswith("(revised)")
+    assert logline.before == {"logline": None}  # untouched until the writer approves
+    assert outline.target_kind == "outline" and [beat["act"] for beat in outline.operation["beats"]] == [1, 2, 3]
+    assert _all(project, StoryBeat) == []
+    approved = run_async(proposals_service.approve(project, 1, outline.id or 0))
+    assert approved.status == "approved"
+    beats = sorted(_all(project, StoryBeat), key=lambda beat: beat.position)
+    assert [beat.title for beat in beats] == [beat["title"] for beat in outline.operation["beats"]]
+    assert len({beat.act_id for beat in beats}) == 3  # acts were created to hold the beats
+    assert run_async(proposals_service.rollback(project, 1, outline.id or 0)).status == "rolled_back"
+    assert _all(project, StoryBeat) == []
     runs = _all(project, AgentRun)
     assert len(runs) == 4 and {run.kind for run in runs} == {"workflow"}
 
@@ -238,10 +244,16 @@ def test_character_arcs_default_to_the_story_twins_leads(project: AsyncSession) 
 
     result, _ = _run("character_arcs", {"top": 2}, {"CharacterArc": arc})
     assert sorted(item["character"] for item in result["arcs"]) == ["Edward", "Will"]
-    (proposal,) = _all(project, AgentProposal)
-    assert proposal.id == result["proposal_ids"][0]
-    assert sorted(item["character"] for item in proposal.operation["artifact_metadata"]["character_arcs"]) == ["Edward", "Will"]
-    assert next(a for a in _all(project, StoryArtifact) if a.id == proposal.target_id).kind == "character"
+    proposals = _all(project, AgentProposal)
+    assert [proposal.id for proposal in proposals] == result["proposal_ids"]
+    assert {(proposal.target_kind, proposal.operation["action"]) for proposal in proposals} == {("character", "update")}
+    edward = next(row for row in _all(project, Character) if row.name == "Edward")
+    proposal = next(item for item in proposals if item.target_id == edward.id)
+    assert proposal.operation["fields"]["want"] == "To be believed." and edward.want == ""
+    run_async(proposals_service.approve(project, 1, proposal.id or 0))
+    project.expire_all()
+    edward = next(row for row in _all(project, Character) if row.name == "Edward")
+    assert edward.arc_summary == "Edward changes." and edward.writer_edited
 
 
 def test_rewrite_retries_invalid_fountain_and_proposes_a_reversible_scene_change(project: AsyncSession) -> None:

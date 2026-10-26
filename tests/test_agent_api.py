@@ -53,7 +53,7 @@ def test_block_proposal_captures_scene_version_and_before_snapshot(monkeypatch) 
         base_version=3,
     )
 
-    monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
+    monkeypatch.setattr("draftpilot.core.proposals._block_target", AsyncMock(return_value=(scene, block)))
 
     async def create(_session: object, created: AgentProposal) -> AgentProposal:
         """Return the captured proposal fixture."""
@@ -62,7 +62,7 @@ def test_block_proposal_captures_scene_version_and_before_snapshot(monkeypatch) 
         assert created.before == {"scene_id": 7, "element_type": "action", "origin": "human"}
         return proposal
 
-    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.create", create)
+    monkeypatch.setattr("draftpilot.core.proposals.proposals_crud.create", create)
     response = _client().post(
         "/api/v1/projects/9/agent-proposals",
         json={
@@ -98,10 +98,10 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
         before={"scene_id": 7, "element_type": "action", "text": "A door opens.", "origin": "human"},
         base_version=3,
     )
-    monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
+    monkeypatch.setattr("draftpilot.core.proposals._block_target", AsyncMock(return_value=(scene, block)))
     changed = AsyncMock()
-    monkeypatch.setattr("draftpilot.api.agent.scene_changed", changed)
-    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.get", AsyncMock(return_value=proposal))
+    monkeypatch.setattr("draftpilot.core.proposals.scene_changed", changed)
+    monkeypatch.setattr("draftpilot.core.proposals.proposals_crud.get", AsyncMock(return_value=proposal))
 
     client = _client()
     approved = client.post("/api/v1/projects/9/agent-proposals/20/approve")
@@ -130,7 +130,7 @@ def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) ->
 def test_chat_only_run_cannot_create_agent_proposal(monkeypatch) -> None:
     """Enforce the originating run permission before persisting a proposal."""
     monkeypatch.setattr(
-        "draftpilot.api.agent.runs_crud.get",
+        "draftpilot.core.proposals.runs_crud.get",
         AsyncMock(return_value=WorkflowRun(id=31, project_id=9, permission_mode="chat_only")),
     )
     response = _client().post(
@@ -150,12 +150,12 @@ def test_chat_only_run_cannot_create_agent_proposal(monkeypatch) -> None:
 def test_suggest_run_can_create_reviewable_agent_proposal(monkeypatch) -> None:
     """Allow a suggest-mode run to create a proposal for writer review."""
     monkeypatch.setattr(
-        "draftpilot.api.agent.runs_crud.get",
+        "draftpilot.core.proposals.runs_crud.get",
         AsyncMock(return_value=WorkflowRun(id=31, project_id=9, permission_mode="suggest")),
     )
     scene = SimpleNamespace(id=7, version=1)
     block = SimpleNamespace(id=11, scene_id=7, element_type=BlockType.ACTION, text="A door opens.", origin="human")
-    monkeypatch.setattr("draftpilot.api.agent._block_target", AsyncMock(return_value=(scene, block)))
+    monkeypatch.setattr("draftpilot.core.proposals._block_target", AsyncMock(return_value=(scene, block)))
     proposal = AgentProposal(
         id=32,
         project_id=9,
@@ -166,7 +166,7 @@ def test_suggest_run_can_create_reviewable_agent_proposal(monkeypatch) -> None:
         before={"scene_id": 7, "text": "A door opens."},
         base_version=1,
     )
-    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.create", AsyncMock(return_value=proposal))
+    monkeypatch.setattr("draftpilot.core.proposals.proposals_crud.create", AsyncMock(return_value=proposal))
     response = _client().post(
         "/api/v1/projects/9/agent-proposals",
         json={
@@ -185,7 +185,7 @@ def test_suggest_run_can_create_reviewable_agent_proposal(monkeypatch) -> None:
 def test_scoped_edit_run_cannot_target_another_block(monkeypatch) -> None:
     """Reject a proposal whose target is outside the persisted run scope."""
     monkeypatch.setattr(
-        "draftpilot.api.agent.runs_crud.get",
+        "draftpilot.core.proposals.runs_crud.get",
         AsyncMock(
             return_value=WorkflowRun(
                 id=31,
@@ -222,8 +222,8 @@ def test_rejecting_a_pending_proposal_leaves_its_target_untouched(monkeypatch) -
         base_version=3,
     )
     target = AsyncMock()
-    monkeypatch.setattr("draftpilot.api.agent._block_target", target)
-    monkeypatch.setattr("draftpilot.api.agent.proposals_crud.get", AsyncMock(return_value=proposal))
+    monkeypatch.setattr("draftpilot.core.proposals._block_target", target)
+    monkeypatch.setattr("draftpilot.core.proposals.proposals_crud.get", AsyncMock(return_value=proposal))
 
     client = _client()
     rejected = client.post("/api/v1/projects/9/agent-proposals/21/reject")

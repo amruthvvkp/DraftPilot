@@ -12,12 +12,13 @@ from draftpilot.core import temporal
 from draftpilot.core.config import settings
 from draftpilot.core.db import async_get_db
 from draftpilot.core.scene_sync import scene_changed
-from draftpilot.core.screenplay.hydrate import blocks_for_scene
 from draftpilot.core.screenplay.timeline import (
     SceneTiming,
     calculate_scene_timings,
     target_runtime_seconds_for_format,
 )
+from draftpilot.core.story import storyline as storyline_service
+from draftpilot.core.story import structure
 from draftpilot.core.wizard import (
     WizardAssistRequest,
     WizardAssistResponse,
@@ -50,7 +51,6 @@ from draftpilot.models import (
     SceneRevisionRead,
     SceneUpdate,
     ScreenplayRead,
-    validate_language_separation,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -291,24 +291,8 @@ async def update_project(
     session: AsyncSession = Depends(async_get_db),
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> ProjectRead:
-    """Update project instructions and metadata with optimistic concurrency."""
-    project = await projects_crud.get(session, project_id)
-    if project is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-    if if_match is None:
-        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
-    if if_match != project.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Project has changed")
-    changes = data.model_dump(exclude_unset=True)
-    primary_language = changes.get("primary_language", project.primary_language)
-    languages = changes.get("languages", project.languages)
-    try:
-        validate_language_separation(primary_language, languages)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
-        ) from exc
-    return ProjectRead.model_validate(await projects_crud.update(session, project, data))
+    """Update project metadata and storyline with optimistic concurrency."""
+    return ProjectRead.model_validate(await storyline_service.update_project(session, project_id, data, if_match))
 
 
 @router.get("/{project_id}/workspace", response_model=ProjectWorkspaceRead)
@@ -370,20 +354,111 @@ async def create_project_scene(
     session: AsyncSession = Depends(async_get_db),
 ) -> SceneRead:
     """Create a scene only under an act belonging to the requested screenplay."""
-    project = await projects_crud.get(session, project_id)
-    screenplay = await screenplays_crud.get(session, screenplay_id)
-    act = await acts_crud.get(session, data.act_id)
-    if (
-        project is None
-        or screenplay is None
-        or screenplay.project_id != project_id
-        or act is None
-        or act.screenplay_id != screenplay_id
-    ):
+    act = await structure.act_in_project(session, project_id, data.act_id)
+    if act.screenplay_id != screenplay_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Screenplay or act not found")
-    scene = await scenes_crud.create(session, data)
-    await scene_changed(session, project_id, scene, reason="scene.created")
+    scene = await structure.create_scene(
+        session, project_id, data.heading, act_id=data.act_id, position=data.position, scene_instruction=data.scene_instruction
+    )
     return SceneRead.model_validate(scene)
+
+
+class SceneAppend(BaseModel):
+    """Create a scene without knowing act ids: it is appended to the draft's last act by default."""
+
+    heading: str = Field(min_length=1, max_length=300)
+    act_id: int | None = None
+    screenplay_id: int | None = None
+    position: int | None = None
+    scene_instruction: str = ""
+
+
+@router.post("/{project_id}/scenes", response_model=SceneRead, status_code=status.HTTP_201_CREATED)
+async def append_project_scene(
+    project_id: int, data: SceneAppend, session: AsyncSession = Depends(async_get_db)
+) -> SceneRead:
+    """Create a scene in the project's draft (the first scene of a new project included)."""
+    scene = await structure.create_scene(
+        session,
+        project_id,
+        data.heading,
+        act_id=data.act_id,
+        screenplay_id=data.screenplay_id,
+        position=data.position,
+        scene_instruction=data.scene_instruction,
+    )
+    return SceneRead.model_validate(scene)
+
+
+class SceneMove(BaseModel):
+    """Target act and position for a scene move."""
+
+    position: int = Field(ge=0)
+    act_id: int | None = None
+
+
+@router.post("/{project_id}/scenes/{scene_id}/move", response_model=SceneRead)
+async def move_project_scene(
+    project_id: int,
+    scene_id: int,
+    data: SceneMove,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> SceneRead:
+    """Move a scene within its act or to another act of the same draft."""
+    return SceneRead.model_validate(
+        await structure.move_scene(session, project_id, scene_id, data.position, if_match, act_id=data.act_id)
+    )
+
+
+@router.delete("/{project_id}/scenes/{scene_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_scene(
+    project_id: int,
+    scene_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> None:
+    """Delete a scene with its blocks and revisions."""
+    await structure.delete_scene(session, project_id, scene_id, if_match)
+
+
+class ActInput(BaseModel):
+    """Create an act in a draft."""
+
+    title: str = Field(default="", max_length=200)
+    screenplay_id: int | None = None
+    position: int | None = None
+
+
+class ActPatch(BaseModel):
+    """Rename or move an act."""
+
+    title: str | None = Field(default=None, max_length=200)
+    position: int | None = Field(default=None, ge=0)
+
+
+@router.post("/{project_id}/acts", response_model=ActRead, status_code=status.HTTP_201_CREATED)
+async def create_project_act(project_id: int, data: ActInput, session: AsyncSession = Depends(async_get_db)) -> ActRead:
+    """Add an act to a draft (default: the project's first draft, at the end)."""
+    return ActRead.model_validate(
+        await structure.create_act(session, project_id, data.screenplay_id, data.title, data.position)
+    )
+
+
+@router.patch("/{project_id}/acts/{act_id}", response_model=ActRead)
+async def update_project_act(
+    project_id: int, act_id: int, data: ActPatch, session: AsyncSession = Depends(async_get_db)
+) -> ActRead:
+    """Rename or reorder an act."""
+    return ActRead.model_validate(await structure.update_act(session, project_id, act_id, data.title, data.position))
+
+
+@router.delete("/{project_id}/acts/{act_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_project_act(
+    project_id: int, act_id: int, move_scenes_to: int | None = None, session: AsyncSession = Depends(async_get_db)
+) -> None:
+    """Delete an act, moving its scenes to ``move_scenes_to`` when it has any."""
+    await structure.delete_act(session, project_id, act_id, move_scenes_to)
 
 
 @router.patch("/{project_id}/scenes/{scene_id}", response_model=SceneRead)
@@ -395,22 +470,7 @@ async def update_project_scene(
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> SceneRead:
     """Update a project scene only when the caller holds its current version."""
-    scene = await scenes_crud.get(session, scene_id)
-    if scene is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
-    act = await acts_crud.get(session, scene.act_id)
-    if act is None or act.screenplay_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
-    screenplay = await screenplays_crud.get(session, act.screenplay_id)
-    if screenplay is None or screenplay.project_id != project_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
-    if if_match is None:
-        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
-    if if_match != scene.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
-    updated = await scenes_crud.update(session, scene, data)
-    await scene_changed(session, project_id, updated, reason="scene.updated")
-    return SceneRead.model_validate(updated)
+    return SceneRead.model_validate(await structure.update_scene(session, project_id, scene_id, data, if_match))
 
 
 @router.post("/{project_id}/scenes/{scene_id}/blocks", response_model=BlockRead, status_code=201)
@@ -422,22 +482,9 @@ async def create_project_block(
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> BlockRead:
     """Create a semantic screenplay block under a versioned scene."""
-    scene = await scenes_crud.get(session, scene_id)
-    act = await acts_crud.get(session, scene.act_id) if scene else None
-    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
-    if scene is None or screenplay is None or screenplay.project_id != project_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
-    if if_match is None:
-        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
-    if if_match != scene.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
-    block = await blocks_crud.create(
-        session, BlockCreate(scene_id=scene_id, **data.model_dump(exclude={"scene_id"}))
+    block = await structure.create_block_from_schema(
+        session, project_id, scene_id, BlockCreate(scene_id=scene_id, **data.model_dump(exclude={"scene_id"})), if_match
     )
-    scene.version += 1
-    session.add(scene)
-    await session.commit()
-    await scene_changed(session, project_id, scene, reason="block.created")
     return BlockRead.model_validate(block)
 
 
@@ -453,49 +500,14 @@ async def update_project_block(
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> BlockRead:
     """Update a semantic screenplay block with optimistic concurrency."""
-    scene = await scenes_crud.get(session, scene_id)
-    block = await blocks_crud.get(session, block_id)
-    act = await acts_crud.get(session, scene.act_id) if scene else None
-    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
-    if (
-        scene is None
-        or block is None
-        or block.scene_id != scene_id
-        or screenplay is None
-        or screenplay.project_id != project_id
-    ):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Block not found")
-    if if_match is None:
-        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
-    if if_match != scene.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
-    text_changed = data.text is not None and data.text != block.text
-    updated = await blocks_crud.update(session, block, data)
-    if text_changed:
-        # The writer rewrote it, so authorship moves from import/agent to human.
-        updated.origin = "human"
-        session.add(updated)
-    scene.version += 1
-    session.add(scene)
-    await session.commit()
-    await scene_changed(session, project_id, scene, reason="block.updated")
-    return BlockRead.model_validate(updated)
+    return BlockRead.model_validate(await structure.update_block(session, project_id, scene_id, block_id, data, if_match))
 
 
 async def _versioned_scene(
     session: AsyncSession, project_id: int, scene_id: int, if_match: int | None
 ) -> Scene:
     """Return a project scene after enforcing the caller's If-Match scene version."""
-    scene = await scenes_crud.get(session, scene_id)
-    act = await acts_crud.get(session, scene.act_id) if scene else None
-    screenplay = await screenplays_crud.get(session, act.screenplay_id) if act else None
-    if scene is None or screenplay is None or screenplay.project_id != project_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scene not found")
-    if if_match is None:
-        raise HTTPException(status_code=status.HTTP_428_PRECONDITION_REQUIRED, detail="If-Match is required")
-    if if_match != scene.version:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scene has changed")
-    return scene
+    return await structure.versioned_scene(session, project_id, scene_id, if_match)
 
 
 class BlockOrder(BaseModel):
@@ -515,19 +527,7 @@ async def delete_project_block(
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> None:
     """Delete one block (and its translations) and close the gap in positions."""
-    scene = await _versioned_scene(session, project_id, scene_id, if_match)
-    block = await blocks_crud.get(session, block_id)
-    if block is None or block.scene_id != scene_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Block not found")
-    await session.delete(block)
-    await session.flush()
-    for position, remaining in enumerate(await blocks_for_scene(session, scene_id)):
-        remaining.position = position
-        session.add(remaining)
-    scene.version += 1
-    session.add(scene)
-    await session.commit()
-    await scene_changed(session, project_id, scene, reason="block.deleted")
+    await structure.delete_block(session, project_id, scene_id, block_id, if_match)
 
 
 @router.put("/{project_id}/scenes/{scene_id}/blocks/order", response_model=list[BlockRead])
@@ -539,21 +539,8 @@ async def reorder_project_blocks(
     if_match: int | None = Header(default=None, alias="If-Match"),
 ) -> list[BlockRead]:
     """Reorder a scene's blocks; the request must list exactly the scene's current blocks."""
-    scene = await _versioned_scene(session, project_id, scene_id, if_match)
-    blocks = {block.id: block for block in await blocks_for_scene(session, scene_id)}
-    if sorted(data.block_ids) != sorted(block_id for block_id in blocks if block_id is not None):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Order must list every block in the scene exactly once",
-        )
-    for position, block_id in enumerate(data.block_ids):
-        blocks[block_id].position = position
-        session.add(blocks[block_id])
-    scene.version += 1
-    session.add(scene)
-    await session.commit()
-    await scene_changed(session, project_id, scene, reason="blocks.reordered")
-    return [BlockRead.model_validate(blocks[block_id]) for block_id in data.block_ids]
+    blocks = await structure.reorder_blocks(session, project_id, scene_id, data.block_ids, if_match)
+    return [BlockRead.model_validate(block) for block in blocks]
 
 
 @router.get(
