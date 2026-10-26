@@ -526,3 +526,21 @@ def test_rewrite_facts_measure_length_and_added_speakers() -> None:
     shorter = "INT. HALL - NIGHT\n\nWill waits.\n\nSANDRA\nHe'll come.\n"
     facts = rewrite_facts(original, shorter)
     assert facts.startswith("the rewrite is 5") and "new speaking characters: SANDRA." in facts
+
+
+def test_a_workflow_step_that_reasons_past_its_budget_answers_again_without_reasoning(project: AsyncSession) -> None:
+    """On Temporal too, a truncated first response is retried once with reasoning off, and both runs are recorded."""
+    seen: list[object] = []
+
+    async def respond(_messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        """Run out of tokens while reasoning the first time, then write the scene."""
+        seen.append((info.model_settings or {}).get("openai_reasoning_effort"))
+        if len(seen) == 1:
+            return ModelResponse(parts=[], finish_reason="length")
+        return ModelResponse(parts=[ToolCallPart(tool_name=info.output_tools[0].name, args={"fountain": SCENE})])
+
+    deps = WorkflowDeps(model=FunctionModel(respond), provider="test", model_name="scripted", room=RoomDeps(project_id=1))
+    result = run_async(run_room_workflow("draft_scenes", {"beats": [{"title": "River", "summary": "Edward wades in."}]}, deps))
+    assert result["scenes"][0]["fountain"] == SCENE
+    assert seen == [None, "none"]
+    assert [run.status for run in _all(project, AgentRun)] == ["failed", "succeeded"]

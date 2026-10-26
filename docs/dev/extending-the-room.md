@@ -21,21 +21,33 @@
 
 ## Add a workflow
 
-Workflows are `pydantic_graph` graphs in `agents/workflows.py`. The steps are:
+Workflows are Temporal workflows in `agents/room_workflows.py`. Their typed outputs, parameters,
+database activities and catalogue live in `agents/workflows.py`. To add one:
 
 1. Define a typed output (a `BaseModel`) for each step, and a params model for the workflow.
-2. Build the graph from steps that call `consult(ctx, step, role, prompt, OutputType)`. Pass
-   `tools=False` when the prompt already contains everything the role needs, which makes the step
-   faster and stops the role from wandering around the project.
-3. Use the builder's primitives:
-   - `_loop_decision(...)` for draft-critique loops;
-   - `g.edge_from(step).map().to(...)` with `g.join(reduce_list_append, ...)` to fan out in
-     parallel.
-4. End generative workflows in a gate that creates `AgentProposal`s. Reports just return data.
-5. Register a `RoomWorkflow` in `ROOM_WORKFLOWS`. The API, MCP tools, launcher form and run views
-   pick it up automatically.
-6. Test it with a scripted `FunctionModel` (see `tests/test_room_workflows.py`). Add online checks in
-   `evals/online.py` and an eval suite in `evals/suites.py`.
+2. Subclass `RoomWorkflowBase` with `@workflow.defn(name="room:<key>")` and a `key`. Its
+   `@workflow.run` returns `await self.execute(run, Params, self.body)`.
+3. Write `body` as plain Python:
+   - each step is `await self.consult(step, role, prompt, OutputType)`. Pass `tools=False` when
+     the prompt already contains everything the role needs, which makes the step faster and stops
+     the role from wandering around the project;
+   - draft-critique loops are `while` loops;
+   - fan-outs are `asyncio.gather(...)`.
+4. Workflow code must be deterministic. Every database read or write is an `@activity.defn` in
+   `agents/workflows.py`, called with `await self.activity(fn, ...)` and listed in `ROOM_ACTIVITIES`.
+   Don't read clocks, randomness or the network in `body`.
+5. End generative workflows in an activity that creates `AgentProposal`s. Reports just return data.
+6. Register a `RoomWorkflow` in `ROOM_WORKFLOWS` and the class in `ROOM_WORKFLOW_CLASSES`. The API,
+   MCP tools, launcher form and run views pick it up automatically.
+7. Test it with a scripted `FunctionModel` (see `tests/test_room_workflows.py`). `run_room_workflow`
+   runs it on an embedded Temporal test server. Add a scenario to `tests/test_temporal_replay.py`,
+   re-record with `TEMPORAL_RECORD=1`, and add online checks in `evals/online.py` and an eval suite
+   in `evals/suites.py`.
+
+**Changing an existing workflow:** the replay tests (`tests/test_temporal_replay.py`) must pass
+against the committed histories in `tests/temporal_histories/`. A change that would break an
+in-flight run has to go behind `workflow.patched("<change-id>")` so that old histories take the old
+path. Only re-record the histories when every run started on the old code has finished.
 
 ## Add an MCP tool
 

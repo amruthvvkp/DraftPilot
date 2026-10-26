@@ -19,8 +19,8 @@ Dependencies are organized into groups in `pyproject.toml`. Install what you nee
 
 ```bash
 uv sync --all-groups      # everything (app + worker + mcp + rag + dev tooling)
-uv sync --group web       # web app: fastapi, uvicorn, pydantic-ai, sqlmodel, asyncpg, redis, arq, alembic, otel
-uv sync --group worker    # ARQ worker (includes the web group)
+uv sync --group web       # web app: fastapi, uvicorn, pydantic-ai (+temporal), sqlmodel, asyncpg, redis, alembic, otel
+uv sync --group worker    # Temporal worker (includes the web group)
 uv sync --group mcp       # FastMCP 4 server (includes web + otel)
 uv sync --group rag       # standalone RAG service
 uv sync --group dev       # lint + test + e2e (Playwright) + docs tooling

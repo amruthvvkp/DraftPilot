@@ -52,7 +52,7 @@ and editor fixes. G9 docs are in place. What's left for v1:
 Planned after v1 (see [plan changes](dev/v1-gap-analysis.md#plan-changes-2026-09-27)):
 
 - **G10** SPA hosting on `app.frontend()`, with auth scoped to `/api`;
-- **G11** Temporal replaces ARQ and `pydantic_graph` orchestration, and Langfuse is removed (optional otel-lgtm instead);
+- **G11** ✅ Temporal replaces ARQ and `pydantic_graph` orchestration, and Langfuse is removed (optional otel-lgtm instead);
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
 - **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
 

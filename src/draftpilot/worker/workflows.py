@@ -164,7 +164,7 @@ WORKFLOWS: list[type] = [IndexRagDocument, DeleteRagDocument, ReindexProject, Re
 
 
 def all_workflows() -> list[type]:
-    """Return the job workflows plus the eight room workflows."""
-    from draftpilot.agents.room_workflows import ROOM_WORKFLOW_CLASSES
+    """Return the job workflows, the eight room workflows and the chat turn."""
+    from draftpilot.agents.room_workflows import ROOM_WORKFLOW_CLASSES, RoomChat
 
-    return [*WORKFLOWS, *ROOM_WORKFLOW_CLASSES]
+    return [*WORKFLOWS, *ROOM_WORKFLOW_CLASSES, RoomChat]

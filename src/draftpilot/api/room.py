@@ -11,6 +11,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from draftpilot.agents.chat import stream_room_chat
 from draftpilot.agents.context import load_room_context
 from draftpilot.agents.deps import RoomDeps
+from draftpilot.agents.models import describe_model
 from draftpilot.agents.specs import role_spec
 from draftpilot.agents.workflow_runner import create_room_workflow_run
 from draftpilot.agents.workflows import ROOM_WORKFLOWS
@@ -19,7 +20,7 @@ from draftpilot.core.agent_roles import normalize_agent_role, normalize_permissi
 from draftpilot.core.config import LLMSettings, settings
 from draftpilot.core.copilot import retrieve_context
 from draftpilot.core.db import async_get_db
-from draftpilot.core.providers import build_chat_model, settings_from_profile
+from draftpilot.core.providers import settings_from_profile
 from draftpilot.crud import projects as projects_crud
 from draftpilot.crud import provider_profiles as profiles_crud
 from draftpilot.models import AgentRun, AgentRunRead, WorkflowRunRead
@@ -61,7 +62,7 @@ async def room_chat(
     if not config.enabled:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No LLM provider is enabled")
     try:
-        model, model_name = await build_chat_model(config)
+        model_ref = await describe_model(provider_profile_id)
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Model provider unavailable: {exc}"
@@ -79,15 +80,12 @@ async def room_chat(
         story_brief=context.story_brief,
     )
     await session.close()
-    return await stream_room_chat(
-        request,
-        spec=role_spec(normalize_agent_role(role)),
-        model=model,
-        deps_without_context=deps,
-        provider=config.provider,
-        model_name=model_name,
-        retrieve=retrieve_context,
-    )
+    try:
+        return await stream_room_chat(
+            request, spec=role_spec(normalize_agent_role(role)), model_ref=model_ref, deps_without_context=deps, retrieve=retrieve_context
+        )
+    except (ConnectionError, RuntimeError) as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Temporal is unavailable: {exc}") from exc
 
 
 @router.get("/runs", response_model=list[AgentRunRead])

@@ -153,18 +153,25 @@ def role_model_settings(spec: RoleSpec, thinking: bool | None = None) -> ModelSe
     return model_settings
 
 
-def _durability() -> TemporalDurability[RoomDeps]:
-    """Return the activity settings for one role: long model calls, bounded retries, quick tool calls."""
+CHAT_TOPIC = "room-chat"
+
+
+def _durability(name: str, event_stream_topic: str | None = None) -> TemporalDurability[RoomDeps]:
+    """Return one agent's activity settings: long model calls, bounded retries, quick tool calls."""
     return TemporalDurability(
+        name=name,
+        event_stream_topic=event_stream_topic,
         model_activity_config=ActivityConfig(
             start_to_close_timeout=timedelta(seconds=settings.temporal.model_timeout_seconds),
-            retry_policy=RetryPolicy(maximum_attempts=2),
+            # A worker crash or lost connection is retried; a model error or runaway response is
+            # not (it would only repeat), and consult's reasoning-off fallback handles runaways.
+            retry_policy=RetryPolicy(maximum_attempts=3, non_retryable_error_types=["ModelHTTPError", "UnexpectedModelBehavior"]),
         ),
         toolset_activity_config={"draftpilot": ActivityConfig(start_to_close_timeout=timedelta(minutes=2))},
     )
 
 
-def _build_role_agent(spec: RoleSpec) -> Agent[RoomDeps, Any]:
+def _build_role_agent(spec: RoleSpec, durability: TemporalDurability[RoomDeps]) -> Agent[RoomDeps, Any]:
     """Build one role's durable agent: its spec, the writer's context, and the filtered MCP tools."""
     agent: Agent[RoomDeps, Any] = Agent(
         default_ref(),
@@ -172,7 +179,7 @@ def _build_role_agent(spec: RoleSpec) -> Agent[RoomDeps, Any]:
         name=spec.key,
         toolsets=[room_toolset()],
         retries=2,
-        capabilities=[ResolveModelId(resolve_room_model), _durability()],
+        capabilities=[ResolveModelId(resolve_room_model), durability],
     )
 
     if spec.key == SHOWRUNNER:
@@ -193,13 +200,22 @@ def _build_role_agent(spec: RoleSpec) -> Agent[RoomDeps, Any]:
 @cache
 def room_agents() -> dict[str, Agent[RoomDeps, Any]]:
     """Return every role's agent, built once per process (outside any workflow, as Temporal requires)."""
-    return {key: _build_role_agent(spec) for key, spec in load_specs().items()}
+    return {key: _build_role_agent(spec, _durability(key)) for key, spec in load_specs().items()}
+
+
+@cache
+def chat_agents() -> dict[str, Agent[RoomDeps, Any]]:
+    """Return every role's chat agent: the same role, streaming its events to the chat workflow's topic.
+
+    Room workflows host no event stream, so chat has agents of its own (``chat__<role>`` activities).
+    """
+    return {key: _build_role_agent(spec, _durability(f"chat__{key}", CHAT_TOPIC)) for key, spec in load_specs().items()}
 
 
 def room_agent_activities() -> list[Callable[..., Any]]:
-    """Return the Temporal activities of every role's durable agent, for the worker to register."""
+    """Return the Temporal activities of every role's durable agents (room and chat), for the worker to register."""
     activities: list[Callable[..., Any]] = []
-    for agent in room_agents().values():
+    for agent in [*room_agents().values(), *chat_agents().values()]:
         durability = TemporalDurability.from_agent(agent)
         assert durability is not None
         activities.extend(durability.temporal_activities)

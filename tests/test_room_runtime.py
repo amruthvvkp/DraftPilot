@@ -236,16 +236,20 @@ def test_approval_required_writes_become_writer_requests(room: AsyncSession) -> 
 def test_streamed_chat_speaks_the_vercel_protocol_and_records_the_turn(
     room: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """POST /room/chat streams AI SDK v6 events, records an AgentRun, and saves the transcript."""
+    """POST /room/chat runs the turn as a Temporal workflow, relays AI SDK v6 events, and records the turn."""
     from collections.abc import AsyncGenerator
 
+    import httpx
+    from _temporal import temporal_worker
     from fastapi import FastAPI
-    from fastapi.testclient import TestClient
 
+    from draftpilot.agents.models import register_model
     from draftpilot.api.room import router
     from draftpilot.core.config import settings
     from draftpilot.core.db import async_get_db
     from draftpilot.models import CopilotMessage
+    from draftpilot.worker.activities import all_activities
+    from draftpilot.worker.workflows import all_workflows
 
     @asynccontextmanager
     async def scope() -> AsyncIterator[AsyncSession]:
@@ -256,23 +260,39 @@ def test_streamed_chat_speaks_the_vercel_protocol_and_records_the_turn(
         """Yield the shared test session to the route."""
         yield room
 
-    async def model(_config: object) -> tuple[FunctionModel, str]:
-        """Return a scripted model instead of reaching a provider."""
-        return _script({"tool": "read_project_overview", "args": {"project_id": 1}}, "Open on the river."), "scripted"
+    ref = register_model(_script({"tool": "read_project_overview", "args": {"project_id": 1}}, "Open on the river."))
+
+    async def describe(_profile_id: int | None = None) -> str:
+        """Return the scripted model instead of reaching a provider."""
+        return ref
 
     async def no_context(_project_id: int, _query: str) -> list[dict[str, object]]:
         """Skip retrieval."""
         return []
 
     monkeypatch.setattr("draftpilot.agents.chat.session_scope", scope)
-    monkeypatch.setattr("draftpilot.api.room.build_chat_model", model)
+    monkeypatch.setattr("draftpilot.api.room.describe_model", describe)
     monkeypatch.setattr("draftpilot.api.room.retrieve_context", no_context)
     monkeypatch.setattr(settings.llm, "enabled", True)
     app = FastAPI()
     app.dependency_overrides[async_get_db] = dependency
     app.include_router(router, prefix="/api/v1")
     body = {"trigger": "submit-message", "id": "chat-1", "messages": [{"id": "m1", "role": "user", "parts": [{"type": "text", "text": "Where should we open?"}]}]}
-    response = TestClient(app).post("/api/v1/projects/1/room/chat?role=story_architect", json=body)
+
+    async def chat() -> httpx.Response:
+        """Serve the turn on a worker and post it through the API."""
+        async with temporal_worker(all_workflows(), all_activities()) as (client, queue):
+
+            async def get_client() -> object:
+                """Return the test server's client."""
+                return client
+
+            monkeypatch.setattr("draftpilot.core.temporal.get_client", get_client)
+            monkeypatch.setattr(settings.temporal, "task_queue", queue)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://studio") as http:
+                return await http.post("/api/v1/projects/1/room/chat?role=story_architect", json=body)
+
+    response = run_async(chat())
     assert response.status_code == 200
     assert response.headers["x-vercel-ai-ui-message-stream"] == "v1"
     assert "Open on the river." in response.text and "[DONE]" in response.text

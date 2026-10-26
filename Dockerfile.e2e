@@ -1,5 +1,6 @@
 # Keep browser tests reproducible locally and in CI using Playwright's pinned image.
-FROM mcr.microsoft.com/playwright/python:v1.62.0-noble
+# The tag must match the `playwright` version in uv.lock, or the bundled browser build is missing.
+FROM mcr.microsoft.com/playwright/python:v1.63.0-noble
 
 WORKDIR /workspace
 COPY pyproject.toml uv.lock ./

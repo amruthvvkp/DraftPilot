@@ -76,19 +76,33 @@ Around the script:
 
 - **Role specs:** `agents/specs/*.yaml` define each role: its instructions, temperature, request
   limit, token cap and thinking flag.
-- **Runtime:** `agents/runtime.py` builds a PydanticAI `Agent` per role. Its tools are DraftPilot's
-  own MCP server, reached in-process through `MCPToolset` and filtered by permission mode. The agent
-  acts under an internal identity scoped to one project. The showrunner gets a `consult` tool that
-  runs a specialist as a nested agent run.
+- **Runtime:** `agents/runtime.py` builds one durable PydanticAI `Agent` per role
+  (`room_agents()`, plus `chat_agents()` for streamed chat). Each carries `TemporalDurability`, so
+  inside a workflow every model request and tool call is an activity, and outside one the agent runs
+  in-process. A `ResolveModelId` hook (`agents/models.py`) resolves the run's model ref (the
+  installation default or a provider profile, with LM Studio `auto` resolved up front). Workflow
+  code gets a no-I/O planning model and the activity gets the real one. The tools are DraftPilot's
+  own MCP server, reached in-process through `MCPToolset` and filtered per run by permission mode.
+  Every tool call carries the run's internal identity, HMAC-signed with a process-local key, in the
+  request `_meta`. The server's `InternalAgentIdentity` middleware verifies it and binds the identity
+  for that call only, so the agent acts under an internal identity scoped to one project, and an
+  external client cannot forge it. The showrunner gets a `consult` tool that runs a specialist as a
+  nested agent run.
 - **Context:** `agents/context.py` loads the Writer and Story twin briefs into every role's single
   system prompt. It is one prompt because local chat templates reject several.
-- **Workflows:** `agents/workflows.py` holds the room workflows as `pydantic_graph` graphs:
-  - evaluator-optimizer loops for outline and rewrite;
-  - parallel fan-out with joins for arcs, brainstorm, audience panel and scene drafting;
+- **Workflows:** `agents/room_workflows.py` holds the eight room workflows as Temporal workflows:
+  - draft-critique loops (plain `while` loops) for outline and rewrite;
+  - `asyncio.gather` fan-outs for arcs, brainstorm, audience panel and scene drafting;
   - single steps for coverage and continuity.
 
-  Generative workflows end at a gate that creates proposals. `agents/workflow_runner.py` runs them
-  durably in the worker.
+  Each step (`consult`) records its AgentRun and the trail through activities. The trail is also
+  the `progress` query. Generative workflows end at a gate activity that creates proposals, which
+  the writer decides through the proposals API. `execute_workflow` runs a room run as a child
+  workflow after preparing its context and model. `run_room_workflow` runs the same workflow on an
+  embedded Temporal test server for evals and tests.
+- **Chat:** each turn is a short `room:chat` workflow. The API relays its Workflow Stream events
+  (`stream_agent_events`) through the Vercel adapter, which is the same SSE `useChat` has always
+  consumed, and the workflow saves the transcript and AgentRun before the stream ends.
 - **Measurement:** every role run is an `AgentRun`, recording tokens, tools, duration and trace id.
 
 ## Safety boundaries

@@ -7,7 +7,7 @@ cover reference scenes, visual language, camera, lighting, color palettes, film/
 research, and continuity.
 
 Start a run with `POST .../runs` and provide a compatible `artifact_id` plus a writer instruction.
-The API persists a `context_generation` workflow run and enqueues it for the ARQ worker. The worker
+The API persists a `context_generation` workflow run and starts it on Temporal (`execute_workflow`). The worker
 retrieves project-scoped citations through the RAG service and invokes the configured PydanticAI
 provider. A successful result contains the suggestion, citations, source artifact version, output
 kind, and evaluator contract. It is explicitly review-only: it never mutates canonical artifacts

@@ -197,7 +197,7 @@ M8→G6b, M9→G6c, M10→G7, M11→G9. Every step keeps the suite green, refere
 | Step | Status | From | Scope |
 |---|---|---|---|
 | G10 · SPA hosting | ✅ done | change 4 | `app.frontend()` replaces the custom fallback; unmatched `/api/*` GETs stay JSON 404s (the frontend fallback would otherwise return the shell to `Accept: text/html`); immutable `/assets/*`, `no-cache` shell; `WEB__REQUIRE_FRONTEND` (true in `Dockerfile.ui`, false in `compose.dev.yml`). Auth was already on the API router only. Verified live on :9000 |
-| G11 · Temporal, Langfuse out | 🚧 in progress (#32) | change 1 | Durable execution on Temporal; ARQ, `pydantic_graph` workflows and Langfuse removed |
+| G11 · Temporal, Langfuse out | ✅ done (#32) | change 1 | Every job, run, room workflow and chat turn is a Temporal workflow served by `python -m draftpilot.worker`. Room roles are durable agents (model refs, signed MCP identity). ARQ, `pydantic_graph` orchestration and Langfuse are gone, with `otel-lgtm` available as an opt-in profile. Replay tests run over `tests/temporal_histories/`. Verified live on :9000 (jobs, runs, room workflow and cancel, streamed chat on LM Studio) |
 | G12 · Frontend telemetry | ⏳ planned | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy |
 | G13 · Monty code mode | ⏳ planned | change 2 (M8b) | CodeMode roles, `analyze_script`, continuity rules as code, DynamicWorkflow |
 
@@ -296,6 +296,23 @@ Decisions made against pydantic-ai 2.51 / temporalio 1.33, landed as G11a–G11e
   `TestModel`/`FunctionModel`. Recorded histories live in `tests/temporal_histories/`, and a
   `Replayer` test replays them. The replay rule goes into CLAUDE.md/AGENTS.md. Room evals are re-run
   on LM Studio against the baselines.
+
+**As built (deviations from the list above):**
+
+- `__pydantic_ai_agents__` isn't used. All eight room workflows share a base class, and the plugin
+  would register every agent's activities once per subclass, so the worker registers them once with
+  `room_agent_activities()`. The agents are built at import, outside any workflow.
+- Chat has its own 13 durable agents (`chat_agents()`, `chat__<role>` activities). They carry
+  `event_stream_topic`, and room workflows host no event stream. Each chat turn is its own workflow,
+  not one long workflow per thread, because `useChat` resends the history and the transcript table
+  keeps it. The SSE relay ends only after the workflow has saved the turn, as `on_complete` did.
+- Human gates stay as proposals decided through the proposals API. Proposals are durable in
+  Postgres, so parking a workflow on a signal would duplicate that state.
+- A room run is `execute_workflow` (prepare → child `room:<key>` → online checks). When a writer
+  cancels, the child ends Canceled and the parent completes with `{"status": "cancelled"}`.
+- `run_room_workflow` (evals, tests) runs the same workflow on an embedded time-skipping server.
+- Tier 0 covers Temporal workflows, cancellation and streamed chat. The replay suite covers every
+  workflow type except the one-activity RAG jobs.
 
 ### G12 · Frontend telemetry (change 3)
 

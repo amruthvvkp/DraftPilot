@@ -110,7 +110,8 @@ ACTIVITIES: list[Callable[..., Any]] = [
 
 def all_activities() -> list[Callable[..., Any]]:
     """Return the job activities, the room workflows' database steps, and the room agents' model and tool calls."""
+    from draftpilot.agents.chat import CHAT_ACTIVITIES
     from draftpilot.agents.runtime import room_agent_activities
     from draftpilot.agents.workflows import ROOM_ACTIVITIES
 
-    return [*ACTIVITIES, *ROOM_ACTIVITIES, *room_agent_activities()]
+    return [*ACTIVITIES, *ROOM_ACTIVITIES, *CHAT_ACTIVITIES, *room_agent_activities()]

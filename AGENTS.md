@@ -27,7 +27,7 @@ src/draftpilot/
   core/        config (pydantic-settings), telemetry, temporal (client), db/, cache/, screenplay/, domain services
   models/      SQLModel domain: Project → Screenplay → Act → Scene → Block (+ story, agents, MCP access)
   crud/        thin async CRUD per model
-  agents/      writers' room: role specs (specs/*.yaml), runtime, room workflows (pydantic_graph)
+  agents/      writers' room: role specs (specs/*.yaml), durable runtime, room workflows (Temporal)
   evals/       pydantic_evals suites on LM Studio (`python -m draftpilot.evals`) + online checks
   worker/      Temporal worker: workflows, activities, job functions
   mcp/         FastMCP server (HTTP + stdio)
@@ -73,6 +73,9 @@ docker compose -f compose.yml -f compose.dev.yml up --build
   (the `protected` router, so `API__TOKEN` applies). See `frontend/CLAUDE.md`.
 - Agents never write silently: they create proposals the writer approves; MCP approval-required calls
   need a writer-decided `approval_id` (see `docs/mcp.md`).
+- **Temporal replay rule**: any workflow edit (`worker/workflows.py`, `agents/room_workflows.py`) must
+  pass `uv run pytest tests/test_temporal_replay.py` against `tests/temporal_histories/`; version
+  incompatible changes with `workflow.patched(...)` (see `docs/dev/extending-the-room.md`).
 - Any change to an agent, prompt, spec or tool must run that agent's evals on LM Studio
   (`uv run python -m draftpilot.evals <suite>`; baselines in `evals/baselines/`, see `docs/evals.md`).
 - After model changes: `uv run alembic revision --autogenerate -m "..."`, then **review it** — the

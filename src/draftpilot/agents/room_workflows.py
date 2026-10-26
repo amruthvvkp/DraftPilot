@@ -18,11 +18,14 @@ from temporalio.exceptions import ActivityError, ApplicationError, FailureError
 
 with workflow.unsafe.imports_passed_through():
     from pydantic import BaseModel
+    from pydantic_ai.durable_exec.temporal import AgentEventStream
     from pydantic_ai.exceptions import AgentRunError
 
+    from draftpilot.agents.chat import ChatTurn, save_chat_turn
     from draftpilot.agents.deps import RoomDeps
     from draftpilot.agents.runtime import (
         RunMeter,
+        chat_agents,
         model_identity,
         reasoning_ran_away,
         role_run_options,
@@ -70,6 +73,11 @@ with workflow.unsafe.imports_passed_through():
         scope_text,
         summarize_panel,
     )
+
+# Temporal needs durable agents built outside any workflow. The first (host) import of this module
+# builds them, and the sandbox's re-imports get the cached ones.
+room_agents()
+chat_agents()
 
 
 class RoomWorkflowBase:
@@ -439,6 +447,36 @@ class ContinuityPass(RoomWorkflowBase):
         known = set(await self.activity(known_scene_ids, self.room.project_id))
         issues = [issue.model_dump() for issue in report.issues if all(scene_id in known for scene_id in issue.scene_ids)]
         return {"issues": issues, "dropped": len(report.issues) - len(issues)}
+
+
+@workflow.defn(name="room:chat")
+class RoomChat:
+    """Run one chat turn, publishing its events to the workflow's stream for the studio to relay."""
+
+    @workflow.init
+    def __init__(self, turn: ChatTurn) -> None:
+        """Host the event stream the chat agent publishes to."""
+        self.events = AgentEventStream()
+
+    @workflow.run
+    async def run(self, turn: ChatTurn) -> str:
+        """Answer the conversation, then record the AgentRun and the transcript."""
+        provider, model_name = model_identity(turn.deps.model_ref)
+        meter = RunMeter(turn.deps.project_id, turn.role, "chat", provider, model_name, None, started=0.0)
+        started = workflow.time()
+        try:
+            async with self.events:
+                result = await chat_agents()[turn.role].run(
+                    message_history=turn.history, **role_run_options(role_spec(turn.role), turn.deps, str, None)
+                )
+        except (ActivityError, AgentRunError) as exc:
+            await workflow.execute_activity(record_agent_run, meter.fields(None, exc, _ms_since(started)), **STEP_ACTIVITY)
+            raise
+        reply = str(result.output)
+        await workflow.execute_activity(
+            save_chat_turn, args=[turn, reply, meter.fields(result, None, _ms_since(started))], **STEP_ACTIVITY
+        )
+        return reply
 
 
 ROOM_WORKFLOW_CLASSES: list[type] = [

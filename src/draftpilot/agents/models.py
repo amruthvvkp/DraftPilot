@@ -32,9 +32,12 @@ _instances: dict[str, Any] = {}
 _built: dict[str, tuple[float, Any]] = {}
 
 
-def register_model(model: Any) -> str:
-    """Return a ref for a ready-made model instance (tests and evals), resolvable in this process only."""
-    key = f"{INSTANCE}{id(model)}"
+def register_model(model: Any, name: str | None = None) -> str:
+    """Return a ref for a ready-made model instance (tests and evals), resolvable in this process only.
+
+    ``name`` gives the ref a stable key, so recorded workflow histories that carry it can be replayed.
+    """
+    key = f"{INSTANCE}{name or id(model)}"
     _instances[key] = model
     return model_ref(key, str(getattr(model, "system", "test")), str(getattr(model, "model_name", "test")))
 

@@ -1,8 +1,14 @@
 # Writers' room
 
-The role runtime, the room workflows and their durable runner.
+The role runtime, the room workflows (Temporal) and how runs start.
 
 ::: draftpilot.agents.workflows
+
+::: draftpilot.agents.room_workflows
+
+::: draftpilot.agents.chat
+
+::: draftpilot.agents.models
 
 ::: draftpilot.agents.workflow_runner
 
