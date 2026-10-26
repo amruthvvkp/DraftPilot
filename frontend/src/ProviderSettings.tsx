@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { type FormEvent, useEffect, useState } from 'react'
 import AppearancePanel from './AppearancePanel'
 import { addWriterMemory, createProviderProfile, forgetWriterMemory, getWriterProfile, listDefaultModels, listProfileModels, listProviderProfiles, listWriterMemories, ModelOption, ProviderProfile, saveWriterProfile, testProviderProfile, updateProviderProfile, WriterMemory, WriterProfile } from './api'
@@ -89,9 +90,9 @@ export default function ProviderSettings() {
   }
 
   return <div className="settings-shell">
-    <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span className="wordmark"><em>Draft</em><b>Pilot</b></span></div><p className="eyebrow">Studio</p><nav><a href="/projects">Projects</a><a className="active" href="/settings">Settings</a></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace</div></aside>
+    <aside className="sidebar"><div className="brand"><span className="brand-mark">✦</span><span className="wordmark"><em>Draft</em><b>Pilot</b></span></div><p className="eyebrow">Studio</p><nav><Link to="/projects">Projects</Link><Link className="active" to="/settings">Settings</Link></nav><div className="sidebar-note"><span className="status-dot" /> Local workspace</div></aside>
     <main className="main settings-main">
-      <header className="topbar"><div><p className="eyebrow warm">CONFIGURATION</p><h1>Settings</h1></div><a className="button quiet" href="/projects">← Projects</a></header>
+      <header className="topbar"><div><p className="eyebrow warm">CONFIGURATION</p><h1>Settings</h1></div><Link className="button quiet" to="/projects">← Projects</Link></header>
       <p className="settings-intro">Connect a model for your story team. API keys are encrypted by the server and never returned to this browser.</p>
       {error && <div className="notice">{error}<button onClick={() => setError('')}>×</button></div>}{message && <div className="success-notice">{message}</div>}
       <AppearancePanel />

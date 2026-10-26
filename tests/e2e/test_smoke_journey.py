@@ -34,7 +34,9 @@ def test_writer_smoke_journey_from_project_to_recovery(page: Page) -> None:
     }
     workspace = {"project": project, "screenplay": {"id": 12, "project_id": 42, "title": project["title"], "format": "feature", "status": "draft"}, "acts": [{"id": 10, "screenplay_id": 12, "title": "Act One", "position": 0}], "scenes": scenes, "blocks": blocks}
     artifacts = [{"id": 301, "project_id": 42, "kind": "brief", "title": "Brief", "content": project["logline"], "version": 1, "stale": False, "depends_on": [], "artifact_metadata": {}}]
-    proposals: list[dict[str, object]] = []
+    # An agent's formatting proposal waiting for review; the writer's own type changes are direct edits.
+    proposals: list[dict[str, object]] = [{"id": 701, "project_id": 42, "run_id": 9, "target_kind": "block", "target_id": 202, "operation": {"element_type": "parenthetical"}, "diff": {"field": "element_type", "from": "dialogue", "to": "parenthetical"}, "before": {}, "base_version": 1, "status": "proposed"}]
+    block_patches: list[dict[str, object]] = []
     translations: list[dict[str, object]] = []
     timeline = {"id": 501, "project_id": 42, "screenplay_id": 12, "status": "proposed", "original_scene_ids": [101, 102], "proposed_scene_ids": [102, 101], "timings": [{"scene_id": 102, "position": 0, "start_seconds": 0, "end_seconds": 30}, {"scene_id": 101, "position": 1, "start_seconds": 30, "end_seconds": 60}], "total_runtime_seconds": 60}
     backup = {"filename": "42-20260904T000000Z.json.gz", "manifest": {"schema_version": 1, "project_id": 42, "created_at": "2026-09-04T00:00:00Z", "app_version": "0.1.0", "sha256": "a" * 64}}
@@ -81,6 +83,9 @@ def test_writer_smoke_journey_from_project_to_recovery(page: Page) -> None:
         elif path.endswith("/agent-proposals/701/rollback"):
             proposals[0]["status"] = "rolled_back"
             result = proposals[0]
+        elif "/blocks/" in path and request.method == "PATCH":
+            block_patches.append(payload)
+            result = {**blocks["101"][0], **payload}
         elif "/translations/" in path and request.method == "PUT":
             item = {"id": 801, "block_id": 202, "language": "Bengali", "text": payload["text"], "source_version": 1, "status": "draft"}
             translations[:] = [item]
@@ -144,8 +149,12 @@ def test_writer_smoke_journey_from_project_to_recovery(page: Page) -> None:
     page.get_by_label("Dialogue translation language").select_option("Bengali")
     page.get_by_label("Edit Bengali translation").fill("আমাদের যেতে হবে।")
     page.get_by_label("Edit Bengali translation").blur()
-    page.get_by_label("Format action").select_option("dialogue")
-    page.get_by_role("button", name="Review format").first.click()
+    page.get_by_label("Format action").select_option("transition")
+    for _ in range(50):
+        if any(patch.get("element_type") == "transition" for patch in block_patches):
+            break
+        page.wait_for_timeout(100)
+    assert any(patch.get("element_type") == "transition" for patch in block_patches), "changing a block's type is a direct edit"
     expect(page.get_by_text("#701 block")).to_be_visible()
     page.get_by_role("button", name="Approve change").click()
     page.get_by_role("button", name="Rollback").click()

@@ -79,6 +79,8 @@ export const storyApi = {
 
   relationships: (projectId: number) => list<Relationship>(projectId, 'relationships'),
   createRelationship: (projectId: number, fields: Omit<Relationship, 'id' | 'project_id' | 'version'>) => create<Relationship>(projectId, 'relationships', fields),
+  updateRelationship: (projectId: number, row: Relationship, fields: Partial<Pick<Relationship, 'relation' | 'description'>>) =>
+    update<Relationship>(projectId, 'relationships', row.id, row.version, fields),
   deleteRelationship: (projectId: number, row: Relationship) => remove(projectId, 'relationships', row.id, row.version),
 
   locations: (projectId: number) => list<Location>(projectId, 'locations'),

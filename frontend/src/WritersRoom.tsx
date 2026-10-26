@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { useEffect, useMemo, useState } from 'react'
 import {
   AgentProposal,
@@ -121,7 +122,7 @@ export default function WritersRoom({ projectId }: { projectId: number }) {
 
   return <div className="room-page">
     <header className="room-head">
-      <div><a className="room-back" href={`/projects/${projectId}`}>← Workspace</a> <a className="room-back" href={`/projects/${projectId}/twin`}>Story twin ↗</a><p className="eyebrow warm">WRITERS’ ROOM</p><h1>Put the room to work</h1><p>Each workflow is a team of agents with a critique loop or a panel. Anything that would change your script or story arrives as a proposal you approve.</p></div>
+      <div><Link className="room-back" to={`/projects/${projectId}`}>← Workspace</Link> <Link className="room-back" to={`/projects/${projectId}/twin`}>Story twin ↗</Link><p className="eyebrow warm">WRITERS’ ROOM</p><h1>Put the room to work</h1><p>Each workflow is a team of agents with a critique loop or a panel. Anything that would change your script or story arrives as a proposal you approve.</p></div>
     </header>
     {error && <p className="notice" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss">×</button></p>}
     <div className="room-grid">

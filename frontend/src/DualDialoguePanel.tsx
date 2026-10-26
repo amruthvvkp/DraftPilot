@@ -1,26 +1,17 @@
-import { useEffect, useState } from 'react'
-import { getProjectWorkspace, ScreenplayBlock, updateProjectBlock } from './api'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { ScreenplayBlock, updateProjectBlock } from './api'
+import { keys, useWorkspace } from './data/queries'
 
 type DualDialoguePanelProps = { projectId: number; sceneId: number }
 
 export default function DualDialoguePanel({ projectId, sceneId }: DualDialoguePanelProps) {
-  const [dialogues, setDialogues] = useState<ScreenplayBlock[]>([])
-  const [version, setVersion] = useState(0)
+  const queryClient = useQueryClient()
+  const workspace = useWorkspace(projectId).data
+  const dialogues: ScreenplayBlock[] = (workspace?.blocks[sceneId] ?? []).filter(item => item.element_type === 'dialogue')
+  const version = workspace?.scenes.find(item => item.id === sceneId)?.version ?? 0
   const [error, setError] = useState('')
-
-  async function refresh(): Promise<void> {
-    try {
-      const workspace = await getProjectWorkspace(projectId)
-      const scene = workspace.scenes.find(item => item.id === sceneId)
-      const nextDialogues = (workspace.blocks[sceneId] ?? []).filter(item => item.element_type === 'dialogue')
-      setDialogues(nextDialogues)
-      setVersion(scene?.version ?? 0)
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Unable to load dialogue controls')
-    }
-  }
-
-  useEffect(() => { void refresh() }, [projectId, sceneId])
+  const refresh = () => queryClient.invalidateQueries({ queryKey: keys.workspaces(projectId) })
 
   async function toggle(): Promise<void> {
     const block = dialogues[0]

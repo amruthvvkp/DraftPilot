@@ -12,7 +12,7 @@ under `/api/v1`. The browser never touches Postgres/Redis directly — it only c
 ## Layout
 
 - `frontend/src/main.tsx` — entry; mounts `<App />` inside `AuthGate` (`SignIn.tsx`) and imports `styles.css`.
-- `frontend/src/App.tsx` — path-regex routing on `window.location.pathname`
+- `frontend/src/App.tsx` — react-router 7 routes; project pages nest under `project/ProjectLayout.tsx`; data via TanStack Query hooks in `src/data/queries.ts`
   (`/projects`, `/projects/:id`, `/projects/:id/studio`, `/projects/:id/context`, `/settings`).
 - `frontend/src/api.ts` — typed API client: shared `request<T>()` helper (JSON, same-origin
   credentials, `ApiError`, dispatches `AUTH_REQUIRED_EVENT` on 401) plus one exported function per call.
@@ -31,8 +31,8 @@ under `/api/v1`. The browser never touches Postgres/Redis directly — it only c
 ## Add a page
 
 1. Create `frontend/src/MyPage.tsx` exporting a default component with typed props.
-2. Add a route match in `App.tsx` (e.g. `path.match(/^\/projects\/(\d+)\/my-page$/)`).
-3. Link to it with a plain `<a href>` (full-page navigation; no client router).
+2. Add a `<Route>` in `AppRoutes` (`App.tsx`), under the `/projects/:projectId` layout for project pages.
+3. Link to it with `Link` / `useNavigate`; load data with a query hook in `src/data/queries.ts`.
 
 ## Add an API call
 
@@ -57,7 +57,7 @@ so rebuild locally and reload the page.
 - `npm --prefix frontend run build` — typecheck and build must pass.
 - `uv run pytest tests/e2e` — Python Playwright journeys against :9000
   (first run `uv run playwright install chromium`), or `docker compose --profile test run --rm e2e`.
-- Backend changes: `uv run pytest`, `uv run mypy src`, `uv run ruff check`, `uv run interrogate src migrations`.
+- Backend changes: `uv run pytest`, `uv run mypy src`, `uv run ruff check`, `uv run interrogate src`.
 
 ## Conventions
 

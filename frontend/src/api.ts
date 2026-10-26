@@ -267,13 +267,6 @@ export function selectedDraftId(): number | null {
   return value && /^\d+$/.test(value) ? Number(value) : null
 }
 
-/** Select a draft in the URL without reloading the page. */
-export function selectDraft(screenplayId: number): void {
-  const url = new URL(window.location.href)
-  url.searchParams.set('draft', String(screenplayId))
-  window.history.replaceState(null, '', url)
-}
-
 export function getProjectWorkspace(projectId: number, screenplayId: number | null = selectedDraftId()): Promise<ProjectWorkspace> {
   const query = screenplayId === null ? '' : `?screenplay_id=${screenplayId}`
   return request<ProjectWorkspace>(`/api/v1/projects/${projectId}/workspace${query}`)
@@ -297,17 +290,39 @@ export function reorderProjectBlocks(projectId: number, sceneId: number, version
 
 export type ProjectEvent = { kind: string; project_id: number; client: string | null; at: string; data: Record<string, unknown> }
 
-export const PROJECT_EVENT_KINDS = ['scene.changed', 'screenplay.changed', 'proposal.changed', 'timeline.changed', 'translation.changed', 'artifact.changed', 'approval.changed', 'run.changed', 'workflow.progress'] as const
+export const PROJECT_EVENT_KINDS = ['scene.changed', 'screenplay.changed', 'structure.changed', 'story.changed', 'project.changed', 'proposal.changed', 'timeline.changed', 'translation.changed', 'artifact.changed', 'approval.changed', 'run.changed', 'workflow.progress', 'twin.changed'] as const
 
-/** Subscribe to a project's live change stream; returns an unsubscribe function. */
-export function subscribeProjectEvents(projectId: number, onEvent: (event: ProjectEvent) => void): () => void {
-  if (typeof EventSource === 'undefined') return () => undefined
+type ProjectChannel = { source: EventSource; listeners: Set<(event: ProjectEvent) => void> }
+const channels = new Map<number, ProjectChannel>()
+
+/** Open (or reuse) the one live change stream for a project; every subscriber shares it. */
+function projectChannel(projectId: number): ProjectChannel {
+  const existing = channels.get(projectId)
+  if (existing) return existing
   const source = new EventSource(`/api/v1/projects/${projectId}/events`, { withCredentials: true })
+  const channel: ProjectChannel = { source, listeners: new Set() }
   const handler = (message: MessageEvent<string>) => {
-    try { onEvent(JSON.parse(message.data) as ProjectEvent) } catch { /* ignore malformed frames */ }
+    let event: ProjectEvent
+    try { event = JSON.parse(message.data) as ProjectEvent } catch { return /* ignore malformed frames */ }
+    channel.listeners.forEach(listener => listener(event))
   }
   PROJECT_EVENT_KINDS.forEach(kind => source.addEventListener(kind, handler as EventListener))
-  return () => source.close()
+  channels.set(projectId, channel)
+  return channel
+}
+
+/** Subscribe to a project's live change stream; returns an unsubscribe function. One EventSource serves every subscriber of a project. */
+export function subscribeProjectEvents(projectId: number, onEvent: (event: ProjectEvent) => void): () => void {
+  if (typeof EventSource === 'undefined') return () => undefined
+  const channel = projectChannel(projectId)
+  channel.listeners.add(onEvent)
+  return () => {
+    channel.listeners.delete(onEvent)
+    if (channel.listeners.size === 0) {
+      channel.source.close()
+      channels.delete(projectId)
+    }
+  }
 }
 
 export function createTimelineProposal(projectId: number, screenplayId: number, sceneIds: number[], durations: Record<number, number>): Promise<TimelineProposal> {

@@ -93,6 +93,7 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     page.route("**/api/v1/settings/providers", lambda route: route.fulfill(
         status=200, content_type="application/json", body="[]"
     ))
+    page.route("**/api/v1/capabilities*", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.goto("/projects")
     page.get_by_role("heading", name="The Lantern House").click()
 
@@ -105,9 +106,11 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()
     expect(page.get_by_role("link", name="FDX")).to_have_attribute("href", "/api/v1/projects/9001/screenplays/12/exports/fdx")
     expect(page.get_by_text("artifact:3 · v2")).to_be_visible()
-    page.get_by_label("Format action").select_option("dialogue")
-    page.get_by_role("button", name="Review format").first.click()
-    expect(page.get_by_text("#80 block")).to_be_visible()
+    # A writer's type change is a direct, versioned block edit (agents still go through proposals).
+    with page.expect_request(lambda request: request.method == "PATCH" and request.url.endswith("/scenes/7/blocks/20")) as patched:
+        page.get_by_label("Format action").select_option("dialogue")
+    assert patched.value.post_data_json["element_type"] == "dialogue"
+    assert not proposals
     page.get_by_role("navigation", name="Project tools").get_by_role("button", name="Timeline").click()
     lanes = page.get_by_role("region", name="Act and character lanes")
     expect(lanes).to_contain_text("Act One")
@@ -197,6 +200,7 @@ def test_copilot_turn_polls_durable_run(page: Page) -> None:
 
     page.route("**/api/v1/projects/9001/copilot/messages/respond-async", respond)
     page.route("**/api/v1/projects/9001/runs/44", lambda route: route.fulfill(status=200, content_type="application/json", body=json.dumps({"id": 44, "project_id": 9001, "kind": "copilot_response", "status": "succeeded", "result": {"assistant_message_id": 32}, "error": None})))
+    page.route("**/api/v1/capabilities*", lambda route: route.fulfill(status=200, content_type="application/json", body="[]"))
     page.goto("/projects/9001/studio")
     page.get_by_label("Copilot message").fill("Find the gap.")
     page.get_by_role("button", name="Send").click()
