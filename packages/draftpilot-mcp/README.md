@@ -3,7 +3,7 @@
 The [DraftPilot](https://github.com/amruthvvkp/DraftPilot) MCP server as its own package: develop
 screenplays end to end (storyline, characters with motives and timelines, outline, scenes,
 revisions, reviews) from Claude Desktop, Claude Code, ChatGPT or any MCP client. It works on the
-same DraftPilot database as the studio, so everything an agent does shows up live for the writer,
+same DraftPilot database as the studio (`pip install draftpilot-studio`), so everything an agent does shows up live for the writer,
 and every write waits for the writer's approval.
 
 ```bash

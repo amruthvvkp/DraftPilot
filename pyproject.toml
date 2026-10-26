@@ -1,5 +1,6 @@
 [project]
-name = "draftpilot"
+# On PyPI as draftpilot-studio ("draftpilot" belongs to an unrelated project); the module and CLI are `draftpilot`.
+name = "draftpilot-studio"
 version = "0.1.0"
 description = "AI-powered screenplay editor and story development platform"
 readme = "README.md"
@@ -75,6 +76,9 @@ test = [
 
 [tool.uv.workspace]
 members = ["packages/*"]
+
+[tool.uv.build-backend]
+module-name = "draftpilot"
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]

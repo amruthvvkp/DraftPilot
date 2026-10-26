@@ -20,7 +20,7 @@ from pathlib import Path
 def version() -> str:
     """Return the installed DraftPilot version."""
     try:
-        return metadata.version("draftpilot")
+        return metadata.version("draftpilot-studio")
     except metadata.PackageNotFoundError:
         return "0+unknown"
 

@@ -13,7 +13,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: Text Editors",
 ]
-dependencies = ["draftpilot==0.1.0"]
+dependencies = ["draftpilot-studio==0.1.0"]
 
 [project.urls]
 Homepage = "https://github.com/amruthvvkp/DraftPilot"
@@ -24,7 +24,7 @@ Repository = "https://github.com/amruthvvkp/DraftPilot"
 draftpilot-mcp = "draftpilot_mcp.cli:main"
 
 [tool.uv.sources]
-draftpilot = { workspace = true }
+draftpilot-studio = { workspace = true }
 
 [build-system]
 requires = ["uv_build>=0.13,<0.14"]

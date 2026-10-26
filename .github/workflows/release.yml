@@ -1,7 +1,7 @@
 name: Release
 
 # Push a tag like v0.2.0 (matching both packages' versions) to publish:
-#   - draftpilot and draftpilot-mcp to PyPI (trusted publishing; configure both projects on PyPI
+#   - draftpilot-studio and draftpilot-mcp to PyPI (trusted publishing; configure both projects on PyPI
 #     with this repository, workflow `release.yml` and environment `pypi`),
 #   - ghcr.io/amruthvvkp/draftpilot:<version> and :latest (linux/amd64 + linux/arm64),
 #   - a GitHub Release with the wheels, sdists and the Compose files.
@@ -33,7 +33,7 @@ jobs:
             version=$(sed -n 's/^version = "\(.*\)"/\1/p' "$file" | head -1)
             test "$version" = "$tag" || { echo "$file is $version, tag is $tag"; exit 1; }
           done
-          grep -q "\"draftpilot==$tag\"" packages/draftpilot-mcp/pyproject.toml
+          grep -q "\"draftpilot-studio==$tag\"" packages/draftpilot-mcp/pyproject.toml
       - run: scripts/build_release.sh
       - name: Smoke-test the wheels in a clean environment
         run: |
@@ -41,8 +41,8 @@ jobs:
           VIRTUAL_ENV=/tmp/smoke uv pip install dist/*.whl
           /tmp/smoke/bin/draftpilot version
           /tmp/smoke/bin/draftpilot-mcp tools > /dev/null
-          unzip -l dist/draftpilot-*.whl | grep -q "draftpilot/studio/index.html"
-          unzip -l dist/draftpilot-*.whl | grep -q "draftpilot/migrations/env.py"
+          unzip -l dist/draftpilot_studio-*.whl | grep -q "draftpilot/studio/index.html"
+          unzip -l dist/draftpilot_studio-*.whl | grep -q "draftpilot/migrations/env.py"
       - uses: actions/upload-artifact@v4
         with:
           name: dist

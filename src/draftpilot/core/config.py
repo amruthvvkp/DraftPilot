@@ -16,7 +16,7 @@ _ROOT = _PACKAGE.parent.parent  # the repository, in a source checkout
 def _distribution() -> metadata.PackageMetadata | None:
     """Return the installed distribution's metadata, if DraftPilot is installed."""
     try:
-        return metadata.metadata("draftpilot")
+        return metadata.metadata("draftpilot-studio")
     except metadata.PackageNotFoundError:
         return None
 
