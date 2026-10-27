@@ -12,6 +12,12 @@ with this project's MIT license (e.g. GPL).
   Draft code or assets are used. <https://www.finaldraft.com/>
 - **Outline drag-and-drop** — the Outline page uses the browser's native HTML drag-and-drop
   plus keyboard controls; no third-party drag-and-drop library is used.
+- **Visual tools** — the tension curve, relationship graph, corkboard and pacing heatmap are
+  hand-drawn SVG and CSS; no charting or graph library is used.
+- **Structure templates** — the target beats follow widely taught story structures, summarised
+  in our own words: Blake Snyder's *Save the Cat!* beat sheet, the Hero's Journey (Joseph
+  Campbell, as adapted for screenwriters by Christopher Vogler) and Gustav Freytag's five-act
+  pyramid. Only beat names and rough positions are used; no text from those books.
 
 ## Reused libraries
 
