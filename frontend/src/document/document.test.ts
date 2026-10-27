@@ -257,6 +257,12 @@ describe('typing rules', () => {
 })
 
 describe('outline layout', () => {
+  it('keeps an unlinked beat in its own act, even one with no scenes yet', () => {
+    const ledger = { id: 9, project_id: 1, version: 1, act_id: 2, position: 0, title: 'The ledger', summary: '', beat_type: 'beat', status: 'draft', scene_ids: [], character_ids: [], source: 'writer' as const }
+    const doc = buildDoc({ acts: [{ id: 1, screenplay_id: 1, title: 'Act One', position: 0 }, { id: 2, screenplay_id: 1, title: 'Act Two', position: 1 }], scenes: [scene(7, 'A')], blocks: {} }, [ledger])
+    expect(doc.content![1].content!.map(item => item.attrs?.beat_id)).toEqual([9])
+  })
+
   const beat = (id: number, position: number, scene_ids: number[]): Beat =>
     ({ id, project_id: 1, version: 1, act_id: 1, position, title: `Beat ${id}`, summary: '', beat_type: 'beat', status: 'draft', scene_ids, character_ids: [], source: 'writer' })
 

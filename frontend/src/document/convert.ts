@@ -75,10 +75,9 @@ export function layoutAct(scenes: Scene[], beats: Beat[]): ActItem[] {
 }
 
 /** Decide which act a beat belongs to in this draft, or null when its scenes are all in another draft. */
-function beatAct(beat: Beat, sceneActs: Map<number, number>, firstAct: number): number | null {
-  if (beat.scene_ids.length === 0) return beat.act_id !== null && beat.act_id !== undefined && [...sceneActs.values(), firstAct].includes(beat.act_id) ? beat.act_id : firstAct
-  const act = beat.scene_ids.map(id => sceneActs.get(id)).find(id => id !== undefined)
-  return act ?? null
+function beatAct(beat: Beat, sceneActs: Map<number, number>, actIds: Set<number>, firstAct: number): number | null {
+  if (beat.scene_ids.length === 0) return beat.act_id !== null && beat.act_id !== undefined && actIds.has(beat.act_id) ? beat.act_id : firstAct
+  return beat.scene_ids.map(id => sceneActs.get(id)).find(id => id !== undefined) ?? null
 }
 
 export type BuildOptions = {
@@ -93,11 +92,12 @@ export function buildDoc(workspace: Pick<ProjectWorkspace, 'acts' | 'scenes'> & 
   const acts = [...workspace.acts].sort((a, b) => a.position - b.position)
   const sceneActs = new Map(workspace.scenes.map(scene => [scene.id, scene.act_id]))
   const firstAct = acts[0]?.id ?? 0
+  const actIds = new Set(acts.map(act => act.id))
   return {
     type: 'doc',
     content: acts.map(act => {
       const scenes = workspace.scenes.filter(scene => scene.act_id === act.id)
-      const actBeats = beats.filter(beat => beatAct(beat, sceneActs, firstAct) === act.id)
+      const actBeats = beats.filter(beat => beatAct(beat, sceneActs, actIds, firstAct) === act.id)
       return {
         type: 'act',
         attrs: { act_id: act.id, title: act.title || `Act ${act.position + 1}` },

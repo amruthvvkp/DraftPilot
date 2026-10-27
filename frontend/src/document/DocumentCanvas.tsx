@@ -1,7 +1,7 @@
 import './document.css'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { EditorContent, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
+import { EditorContent, ReactNodeViewRenderer, useEditor, type UseEditorOptions } from '@tiptap/react'
 import type { Editor } from '@tiptap/core'
 import { Placeholder } from '@tiptap/extensions'
 import { approveAgentProposal, createProjectScene, getAgentProposals, type ProjectWorkspace, rejectAgentProposal, rollbackAgentProposal, writeSceneContent } from '../api'
@@ -13,7 +13,7 @@ import { buildDoc, sceneNodes } from './convert'
 import FloatingToolbar, { ElementTypeSelect } from './FloatingToolbar'
 import { type OverlayActions, overlayKey, ScriptOverlay } from './overlay'
 import { BeatNote, ELEMENT_LABELS, schemaExtensions } from './schema'
-import { DocumentSync, type SyncStatus } from './sync'
+import { dispatchRemote, DocumentSync, flushPendingDOM, type SyncStatus } from './sync'
 
 export type DocumentFocus = { sceneId: number | null; selection: string | null; blockIds: number[] }
 export type Jump = { sceneId: number; nonce: number }
@@ -57,6 +57,24 @@ function TitlePageCard({ workspace }: { workspace: ProjectWorkspace }) {
   </section>
 }
 
+/**
+ * Own the TipTap editor in a component that only renders when its (stable) options change: TipTap
+ * re-applies its state to the view after every render of the component that calls `useEditor`,
+ * which would race the writer's keystrokes if the canvas around it re-rendered while typing.
+ */
+const EditorHost = memo(function EditorHost({ options, onReady }: { options: UseEditorOptions; onReady: (editor: Editor | null) => void }) {
+  const editor = useEditor(options, [options])
+  // Hand the editor up only once its view is mounted; until then `editor.view` throws.
+  useEffect(() => {
+    if (!editor) return
+    const ready = () => onReady(editor)
+    if (editor.isInitialized) ready()
+    else editor.on('create', ready)
+    return () => { editor.off('create', ready); onReady(null) }
+  }, [editor, onReady])
+  return <EditorContent editor={editor} />
+})
+
 /** The single-document script editor: the whole draft as one page, with acts and beats inline. */
 export default function DocumentCanvas({ projectId, workspace, onFocusChange, jump, onStatus }: Props) {
   const queryClient = useQueryClient()
@@ -89,7 +107,10 @@ export default function DocumentCanvas({ projectId, workspace, onFocusChange, ju
   })
   const beatActions = useRef<BeatActions>({ saveBeat: async () => false, createScene: async () => undefined })
 
-  const editor = useEditor({
+  const focusChange = useRef(onFocusChange)
+  focusChange.current = onFocusChange
+  // Stable options: the editor is created once per draft, and its host never re-renders while typing.
+  const options = useMemo<UseEditorOptions>(() => ({
     extensions: [
       ...schemaExtensions().filter(extension => extension.name !== 'beatNote'),
       BeatNote.extend({
@@ -100,15 +121,16 @@ export default function DocumentCanvas({ projectId, workspace, onFocusChange, ju
       ScriptOverlay.configure({ actions: overlayActions }),
       Placeholder.configure({ placeholder: ({ node }) => node.type.name === 'sceneHeading' ? 'INT. LOCATION - DAY' : ELEMENT_LABELS[String(node.attrs.element_type)] ?? '' }),
     ],
-    content: buildDoc(workspace, beats ?? []),
+    content: buildDoc(latest.current.workspace, latest.current.beats),
     enableInputRules: false,
     enablePasteRules: false,
     editorProps: { attributes: { class: 'script-document', role: 'textbox', 'aria-multiline': 'true', 'aria-label': 'Screenplay', spellcheck: 'true' } },
     onTransaction: ({ editor: current, transaction }) => {
       if (transaction.docChanged && !transaction.getMeta(REMOTE)) sync.noteChange(transaction.before, current.state.doc)
     },
-    onSelectionUpdate: ({ editor: current }) => onFocusChange(describeFocus(current)),
-  }, [sync])
+    onSelectionUpdate: ({ editor: current }) => focusChange.current(describeFocus(current)),
+  }), [sync])
+  const [editor, setEditor] = useState<Editor | null>(null)
 
   useEffect(() => {
     if (!editor) return
@@ -124,7 +146,8 @@ export default function DocumentCanvas({ projectId, workspace, onFocusChange, ju
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    editor.view.dispatch(editor.state.tr.setMeta(overlayKey, { proposals: proposals ?? [], conflicts: syncState.conflicts, collapsed, busy: syncState.busy }).setMeta(REMOTE, true).setMeta('addToHistory', false))
+    flushPendingDOM(editor)
+    dispatchRemote(editor, editor.state.tr.setMeta(overlayKey, { proposals: proposals ?? [], conflicts: syncState.conflicts, collapsed, busy: syncState.busy }))
   }, [editor, proposals, syncState.conflicts, syncState.busy, collapsed])
 
   // The navigator jumps to a scene: put the cursor at the end of its heading.
@@ -183,10 +206,9 @@ export default function DocumentCanvas({ projectId, workspace, onFocusChange, ju
     }, 'Unable to create a scene from the beat')
   }
 
-  if (!editor) return null
   return <div className={`document-canvas${outlineHidden ? ' outline-hidden' : ''}`} ref={container}>
     <div className="document-toolbar" role="toolbar" aria-label="Document tools">
-      <ElementTypeSelect editor={editor} label="Current element type" />
+      {editor && <ElementTypeSelect editor={editor} label="Current element type" />}
       <button type="button" className="view-switch" role="switch" aria-checked={!outlineHidden} onClick={() => setOutlineHidden(value => !value)}>
         Outline <i className={outlineHidden ? 'toggle' : 'toggle on'} aria-hidden="true" />
       </button>
@@ -195,9 +217,9 @@ export default function DocumentCanvas({ projectId, workspace, onFocusChange, ju
     {error && <div className="notice" role="alert">{error}<button type="button" onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
     <article className="script-page document-page">
       <TitlePageCard workspace={workspace} />
-      <EditorContent editor={editor} />
+      <EditorHost options={options} onReady={setEditor} />
     </article>
-    <FloatingToolbar editor={editor} container={container} />
+    {editor && <FloatingToolbar editor={editor} container={container} />}
   </div>
 }
 

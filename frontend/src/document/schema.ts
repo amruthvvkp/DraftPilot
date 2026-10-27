@@ -118,14 +118,47 @@ export const Element = Node.create({
   },
   parseHTML() { return [{ tag: 'p[data-type]' }] },
   renderHTML({ node }) {
-    const type = String(node.attrs.element_type)
-    return ['p', {
-      class: `script-el ${type}${node.attrs.is_dual ? ' dual' : ''}${node.attrs.origin && node.attrs.origin !== 'human' ? ' agent-authored' : ''}`,
-      'data-type': type,
-      ...(node.attrs.block_id ? { 'data-block-id': node.attrs.block_id } : {}),
-    }, 0]
+    return ['p', elementAttributes(node.attrs), 0]
+  },
+  // Patch the paragraph in place when only attributes change (a save writing back a block id, a
+  // retype), instead of rebuilding its DOM under the writer's cursor and selection.
+  addNodeView() {
+    return ({ node }) => {
+      const dom = document.createElement('p')
+      let current = node
+      const apply = (attrs: Record<string, unknown>) => {
+        const wanted = elementAttributes(attrs)
+        for (const name of ['class', 'data-type', 'data-block-id']) {
+          const value = wanted[name as keyof typeof wanted]
+          if (value === undefined) dom.removeAttribute(name)
+          else if (dom.getAttribute(name) !== String(value)) dom.setAttribute(name, String(value))
+        }
+      }
+      apply(node.attrs)
+      return {
+        dom,
+        contentDOM: dom,
+        update: next => {
+          if (next.type !== current.type) return false
+          current = next
+          apply(next.attrs)
+          return true
+        },
+        ignoreMutation: mutation => mutation.type === 'attributes' && mutation.target === dom,
+      }
+    }
   },
 })
+
+/** The DOM attributes of an element paragraph. */
+function elementAttributes(attrs: Record<string, unknown>): { class: string; 'data-type': string; 'data-block-id'?: number } {
+  const type = String(attrs.element_type)
+  return {
+    class: `script-el ${type}${attrs.is_dual ? ' dual' : ''}${attrs.origin && attrs.origin !== 'human' ? ' agent-authored' : ''}`,
+    'data-type': type,
+    ...(attrs.block_id ? { 'data-block-id': Number(attrs.block_id) } : {}),
+  }
+}
 
 export const ColorMark = Mark.create({
   name: 'color',

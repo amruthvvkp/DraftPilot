@@ -60,6 +60,21 @@ function uidsByBlock(doc: PMNode): Map<number, string> {
   return uids
 }
 
+/**
+ * Read any DOM change ProseMirror hasn't seen yet. Keyboard selection changes reach it
+ * asynchronously, so a server-side transaction landing between a Shift+Arrow and that read would
+ * put the old selection back. Call this before building a remote transaction.
+ */
+export function flushPendingDOM(editor: Editor): void {
+  const observer = (editor.view as unknown as { domObserver?: { flush?: () => void } }).domObserver
+  try { observer?.flush?.() } catch { /* best effort: an unflushed selection only costs a keystroke */ }
+}
+
+/** Dispatch a server-side change: no dirty tracking, no undo step. */
+export function dispatchRemote(editor: Editor, tr: Transaction): void {
+  editor.view.dispatch(tr.setMeta(REMOTE, true).setMeta('addToHistory', false))
+}
+
 export class DocumentSync {
   /** The scene that owns each block id, as the server last said. */
   readonly owners = new Map<number, number>()
@@ -119,7 +134,13 @@ export class DocumentSync {
 
   private emit(): void {
     const status: SyncStatus = this.error ? 'error' : this.inFlight.size ? 'saving' : this.dirty.size ? 'unsaved' : 'saved'
-    this.snapshot = { status, error: this.error, conflicts: new Map(this.conflicts), busy: new Set([...this.dirty, ...this.inFlight]) }
+    const busy = new Set([...this.dirty, ...this.inFlight])
+    const same = <T>(a: ReadonlySet<T> | ReadonlyMap<T, unknown>, b: ReadonlySet<T> | ReadonlyMap<T, unknown>) =>
+      a.size === b.size && [...a.keys()].every(key => b.has(key) && (!(a instanceof Map) || a.get(key) === (b as ReadonlyMap<T, unknown>).get(key)))
+    const previous = this.snapshot
+    // Only a real change notifies listeners, so typing doesn't re-render the page on every key.
+    if (previous.status === status && previous.error === this.error && same(previous.conflicts, this.conflicts) && same(previous.busy, busy)) return
+    this.snapshot = { status, error: this.error, conflicts: new Map(this.conflicts), busy }
     this.listeners.forEach(listener => listener())
   }
 
@@ -201,6 +222,7 @@ export class DocumentSync {
   private writeBack(sceneId: number, uids: string[], blockIds: number[], content: SceneContent): void {
     const editor = this.editor
     if (!editor) return
+    flushPendingDOM(editor)
     const byUid = new Map(uids.map((uid, index) => [uid, { id: blockIds[index], text: content.blocks[index].text }]))
     const entry = sceneNodes(editor.state.doc).get(sceneId)
     if (!entry) return
@@ -212,7 +234,7 @@ export class DocumentSync {
       }
       return false
     })
-    if (tr.docChanged) editor.view.dispatch(tr.setMeta(REMOTE, true).setMeta('addToHistory', false))
+    if (tr.docChanged) dispatchRemote(editor, tr)
   }
 
   /**
@@ -224,6 +246,7 @@ export class DocumentSync {
     this.server = { workspace, beats }
     const editor = this.editor
     if (!editor || editor.isDestroyed) return
+    flushPendingDOM(editor)
     const doc = editor.state.doc
     const current = sceneNodes(doc)
     const replace = new Set<number>()
@@ -236,7 +259,8 @@ export class DocumentSync {
     const stub = (scene: Scene): JSONContent | undefined => replace.has(scene.id) ? undefined : { type: 'scene', attrs: { scene_id: scene.id } }
     const uids = uidsByBlock(doc)
     const sameShape = structureKey(buildDoc(workspace, beats, { keep: stub })) === structureKey(doc)
-    const anchor = anchorAt(doc, editor.state.selection.head)
+    const anchor = anchorAt(doc, editor.state.selection.anchor)
+    const head = anchorAt(doc, editor.state.selection.head)
     const tr = editor.state.tr
     if (sameShape) {
       for (const sceneId of replace) {
@@ -258,9 +282,10 @@ export class DocumentSync {
     const known = new Set(workspace.scenes.map(scene => scene.id))
     for (const sceneId of [...this.versions.keys()]) if (!known.has(sceneId)) { this.versions.delete(sceneId); this.dirty.delete(sceneId); this.conflicts.delete(sceneId) }
     if (tr.docChanged) {
-      const head = resolveAnchor(tr.doc, anchor)
-      if (head !== null) tr.setSelection(TextSelection.create(tr.doc, head))
-      editor.view.dispatch(tr.setMeta(REMOTE, true).setMeta('addToHistory', false))
+      const from = resolveAnchor(tr.doc, anchor)
+      const to = resolveAnchor(tr.doc, head)
+      if (from !== null && to !== null) tr.setSelection(TextSelection.create(tr.doc, from, to))
+      dispatchRemote(editor, tr)
       for (const sceneId of replace) { const entry = sceneNodes(editor.state.doc).get(sceneId); if (entry) this.rememberSent(entry.node) }
     }
     this.emit()
