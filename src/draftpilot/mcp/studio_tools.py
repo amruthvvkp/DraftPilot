@@ -382,6 +382,30 @@ async def write_scene(
         return _dump(SceneRead, scene)
 
 
+@mcp.tool(annotations=WRITE, tags={"structure", "screenplay"})
+async def write_scene_content(
+    project_id: int,
+    scene_id: int,
+    blocks: list[structure.SceneContentBlock],
+    expected_version: int,
+    ctx: Context,
+    heading: str | None = None,
+    approval_id: int | None = None,
+) -> dict[str, object]:
+    """Save a scene's blocks in one write: blocks with an ``id`` are updated, without one created, missing ones deleted."""
+    arguments = {
+        "project_id": project_id,
+        "scene_id": scene_id,
+        "blocks": [block.model_dump(mode="json", exclude_unset=True) for block in blocks],
+        "expected_version": expected_version,
+        "heading": heading,
+    }
+    content = structure.SceneContent(heading=heading, blocks=blocks)
+    async with authorized(ctx, project_id, "structure.write", "write_scene_content", {"scene_id": scene_id}, approval_id=approval_id, arguments=arguments) as session:
+        result = await structure.write_scene_content(session, project_id, scene_id, content, expected_version, origin="agent")
+        return result.model_dump()
+
+
 @mcp.tool(annotations=WRITE, tags={"structure"})
 async def update_scene(
     project_id: int, scene_id: int, expected_version: int, ctx: Context, heading: str | None = None, scene_instruction: str | None = None, approval_id: int | None = None

@@ -543,6 +543,18 @@ async def reorder_project_blocks(
     return [BlockRead.model_validate(block) for block in blocks]
 
 
+@router.put("/{project_id}/scenes/{scene_id}/content", response_model=structure.SceneContentResult)
+async def write_project_scene_content(
+    project_id: int,
+    scene_id: int,
+    data: structure.SceneContent,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> structure.SceneContentResult:
+    """Save a scene's heading and every block in one write: keep, create, delete and renumber."""
+    return await structure.write_scene_content(session, project_id, scene_id, data, if_match)
+
+
 @router.get(
     "/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations",
     response_model=list[DialogueTranslationRead],

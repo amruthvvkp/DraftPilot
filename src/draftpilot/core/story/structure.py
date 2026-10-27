@@ -6,6 +6,7 @@ the usual side effects (scene RAG refresh, live-sync event, debounced Story-twin
 
 from typing import Any
 
+from pydantic import BaseModel, Field
 from sqlmodel import col, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -384,6 +385,108 @@ async def reorder_blocks(
     await session.commit()
     await scene_changed(session, project_id, scene, reason="blocks.reordered")
     return [blocks[block_id] for block_id in block_ids]
+
+
+# Fields a batched scene write may set on a block; anything not posted keeps its stored value.
+_CONTENT_FIELDS = ("element_type", "text", "character_extension", "is_dual", "dual_group", "marks")
+MAX_SCENE_BLOCKS = 5_000
+
+
+class SceneContentBlock(BaseModel):
+    """One block of a batched scene write: an ``id`` updates that block, no ``id`` creates one."""
+
+    id: int | None = None
+    element_type: BlockType = BlockType.ACTION
+    text: str = ""
+    character_extension: str | None = Field(default=None, max_length=50)
+    is_dual: bool = False
+    dual_group: int | None = None
+    marks: dict[str, Any] | None = None
+
+
+class SceneContent(BaseModel):
+    """A scene's full content: an optional new heading plus every block in order."""
+
+    heading: str | None = None
+    blocks: list[SceneContentBlock] = Field(max_length=MAX_SCENE_BLOCKS)
+
+
+class SceneContentResult(BaseModel):
+    """The outcome of a batched scene write."""
+
+    scene_id: int
+    version: int
+    block_ids: list[int]  # every block id in scene order
+    created_ids: list[int]  # ids of the blocks posted without one, in order
+
+
+async def write_scene_content(
+    session: AsyncSession,
+    project_id: int,
+    scene_id: int,
+    content: SceneContent,
+    expected_version: int | None,
+    *,
+    origin: str = "human",
+) -> SceneContentResult:
+    """Make a scene match the posted heading and blocks in one transaction and one version bump.
+
+    Blocks that keep their ``id`` are updated in place (so their dialogue translations survive),
+    blocks without one are created, stored blocks missing from the post are deleted, and positions
+    follow the posted order. A block whose content changes takes ``origin``. A post that changes
+    nothing leaves the version alone and fires no side effects.
+    """
+    scene = await versioned_scene(session, project_id, scene_id, expected_version)
+    existing = {block.id: block for block in await blocks_for_scene(session, scene_id)}
+    posted_ids = [item.id for item in content.blocks if item.id is not None]
+    if len(posted_ids) != len(set(posted_ids)):
+        raise Invalid("A block id appears more than once")
+    if unknown := sorted(set(posted_ids) - set(existing)):
+        raise Invalid(f"Blocks {unknown} are not in this scene")
+    changed = content.heading is not None and content.heading != scene.heading
+    if changed:
+        scene.heading = content.heading or ""
+    ordered: list[Block] = []
+    created: list[Block] = []
+    for position, item in enumerate(content.blocks):
+        if item.id is None:
+            block = _block_row(scene_id, position, item.model_dump(mode="json", include=set(_CONTENT_FIELDS)), origin)
+            block.marks = item.marks
+            session.add(block)
+            created.append(block)
+            ordered.append(block)
+            changed = True
+            continue
+        block = existing[item.id]
+        edits = {field: getattr(item, field) for field in item.model_fields_set & set(_CONTENT_FIELDS)}
+        edits = {field: value for field, value in edits.items() if getattr(block, field) != value}
+        for field, value in edits.items():
+            setattr(block, field, value)
+        if edits:
+            block.origin = origin
+        if edits or block.position != position:
+            block.position = position
+            session.add(block)
+            changed = True
+        ordered.append(block)
+    for block_id, block in existing.items():
+        if block_id not in posted_ids:
+            await session.delete(block)
+            changed = True
+    if not changed:
+        return SceneContentResult(
+            scene_id=scene_id, version=scene.version, block_ids=[block.id or 0 for block in ordered], created_ids=[]
+        )
+    scene.version += 1
+    session.add(scene)
+    await session.commit()
+    await scene_changed(session, project_id, scene, reason="scene.content")
+    return SceneContentResult(
+        scene_id=scene_id,
+        version=scene.version,
+        block_ids=[block.id or 0 for block in ordered],
+        created_ids=[block.id or 0 for block in created],
+    )
 
 
 async def scenes_for_project(session: AsyncSession, project_id: int, screenplay_id: int | None = None) -> list[Scene]:
