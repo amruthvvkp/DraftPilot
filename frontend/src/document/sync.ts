@@ -12,7 +12,7 @@ import { TextSelection, type Transaction } from '@tiptap/pm/state'
 import { ApiError, type ProjectWorkspace, type Scene, type SceneContentResult } from '../api'
 import type { Beat } from '../storyApi'
 import { REMOTE } from './behaviour'
-import { buildDoc, type SceneContent, sceneJSON, sceneNodes, serializeScene, structureKey } from './convert'
+import { buildDoc, type SceneContent, sceneJSON, sceneNodes, serializeScene, type ServerBlock, structureKey } from './convert'
 
 export type SyncApi = {
   write: (sceneId: number, version: number, content: SceneContent) => Promise<SceneContentResult>
@@ -22,7 +22,7 @@ export type SyncApi = {
 export type ConflictReason = 'remote' | 'stale'
 export type SyncStatus = 'saved' | 'unsaved' | 'saving' | 'error'
 export type SyncSnapshot = { status: SyncStatus; error: string; conflicts: ReadonlyMap<number, ConflictReason>; busy: ReadonlySet<number> }
-type Snapshot = { workspace: Pick<ProjectWorkspace, 'acts' | 'scenes' | 'blocks'>; beats: Beat[] }
+type Snapshot = { workspace: Pick<ProjectWorkspace, 'acts' | 'scenes'> & { blocks: Record<number, ServerBlock[]> }; beats: Beat[] }
 
 /** A cursor position that survives a reload: an element's uid, or a scene heading, plus an offset. */
 type Anchor = { uid: string; offset: number } | { sceneId: number; offset: number } | null

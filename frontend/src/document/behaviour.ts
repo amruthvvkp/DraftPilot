@@ -201,13 +201,19 @@ function pastePlugin(): Plugin {
         })
         return new Slice(Fragment.fromArray(elements), 0, 0)
       },
-      clipboardTextParser(text, _context, _plain, view) {
+      clipboardTextParser(text, context, _plain, view) {
         const { schema } = view.state
         const lines = text.replace(/\r\n?/g, '\n').split('\n')
-        const nodes = lines.map(line => schema.nodes.element.create(
-          { uid: newUid(), element_type: inferElement(line, 'action') ?? 'action' },
-          inlineContent(line).map(item => schema.nodeFromJSON(item)),
-        ))
+        // The first line joins the element under the cursor; it carries that element's identity, so
+        // the block keeps its id even when ProseMirror replaces an empty element outright.
+        const target = context.parent.type.name === 'element' ? context.parent : null
+        const nodes = lines.map((line, index) => {
+          const inferred = inferElement(line, 'action') ?? 'action'
+          const attrs = index === 0 && target
+            ? { ...target.attrs, element_type: target.content.size === 0 && target.attrs.element_type === 'action' ? inferred : target.attrs.element_type }
+            : { uid: newUid(), element_type: inferred }
+          return schema.nodes.element.create(attrs, inlineContent(line).map(item => schema.nodeFromJSON(item)))
+        })
         return new Slice(Fragment.fromArray(nodes), 1, 1)
       },
     },
