@@ -139,3 +139,10 @@ nav { display: grid; gap: 7px; } nav a { color: var(--ink-muted); padding: 11px 
 @media(max-width:1100px){.workspace-nav a:not(:first-of-type){display:none}}
 .semantic-row .script-editor{field-sizing:content;height:auto;min-height:1.9em;resize:none;overflow:hidden}
 .deleted-actions{display:flex;gap:6px}
+/* Collapsible navigator and context rail (Document editor). */
+.navigator-wrap{display:flex;flex-direction:column;background:var(--surface-3);border-right:1px solid var(--line)}.navigator-wrap>.navigator{flex:1;border-right:0}
+.workspace-grid.nav-collapsed{grid-template-columns:44px minmax(420px,1fr) 280px}
+.workspace-grid.rail-collapsed{grid-template-columns:240px minmax(420px,1fr) 44px}
+.workspace-grid.nav-collapsed.rail-collapsed{grid-template-columns:44px minmax(420px,1fr) 44px}
+.panel-collapse{display:block;margin:0 0 12px auto;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink-muted);font-size:11px;cursor:pointer}
+.collapsed-panel{padding:16px 6px !important}.collapsed-panel>*:not(.panel-collapse){display:none}

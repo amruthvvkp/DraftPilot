@@ -1,5 +1,5 @@
 import './room.css'
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { CLIENT_ID, createProjectBackup, deleteProjectBlock, getDialogueTranslations, importScreenplay, listProjectBackups, ProjectBackup, ProjectWorkspace, reorderProjectBlocks, restoreProjectBackup, saveDialogueTranslation, Scene, ScreenplayBlock, subscribeProjectEvents, updateProject, updateProjectBlock, updateProjectScene } from './api'
@@ -16,7 +16,12 @@ import BlockRow from './script/BlockRow'
 import { useEditorView } from './script/editorView'
 import SceneNavigator, { type SceneMoves, type Timing } from './script/SceneNavigator'
 import { inferElement } from './smartTyping'
+import { useEditorMode } from './editorMode'
+import type { DocumentFocus, Jump } from './document/DocumentCanvas'
 import './backup.css'
+
+// The Document editor (TipTap) loads only for writers who choose it in Settings → Editor.
+const DocumentCanvas = lazy(() => import('./document/DocumentCanvas'))
 
 type WorkspaceProps = { projectId: number; initialTimeline?: boolean }
 
@@ -105,6 +110,14 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
   const [sceneHeading, setSceneHeading] = useState('')
   const [activeBlockId, setActiveBlockId] = useState<number | null>(null)
   const [deletingScene, setDeletingScene] = useState<Scene | null>(null)
+  const editorMode = useEditorMode()
+  const documentMode = editorMode === 'document'
+  const [jump, setJump] = useState<Jump | null>(null)
+  const [documentFocus, setDocumentFocus] = useState<DocumentFocus>({ sceneId: null, selection: null, blockIds: [] })
+  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem('draftpilot:nav-collapsed') === 'true')
+  const [railCollapsed, setRailCollapsed] = useState(() => localStorage.getItem('draftpilot:rail-collapsed') === 'true')
+  useEffect(() => { localStorage.setItem('draftpilot:nav-collapsed', String(navCollapsed)) }, [navCollapsed])
+  useEffect(() => { localStorage.setItem('draftpilot:rail-collapsed', String(railCollapsed)) }, [railCollapsed])
   const refresh = () => queryClient.invalidateQueries({ queryKey: keys.workspaces(projectId) })
   const fail = (reason: unknown, fallback: string) => setError(errorMessage(reason, fallback))
 
@@ -136,12 +149,16 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
   }, [workspace])
 
   const selectedScene: Scene | undefined = workspace?.scenes.find(scene => scene.id === selectedId)
-  useChatFocus('screenplay', selectedScene?.heading ?? null, selectedScene?.id ?? null)
+  // In the Document editor the chat sees the selected text and its block ids, not just the scene.
+  useChatFocus('screenplay', (documentMode ? documentFocus.selection : null) ?? selectedScene?.heading ?? null, selectedScene?.id ?? null)
+  useEffect(() => {
+    if (documentMode && documentFocus.sceneId !== null && documentFocus.sceneId !== selectedId) setSelectedId(documentFocus.sceneId)
+  }, [documentMode, documentFocus.sceneId])
   // Follow ?scene= when it changes while the editor is open (the chat's open_scene tool, links from the outline).
   const sceneParam = Number(params.get('scene'))
   useEffect(() => {
-    if (sceneParam && workspace?.scenes.some(scene => scene.id === sceneParam)) setSelectedId(sceneParam)
-  }, [sceneParam, workspace])
+    if (sceneParam && workspace?.scenes.some(scene => scene.id === sceneParam)) { setSelectedId(sceneParam); setJump({ sceneId: sceneParam, nonce: Date.now() }) }
+  }, [sceneParam, workspace?.scenes.length])
   useEffect(() => { setSceneHeading(selectedScene?.heading ?? '') }, [selectedScene?.id, selectedScene?.heading])
   useEffect(() => { setProjectInstruction(workspace?.project.project_instruction ?? '') }, [workspace?.project.id, workspace?.project.project_instruction])
   useEffect(() => { setSceneInstruction(selectedScene?.scene_instruction ?? '') }, [selectedScene?.id, selectedScene?.scene_instruction])
@@ -326,9 +343,12 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
     {notice && <div className="notice" role="status">{notice}<button type="button" onClick={() => setNotice('')}>×</button></div>}
     {error && <div className="notice" role="alert">{error}<button type="button" onClick={() => setError('')} aria-label="Dismiss">×</button></div>}
     <HeadingOptions />
-    {timelineOpen ? <Timeline projectId={projectId} screenplayId={workspace.screenplay?.id ?? 0} workspace={workspace} /> : <div className="workspace-grid">
-      <SceneNavigator projectId={projectId} workspace={workspace} selectedId={selectedId} onSelect={setSelectedId}
-        timings={timings} totalRuntime={totalRuntime} targetRuntime={targetRuntime} moves={selectedScene ? sceneMoves(selectedScene) : null} />
+    {timelineOpen ? <Timeline projectId={projectId} screenplayId={workspace.screenplay?.id ?? 0} workspace={workspace} /> : <div className={`workspace-grid${documentMode && navCollapsed ? ' nav-collapsed' : ''}${documentMode && railCollapsed ? ' rail-collapsed' : ''}`}>
+      <div className={documentMode && navCollapsed ? 'navigator-wrap collapsed-panel' : 'navigator-wrap'}>
+        {documentMode && <button type="button" className="panel-collapse" aria-expanded={!navCollapsed} aria-label={navCollapsed ? 'Show navigator' : 'Hide navigator'} onClick={() => setNavCollapsed(value => !value)}>{navCollapsed ? '»' : '«'}</button>}
+        <SceneNavigator projectId={projectId} workspace={workspace} selectedId={selectedId} onSelect={sceneId => { setSelectedId(sceneId); if (documentMode) setJump({ sceneId, nonce: Date.now() }) }}
+          timings={timings} totalRuntime={totalRuntime} targetRuntime={targetRuntime} moves={selectedScene ? sceneMoves(selectedScene) : null} />
+      </div>
       <main className="script-canvas">
         <div className="canvas-toolbar">
           {(workspace.screenplays?.length ?? 0) > 1
@@ -338,7 +358,9 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
             Continuous view <i className={view === 'continuous' ? 'toggle on' : 'toggle'} aria-hidden="true" />
           </button>
         </div>
-        {selectedScene ? <article className="script-page">
+        {documentMode && selectedScene ? <Suspense fallback={<p className="workspace-loading">Opening the document editor…</p>}>
+          <DocumentCanvas key={workspace.screenplay?.id ?? 0} projectId={projectId} workspace={workspace} jump={jump} onFocusChange={setDocumentFocus} />
+        </Suspense> : selectedScene ? <article className="script-page">
           <input className="script-heading" list="screenplay-headings" value={sceneHeading} onChange={event => setSceneHeading(event.target.value)} onBlur={() => void saveSceneHeading()} aria-label="Edit scene heading" />
           {sceneBlocks.length ? <div className="semantic-blocks">{sceneBlocks.map((block, index) => <BlockRow key={block.id} block={block} index={index} count={sceneBlocks.length}
             draft={drafts[block.id] ?? block.text} onDraft={text => setDrafts(previous => ({ ...previous, [block.id]: text }))}
@@ -355,7 +377,8 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
           {workspace.screenplay && <SceneCreationPanel projectId={projectId} screenplayId={workspace.screenplay.id} onCreated={setSelectedId} first />}
         </article>}
       </main>
-      <aside className="context-panel">
+      <aside className={documentMode && railCollapsed ? 'context-panel collapsed-panel' : 'context-panel'}>
+        {documentMode && <button type="button" className="panel-collapse" aria-expanded={!railCollapsed} aria-label={railCollapsed ? 'Show context rail' : 'Hide context rail'} onClick={() => setRailCollapsed(value => !value)}>{railCollapsed ? '«' : '»'}</button>}
         <div className="panel-label"><span>Context</span><span className="context-badge">Inherited</span></div>
         <section className="context-card"><p className="eyebrow warm">PROJECT INSTRUCTION</p><textarea value={projectInstruction} onChange={event => setProjectInstruction(event.target.value)} placeholder="What should every scene remember?" /><small>Applies to the whole project</small></section>
         <section className="context-card"><p className="eyebrow warm">SCENE INSTRUCTION</p><textarea value={sceneInstruction} onChange={event => setSceneInstruction(event.target.value)} placeholder="Tone, camera, light, or blocking for this scene…" /><small>{selectedScene ? 'Applies to the selected scene' : 'Select a scene to scope this instruction'}</small></section>

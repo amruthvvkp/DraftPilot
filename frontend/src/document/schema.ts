@@ -47,7 +47,9 @@ export const Act = Node.create({
   parseHTML() { return [{ tag: 'section[data-act-id]' }] },
   renderHTML({ node, HTMLAttributes }) {
     return ['section', mergeAttributes(HTMLAttributes, { class: 'script-act', 'data-act-id': node.attrs.act_id }),
-      ['header', { class: 'act-heading outline-only', contenteditable: 'false' }, node.attrs.title || 'Act'],
+      ['header', { class: 'act-heading outline-only', contenteditable: 'false' },
+        ['button', { type: 'button', class: 'act-toggle', tabindex: '-1', 'aria-label': `Collapse or expand ${node.attrs.title || 'act'}` }, '▾'],
+        ['span', { class: 'act-title' }, node.attrs.title || 'Act']],
       ['div', { class: 'act-body' }, 0]]
   },
 })

@@ -130,7 +130,7 @@ export function elementText(node: PMNode): string {
   return serializeInline(typed)
 }
 
-export type SerializedScene = { sceneId: number; content: SceneContent; newUids: string[] }
+export type SerializedScene = { sceneId: number; content: SceneContent; uids: string[]; newUids: string[] }
 
 /**
  * Serialise a scene node for `PUT …/scenes/{id}/content`. A block id is only sent when this scene
@@ -138,6 +138,7 @@ export type SerializedScene = { sceneId: number; content: SceneContent; newUids:
  */
 export function serializeScene(node: PMNode, owns: (blockId: number) => boolean = () => true): SerializedScene {
   const blocks: ContentBlock[] = []
+  const uids: string[] = []
   const newUids: string[] = []
   const seen = new Set<number>()
   let heading = ''
@@ -147,6 +148,7 @@ export function serializeScene(node: PMNode, owns: (blockId: number) => boolean 
     const keep = id !== null && owns(id) && !seen.has(id)
     if (keep) seen.add(id)
     else newUids.push(String(child.attrs.uid))
+    uids.push(String(child.attrs.uid))
     blocks.push({
       ...(keep ? { id } : {}),
       element_type: String(child.attrs.element_type), text: elementText(child),
@@ -154,7 +156,7 @@ export function serializeScene(node: PMNode, owns: (blockId: number) => boolean 
       character_extension: (child.attrs.character_extension as string | null) ?? null,
     })
   })
-  return { sceneId: Number(node.attrs.scene_id), content: { heading, blocks }, newUids }
+  return { sceneId: Number(node.attrs.scene_id), content: { heading, blocks }, uids, newUids }
 }
 
 /** Find every scene node in a document with its position. */
