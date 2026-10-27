@@ -8,9 +8,13 @@ from _async import run_async
 
 from draftpilot.core import rag_client
 from draftpilot.core.db import session_scope
-from draftpilot.evals.baseline import compare, save
+from pydantic_evals.evaluators.common import OutputConfig
+
+from draftpilot.evals.baseline import _assertion_rate, agreement, compare, notes, save
 from draftpilot.evals.evaluators import (
+    SECOND_JUDGE,
     FoundPlanted,
+    Judges,
     KeepsCast,
     MentionsAny,
     OutlineShape,
@@ -81,3 +85,31 @@ def test_baselines_flag_drops_beyond_tolerance(tmp_path: Path) -> None:
     problems = compare({**baseline, "assertion_rate": 0.6, "scores": {"CritiqueImproved": 0.5}, "failures": ["x"]}, 0.15, tmp_path)
     assert len(problems) == 3
     assert compare({**baseline, "suite": "new_suite"}, 0.15, tmp_path) == []
+
+
+def test_a_second_judge_grades_apart_and_is_compared() -> None:
+    """The second judge reports under its own name, stays out of the pass rate, and its agreement is measured."""
+    assert len(Judges("judge", "a").evaluators("rubric")) == 1
+    primary, second = Judges("judge", "a", "other", "b").evaluators("rubric", include_input=True)
+    assert primary.model == "judge" and second.model == "other" and second.include_input
+    assert second.assertion == OutputConfig(evaluation_name=SECOND_JUDGE, include_reason=True)
+    cases = {
+        "agree": {"assertions": {"UsedTools": True, "LLMJudge": True, SECOND_JUDGE: True}},
+        "split": {"assertions": {"UsedTools": True, "LLMJudge": True, SECOND_JUDGE: False}, "reasons": {SECOND_JUDGE: "wrong name"}},
+    }
+    assert _assertion_rate(cases) == 1.0  # the second judge's failure does not move the comparable rate
+    result = agreement(cases)
+    assert result is not None and result["rate"] == 0.5 and list(result["disagreements"]) == ["split"]
+    assert result["disagreements"]["split"]["reasons"][SECOND_JUDGE] == "wrong name"
+    assert agreement({"solo": {"assertions": {"LLMJudge": True}}}) is None
+
+
+def test_notes_report_disagreement_and_a_changed_judge(tmp_path: Path) -> None:
+    """Notes list each disagreement and warn when the baseline was graded by a different judge."""
+    save({"suite": "room_qa", "judge": "qwen", "failures": [], "assertion_rate": 1.0, "scores": {}}, tmp_path)
+    split = {"cases": 2, "rate": 0.5, "disagreements": {"split": {"judge": True, "second_judge": False, "reasons": {SECOND_JUDGE: "wrong"}}}}
+    lines = notes({"suite": "room_qa", "judge": "gemma", "second_judge": "gpt", "judge_agreement": split}, tmp_path)
+    assert lines[0] == "room_qa: judges gemma and gpt agree on 1/2 cases"
+    assert "split: judge=True" in lines[1] and "(wrong)" in lines[1]
+    assert "baseline was judged by qwen" in lines[2]
+    assert notes({"suite": "room_qa", "judge": "qwen"}, tmp_path) == []

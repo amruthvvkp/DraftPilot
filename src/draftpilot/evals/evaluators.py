@@ -3,11 +3,38 @@
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
+from pydantic_evals.evaluators import (
+    EvaluationReason,
+    Evaluator,
+    EvaluatorContext,
+    LLMJudge,
+)
+from pydantic_evals.evaluators.common import OutputConfig
 
 from draftpilot.core.scene_proposals import parse_scene_fountain
 from draftpilot.core.screenplay.schema import BlockType
 from draftpilot.core.twins import normalize_cue
+
+PRIMARY_JUDGE = "LLMJudge"
+SECOND_JUDGE = "SecondJudge"
+
+
+@dataclass(frozen=True)
+class Judges:
+    """The LLM judges of a run: the judge baselines compare against, and an optional second opinion."""
+
+    model: Any
+    name: str
+    second: Any = None
+    second_name: str = ""
+
+    def evaluators(self, rubric: str, **options: Any) -> list[LLMJudge]:
+        """Return one ``LLMJudge`` per judge on the same rubric; the second reports as ``SecondJudge``."""
+        judges = [LLMJudge(rubric=rubric, model=self.model, **options)]
+        if self.second is not None:
+            assertion = OutputConfig(evaluation_name=SECOND_JUDGE, include_reason=True)
+            judges.append(LLMJudge(rubric=rubric, model=self.second, assertion=assertion, **options))
+        return judges
 
 
 def _text(value: Any) -> str:

@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic_evals import Case, Dataset, increment_eval_metric, set_eval_attribute
-from pydantic_evals.evaluators import LLMJudge
 
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.runtime import run_role
@@ -23,6 +22,7 @@ from draftpilot.evals.evaluators import (
     CastDeveloped,
     CritiqueImproved,
     FoundPlanted,
+    Judges,
     KeepsCast,
     MentionsAny,
     NoHallucinatedScenes,
@@ -43,7 +43,7 @@ class Suite:
 
     name: str
     description: str
-    build: Callable[[EvalProject, Any, str, Any], Awaitable[tuple[Dataset[Any, Any, Any], Task]]]
+    build: Callable[[EvalProject, Any, str, Judges], Awaitable[tuple[Dataset[Any, Any, Any], Task]]]
 
 
 def _room(project: EvalProject) -> RoomDeps:
@@ -65,7 +65,7 @@ def _workflow_deps(project: EvalProject, model: Any, name: str) -> WorkflowDeps:
 # ---------------------------------------------------------------------------------------------------------------------
 
 
-async def room_qa(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def room_qa(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Ask the script editor questions only the script can answer."""
     cases = [
         Case(name="second_scene_heading", inputs="What is the exact scene heading of the second scene? Answer with the heading only.",
@@ -85,10 +85,10 @@ async def room_qa(project: EvalProject, model: Any, name: str, judge: Any) -> tu
         cases=cases,
         evaluators=[
             UsedTools(),
-            LLMJudge(
+            *judges.evaluators(
                 rubric="The reply gives the same answer as the expected output for the Big Fish screenplay. Extra accurate "
                 "context is fine; fail only if the answer is wrong, missing, or contradicts the expected output.",
-                model=judge, include_input=True, include_expected_output=True,
+                include_input=True, include_expected_output=True,
             ),
         ],
     )
@@ -105,7 +105,7 @@ async def room_qa(project: EvalProject, model: Any, name: str, judge: Any) -> tu
     return dataset, task
 
 
-async def rewrite(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def rewrite(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Rewrite real scenes to briefs through the draft-critique loop."""
     bedroom, front_hall = project.scene(2), project.scene(4)
     cases = [
@@ -120,10 +120,10 @@ async def rewrite(project: EvalProject, model: Any, name: str, judge: Any) -> tu
             ValidScene(),
             KeepsCast(),
             CritiqueImproved(),
-            LLMJudge(
+            *judges.evaluators(
                 rubric="Given the brief and the original scene, the rewrite delivers the brief, keeps the characters' "
                 "voices and the scene's story function, and is correctly formatted screenplay text.",
-                model=judge, include_input=True,
+                include_input=True,
             ),
         ],
     )
@@ -148,7 +148,7 @@ which would reveal his secret and cost him the only job he has. Ends with her ch
 light over her own escape, and him finally admitting he needs her. Tone: quiet, windswept, hopeful."""
 
 
-async def outline(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def outline(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Turn fresh notes into a critiqued outline (from scratch, not from the script)."""
     dataset = Dataset[Any, Any, Any](
         name="outline",
@@ -156,10 +156,10 @@ async def outline(project: EvalProject, model: Any, name: str, judge: Any) -> tu
         evaluators=[
             OutlineShape(),
             CritiqueImproved(),
-            LLMJudge(
+            *judges.evaluators(
                 rubric="The outline is a causal, escalating three-act story that honours every element of the writer's "
                 "notes (characters, setting, dilemma, ending, tone) without contradicting them.",
-                model=judge, include_input=True,
+                include_input=True,
             ),
         ],
     )
@@ -173,7 +173,7 @@ async def outline(project: EvalProject, model: Any, name: str, judge: Any) -> tu
     return dataset, task
 
 
-async def continuity(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def continuity(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Plant a timeline contradiction (Will ages 18 years in 11) and check the supervisor catches it."""
     front_hall, paris = project.scene(4), project.scene(5)
     async with session_scope() as session:
@@ -197,17 +197,17 @@ async def continuity(project: EvalProject, model: Any, name: str, judge: Any) ->
     return dataset, task
 
 
-async def storyline(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def storyline(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Develop the lighthouse notes into a storyline (logline, premise, synopsis, theme, tone)."""
     dataset = Dataset[Any, Any, Any](
         name="storyline",
         cases=[Case(name="lighthouse", inputs=NOTES, evaluators=(MentionsAny(["mara", "light", "storm"], minimum=2),))],
         evaluators=[
             StorylineComplete(),
-            LLMJudge(
+            *judges.evaluators(
                 rubric="The storyline is specific and dramatic: the logline names a protagonist, a goal and an obstacle; "
                 "the synopsis runs from beginning to end; theme and tone fit the writer's notes, which it never contradicts.",
-                model=judge, include_input=True,
+                include_input=True,
             ),
         ],
     )
@@ -224,17 +224,17 @@ async def storyline(project: EvalProject, model: Any, name: str, judge: Any) -> 
     return dataset, task
 
 
-async def cast(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def cast(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Build the lighthouse cast: profiles with want, need, motive, objective, flaw and arc."""
     dataset = Dataset[Any, Any, Any](
         name="cast",
         cases=[Case(name="lighthouse", inputs=NOTES)],
         evaluators=[
             CastDeveloped(),
-            LLMJudge(
+            *judges.evaluators(
                 rubric="The characters' wants collide; each has an inner need distinct from their want; the cast serves "
                 "the writer's notes and includes the characters the notes name.",
-                model=judge, include_input=True,
+                include_input=True,
             ),
         ],
     )

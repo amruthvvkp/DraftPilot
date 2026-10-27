@@ -64,7 +64,7 @@ and full manual editing. The audited status of each item and the execution order
 Still open after v1.0:
 
 - rich-text editing in the page (inline bold and italics, via TipTap);
-- a second local judge model for the evals (a judge grading its own model is lenient);
+- ✅ a second local judge model for the evals (`EVAL__SECOND_JUDGE_MODEL`, v1.1, #50): both judges grade, and the run reports where they agree;
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
 - **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
 
