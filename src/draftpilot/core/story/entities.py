@@ -227,6 +227,9 @@ async def _validate_references(session: AsyncSession, project_id: int, values: d
 
 def validate_input(schema: type[BaseModel], data: BaseModel | dict[str, Any]) -> BaseModel:
     """Validate input against a schema, turning validation errors into ``Invalid``."""
+    if isinstance(data, dict) and (unknown := sorted(set(data) - set(schema.model_fields))):
+        # Agents send plain dicts; name the fields they may use instead of silently dropping theirs.
+        raise Invalid(f"Unknown field(s) {', '.join(unknown)}; allowed: {', '.join(schema.model_fields)}")
     try:
         return schema.model_validate(data.model_dump(exclude_unset=True) if isinstance(data, BaseModel) else data)
     except ValidationError as exc:

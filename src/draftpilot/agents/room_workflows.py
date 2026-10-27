@@ -444,6 +444,10 @@ class CoverageReport(RoomWorkflowBase):
         return {"coverage": report.model_dump()}
 
 
+# A continuity pass over this many scenes or fewer gets their text in the prompt.
+INLINE_SCENES = 12
+
+
 @workflow.defn(name="room:continuity")
 class ContinuityPass(RoomWorkflowBase):
     """Find continuity problems, then drop issues citing scenes outside the draft."""
@@ -457,12 +461,24 @@ class ContinuityPass(RoomWorkflowBase):
 
     async def body(self, params: ContinuityParams) -> dict[str, Any]:
         """One pass; keep only issues about real scenes."""
+        scope, tools = scope_text(params.scene_ids, params.focus), True
+        if params.scene_ids and len(params.scene_ids) <= INLINE_SCENES and workflow.patched("continuity-inline-scenes"):
+            # Hand over the scenes and check only them, without tools: told only their ids, the supervisor
+            # wandered the script and re-read empty story records until it ran out of requests.
+            texts = [await self.activity(load_scene, self.room.project_id, scene_id) for scene_id in params.scene_ids]
+            scenes = "\n\n".join(f"[scene {scene_id}]\n{text}" for scene_id, text in zip(params.scene_ids, texts, strict=True))
+            scope = (
+                "Check only these scenes, against each other and the Story twin above."
+                + (f" Focus: {params.focus}" if params.focus else "")
+                + f"\n\n{scenes}"
+            )
+            tools = False
         report = await self.consult(
             "continuity",
             "continuity_supervisor",
-            "Find continuity problems (timeline, character, props, locations, established facts). Cite scene ids. "
-            + scope_text(params.scene_ids, params.focus),
+            "Find continuity problems (timeline, character, props, locations, established facts). Cite scene ids. " + scope,
             ContinuityReport,
+            tools=tools,
         )
         known = set(await self.activity(known_scene_ids, self.room.project_id))
         issues = [issue.model_dump() for issue in report.issues if all(scene_id in known for scene_id in issue.scene_ids)]
@@ -661,11 +677,13 @@ class DevelopStory(RoomWorkflowBase):
 
                 async def write(index: int, beat: dict[str, Any]) -> dict[str, Any]:
                     """Dramatise one beat as a scene."""
+                    cast = beat.get("cast") or []
+                    cues = f"\n\nCharacter cues, spelt exactly like this: {', '.join(cast)}." if cast else ""
                     draft = await self.consult(
                         f"scene: {beat['title']}",
                         "scene_writer",
                         "Write this beat as one new screenplay scene in Fountain, heading first, true to each character's voice "
-                        f"and objective.\n\nBeat: {beat['title']} — {beat.get('summary', '')}",
+                        f"and objective.\n\nBeat: {beat['title']} — {beat.get('summary', '')}{cues}",
                         SceneDraft,
                     )
                     return {"index": index, "title": beat["title"], "beat_id": beat.get("beat_id"), **draft.model_dump()}

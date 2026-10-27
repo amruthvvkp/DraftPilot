@@ -17,7 +17,7 @@ from statistics import mean
 from typing import Any, Literal
 
 import logfire
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlmodel.ext.asyncio.session import AsyncSession
 from temporalio import activity
 from temporalio.common import RetryPolicy
@@ -259,21 +259,28 @@ class CastMember(BaseModel):
     """One character as the room proposes them."""
 
     name: str = Field(min_length=1, max_length=200)
-    role: str = Field(default="supporting", description="protagonist, antagonist, supporting or minor")
+    role: Literal["protagonist", "antagonist", "supporting", "minor"] = Field(description="The lead is the protagonist.")
     summary: str = Field(min_length=1, max_length=1000)
     want: str = Field(min_length=1, max_length=1000, description="The conscious, external goal.")
     need: str = Field(min_length=1, max_length=1000, description="The inner truth they must accept.")
     motive: str = Field(default="", max_length=1000)
-    objective: str = Field(default="", max_length=1000, description="What they concretely pursue in the story.")
+    objective: str = Field(min_length=1, max_length=1000, description="What they concretely pursue in the story.")
     flaw: str = Field(default="", max_length=1000)
     arc_summary: str = Field(default="", max_length=2000)
     voice: str = Field(default="", max_length=1000)
 
 
 class Cast(BaseModel):
-    """The principal cast."""
+    """The principal cast, leads first."""
 
-    characters: list[CastMember] = Field(min_length=1, max_length=8)
+    characters: list[CastMember] = Field(min_length=1, max_length=8, description="Leads first; exactly one protagonist.")
+
+    @model_validator(mode="after")
+    def _has_protagonist(self) -> "Cast":
+        """Refuse a cast without a protagonist, so the model names its lead."""
+        if not any(member.role == "protagonist" for member in self.characters):
+            raise ValueError("Mark the lead character's role as protagonist")
+        return self
 
 
 class TimelineMoment(BaseModel):
@@ -531,7 +538,13 @@ async def outline_beats(project_id: int, outline_artifact_id: int | None) -> lis
         if outline_artifact_id is None:
             beats = await story_entities.list_entities(session, project_id, "beat")
             if beats:
-                return [{"title": beat.title, "summary": beat.summary or beat.title, "beat_id": beat.id} for beat in beats if beat.status != "cut"]
+                # Scene writers get the cast's exact cues, so the Story twin doesn't derive a misspelt extra character.
+                cast = [normalize_cue(row.cue or row.name) for row in await story_entities.list_entities(session, project_id, "character")]
+                return [
+                    {"title": beat.title, "summary": beat.summary or beat.title, "beat_id": beat.id, "cast": cast}
+                    for beat in beats
+                    if beat.status != "cut"
+                ]
         artifacts = await artifacts_crud.list_for_project(session, project_id)
     outline = next(
         (item for item in artifacts if item.id == outline_artifact_id or (outline_artifact_id is None and item.kind == "outline")),

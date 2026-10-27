@@ -101,6 +101,15 @@ def test_story_entities_never_cross_projects(studio: tuple[TestClient, AsyncSess
     assert client.post("/api/v1/projects/1/scenes", json={"heading": "X", "act_id": 2}).status_code == 404
 
 
+def test_agent_fields_outside_the_schema_are_refused() -> None:
+    """A dict with an unknown field is refused with the allowed fields, not silently trimmed."""
+    from draftpilot.core.errors import Invalid
+    from draftpilot.models.story import CharacterCreate
+
+    with pytest.raises(Invalid, match="Unknown field\\(s\\) description; allowed: .*summary"):
+        entities.validate_input(CharacterCreate, {"name": "Elin", "description": "A navigator"})
+
+
 def test_story_proposals_apply_as_the_writer_and_roll_back(studio: tuple[TestClient, AsyncSession]) -> None:
     """Agent story changes wait for the writer, and approved ones are reversible."""
     _client, session = studio

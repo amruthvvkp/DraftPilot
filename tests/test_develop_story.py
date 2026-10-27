@@ -46,7 +46,7 @@ PAYLOADS: dict[str, Any] = {
     "Cast": lambda _prompt, _count: {
         "characters": [
             {"name": "Edward", "role": "protagonist", "summary": "A teller of tall tales.", "want": "To be a legend", "need": "To be known by his son", "objective": "Win back Will"},
-            {"name": "Josephine", "role": "supporting", "summary": "Will's wife.", "want": "Peace", "need": "Truth"},
+            {"name": "Josephine", "role": "supporting", "summary": "Will's wife.", "want": "Peace", "need": "Truth", "objective": "Get Will to listen"},
         ]
     },
     "CharacterTimeline": lambda _prompt, _count: {

@@ -356,6 +356,19 @@ def test_continuity_drops_issues_that_cite_scenes_outside_the_draft(project: Asy
     assert [issue["scene_ids"] for issue in result["issues"]] == [[1]] and result["dropped"] == 1
 
 
+def test_continuity_over_named_scenes_hands_their_text_to_the_supervisor(project: AsyncSession) -> None:
+    """Named scenes arrive in the prompt, with the check kept to them."""
+    prompts: list[str] = []
+
+    def report(prompt: str, _count: int) -> dict[str, Any]:
+        """Record the prompt and report nothing."""
+        prompts.append(prompt)
+        return {"issues": []}
+
+    _run("continuity", {"scene_ids": [1]}, {"ContinuityReport": report})
+    assert "[scene 1]" in prompts[0] and "Check only these scenes" in prompts[0]
+
+
 def test_coverage_returns_graded_coverage(project: AsyncSession) -> None:
     """Coverage is a single typed report."""
     grades = {"premise": 8, "structure": 6, "character": 9, "dialogue": 7, "pacing": 5}

@@ -26,6 +26,19 @@ baseline in `evals/baselines/<suite>.json`.
 | `rewrite` | **Rewrite a scene** on two real scenes with different briefs, with at most one revision round | The result parses as a screenplay scene; it adds no speaking characters; a "shorter" brief actually shortens; the script doctor's final score; an LLM judge checks the brief was delivered in the characters' voices |
 | `outline` | **Notes → outline** from fresh notes (a lighthouse story, not Big Fish) | Beat count and three-act coverage; the notes' elements appear; the script doctor's score; an LLM judge checks causality and fidelity to the notes |
 | `continuity` | A **continuity pass** over two scenes after a timeline contradiction is planted (Will is 17 in 1987 but "35" in 1998) | The planted error is caught; no issue cites a scene outside the draft |
+| `storyline` | The story architect develops the lighthouse notes into a storyline | Every storyline field is filled and the logline is one sentence; the notes' elements appear; an LLM judge checks it is specific, dramatic and faithful to the notes |
+| `cast` | The character specialist builds the lighthouse cast | Each character has a distinct want, a need and an objective, with one protagonist; an LLM judge checks the wants collide and the cast serves the notes |
+
+### On the running stack
+
+Two scripts exercise a running stack end to end (`docker compose up`), not an isolated project:
+
+```bash
+uv run python scripts/mcp_journey.py            # an external agent builds a screenplay over MCP
+uv run python scripts/develop_story_journey.py  # the develop_story pipeline, every stage approved as the writer
+```
+
+The pipeline needs the worker and a model; on a local 27B reasoning model it takes over an hour.
 
 ### Isolation
 
