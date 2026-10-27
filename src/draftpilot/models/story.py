@@ -149,8 +149,13 @@ class CharacterTimelineEventBase(SQLModel):
     description: str = Field(default="", max_length=4000)
     objective: str = Field(default="", max_length=2000)  # what they want in this moment
     emotional_state: str = Field(default="", max_length=300)
+    motivation: str = Field(default="", max_length=2000)  # why they act here
+    history: str = Field(default="", max_length=4000)  # the backstory this moment draws on
+    intensity: int = Field(default=0, ge=-5, le=5)  # emotional valence: −5 a low, +5 a high
+    chrono_index: float | None = None  # sortable story-world position; story_time is its label
     scene_id: int | None = None
     beat_id: int | None = None
+    moment_id: int | None = None  # the shared moment this event is one character's side of
 
 
 class CharacterTimelineEvent(CharacterTimelineEventBase, TimestampMixin, table=True):  # type: ignore[call-arg]
@@ -169,6 +174,10 @@ class CharacterTimelineEvent(CharacterTimelineEventBase, TimestampMixin, table=T
     beat_id: int | None = Field(
         default=None, sa_column=Column(Integer, ForeignKey("story_beat.id", ondelete="SET NULL"), nullable=True)
     )
+    moment_id: int | None = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("story_moment.id", ondelete="SET NULL"), nullable=True, index=True),
+    )
     version: int = Field(default=1, ge=1)
 
 
@@ -185,8 +194,13 @@ class CharacterTimelineEventUpdate(SQLModel):
     description: str | None = None
     objective: str | None = None
     emotional_state: str | None = None
+    motivation: str | None = None
+    history: str | None = None
+    intensity: int | None = Field(default=None, ge=-5, le=5)
+    chrono_index: float | None = None
     scene_id: int | None = None
     beat_id: int | None = None
+    moment_id: int | None = None
 
 
 class CharacterTimelineEventRead(CharacterTimelineEventBase):
@@ -304,4 +318,90 @@ class StoryBeatRead(StoryBeatBase):
     id: int
     project_id: int
     source: str
+    version: int
+
+
+class StoryMomentBase(SQLModel):
+    """A moment several characters share; each participant's timeline event holds their side of it."""
+
+    title: str = Field(min_length=1, max_length=300)
+    summary: str = Field(default="", max_length=4000)
+    chrono_index: float | None = None  # sortable story-world position; story_time is its label
+    story_time: str = Field(default="", max_length=100)
+    scene_id: int | None = None
+    beat_id: int | None = None
+
+
+class StoryMoment(StoryMomentBase, TimestampMixin, table=True):  # type: ignore[call-arg]
+    """Persisted shared moment, placed in narrative order by its scene or beat."""
+
+    __tablename__ = "story_moment"
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = _project_fk()
+    scene_id: int | None = Field(
+        default=None, sa_column=Column(Integer, ForeignKey("scene.id", ondelete="SET NULL"), nullable=True)
+    )
+    beat_id: int | None = Field(
+        default=None, sa_column=Column(Integer, ForeignKey("story_beat.id", ondelete="SET NULL"), nullable=True)
+    )
+    version: int = Field(default=1, ge=1)
+
+
+class StoryMomentCreate(StoryMomentBase):
+    """Fields to create a shared moment."""
+
+
+class StoryMomentUpdate(SQLModel):
+    """Partial shared moment update."""
+
+    title: str | None = None
+    summary: str | None = None
+    chrono_index: float | None = None
+    story_time: str | None = None
+    scene_id: int | None = None
+    beat_id: int | None = None
+
+
+class StoryMomentRead(StoryMomentBase):
+    """Shared moment with identity and version."""
+
+    id: int
+    project_id: int
+    version: int
+
+
+class NarrativeVariantBase(SQLModel):
+    """A named narrative order of scenes, saved without applying it."""
+
+    name: str = Field(min_length=1, max_length=200)
+    scene_ids: list[int] = Field(default_factory=list, sa_type=JSON)  # in the variant's order
+
+
+class NarrativeVariant(NarrativeVariantBase, TimestampMixin, table=True):  # type: ignore[call-arg]
+    """Persisted narrative variant."""
+
+    __tablename__ = "narrative_variant"
+
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: int = _project_fk()
+    version: int = Field(default=1, ge=1)
+
+
+class NarrativeVariantCreate(NarrativeVariantBase):
+    """Fields to create a narrative variant."""
+
+
+class NarrativeVariantUpdate(SQLModel):
+    """Partial narrative variant update."""
+
+    name: str | None = None
+    scene_ids: list[int] | None = None
+
+
+class NarrativeVariantRead(NarrativeVariantBase):
+    """Narrative variant with identity and version."""
+
+    id: int
+    project_id: int
     version: int
