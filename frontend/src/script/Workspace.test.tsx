@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { projectStages } from '../project/progress'
@@ -54,6 +54,23 @@ describe('Script workspace', () => {
     await userEvent.click(within(screen.getByRole('group', { name: 'Selected scene actions' })).getByRole('button', { name: 'Delete scene' }))
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete scene' }))
     expect(await screen.findByText('Your first scene starts here.')).toBeTruthy()
+  })
+
+  it('keeps focus where the writer moved it right after a formatting click', async () => {
+    const { blocks } = scriptBackend([scene(7, 'INT. HALL - NIGHT', 4, 0)])
+    blocks[7].push(block(21, 7, 'dialogue', 'We should go.'))
+    const user = userEvent.setup({ delay: null })
+    renderAt('/projects/3')
+    const action = await screen.findByLabelText('Edit action') as HTMLTextAreaElement
+    await user.click(action)
+    action.setSelectionRange(4, 9)
+    fireEvent.click(screen.getByRole('button', { name: 'Bold text' }))
+    // The writer tabs on before the editor's deferred work runs.
+    const dialogue = screen.getByLabelText('Edit dialogue') as HTMLTextAreaElement
+    dialogue.focus()
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(document.activeElement).toBe(dialogue)
+    expect(action.value).toBe('The **house** breathes.')
   })
 
   it('toggles the continuous view for real', async () => {

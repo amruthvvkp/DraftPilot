@@ -257,7 +257,9 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
     const currentText = drafts[blockId] ?? ''
     const selected = currentText.slice(start, end) || fallback
     setDrafts(previous => ({ ...previous, [blockId]: currentText.slice(0, start) + `${open}${selected}${close}` + currentText.slice(end) }))
-    setTimeout(() => { textarea.focus(); textarea.setSelectionRange(start + open.length, start + open.length + selected.length) }, 0)
+    textarea.focus()
+    // Reselect once React has written the new text, unless the writer has already moved on (a Tab, a click).
+    setTimeout(() => { if (document.activeElement === textarea) textarea.setSelectionRange(start + open.length, start + open.length + selected.length) }, 0)
   }
 
   function sceneMoves(scene: Scene): SceneMoves {
