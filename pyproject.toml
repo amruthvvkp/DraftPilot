@@ -1,5 +1,6 @@
 [project]
-name = "draftpilot"
+# On PyPI as draftpilot-studio ("draftpilot" belongs to an unrelated project); the module and CLI are `draftpilot`.
+name = "draftpilot-studio"
 version = "0.1.0"
 description = "AI-powered screenplay editor and story development platform"
 readme = "README.md"
@@ -14,10 +15,28 @@ classifiers = [
   "Topic :: Multimedia :: Video",
   "Topic :: Text Editors",
 ]
+# Everything the studio, worker, MCP server and RAG service need: `pip install draftpilot` runs them all.
 dependencies = [
+  "alembic>=1.20.0",
+  "asyncpg>=0.31.0",
+  "fastapi>=0.141.1",
+  "fastmcp>=4.0.10",  # the MCP server (in-app agents use it in-process)
   "httpx>=0.28.1",
-  "pydantic>=2.13.4",
-  "pydantic-settings>=2.14.2",
+  "httpx2>=2.13.1",  # MCP SDK 2 client transport
+  "logfire[asyncpg,httpx,fastapi,redis,system-metrics]>=5.1.1",
+  "psycopg[binary]>=3.3.6",
+  "pydantic>=2.13.5",
+  "pydantic-ai>=2.51.0",
+  "pydantic-ai-slim[openai,temporal,ag-ui]>=2.51.0",  # durable execution (temporalio); AG-UI chat protocol
+  "pydantic-monty>=1.0.0",
+  "pydantic-settings>=2.15.0",
+  "pypdf>=6.19.0",
+  "redis>=5.2.0",
+  "reportlab>=5.0.1",
+  "screenplay-tools>=0.0.10",
+  "sqlalchemy[asyncio]>=2.0",  # async sessions need greenlet
+  "sqlmodel>=0.0.47",
+  "uvicorn[standard]>=0.54.0",
 ]
 
 [project.urls]
@@ -27,48 +46,42 @@ Issues = "https://github.com/amruthvvkp/DraftPilot/issues"
 Repository = "https://github.com/amruthvvkp/DraftPilot"
 
 [project.scripts]
-draftpilot = "draftpilot:main"
+draftpilot = "draftpilot.cli:main"
 
 [dependency-groups]
 dev = [
-  "isort>=8.0.1",
+  "isort>=9.0.1",
   "jupyter>=1.1.1",
-  "mypy>=2.1.0",
-  "pre-commit>=4.6.0",
+  "mypy>=2.3.1",
+  "pre-commit>=4.6.2",
   { include-group = "docs" },
+  { include-group = "e2e" },
   { include-group = "lint" },
   { include-group = "test" },
 ]
-debugpy = ["debugpy>=1.8.0"]
+debugpy = ["debugpy>=1.8.22"]
 docs = [
-  "zensical>=0.0.46",
+  "mkdocstrings-python>=1.18",
+  "zensical>=0.0.65",
 ]
-lint = ["interrogate>=1.7.0", "ruff>=0.12.9"]
-mcp = ["fastmcp>=3", { include-group = "otel" }]
-otel = ["logfire[asyncpg,httpx,fastapi,redis,system-metrics]>=4.37.0"]
+e2e = ["pytest-playwright>=0.9.0"]
+lint = ["interrogate>=1.7.0", "ruff>=0.16.9"]
 test = [
-  "dirty-equals>=0.9.0",
+  "aiosqlite>=0.21",
+  "dirty-equals>=0.11",
   "pyhamcrest>=2.1.0",
-  "pytest>=8.4.1",
+  "pytest>=9.1.1",
   "pytest-pretty>=1.3.0",
 ]
-ui = [
-  "alembic>=1.18.5",
-  "arq>=0.26.0",
-  "asyncpg>=0.30.0",
-  "nicegui>=3.13.0",
-  "psycopg[binary]>=3.2.0",
-  "pydantic-ai>=2.0.0",
-  "redis>=5.2.0",
-  "screenplay-tools>=0.0.10",
-  "sqlmodel>=0.0.39",
-  { include-group = "lint" },
-  { include-group = "otel" },
-]
-worker = [{ include-group = "ui" }]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.build-backend]
+module-name = "draftpilot"
 
 [build-system]
-requires = ["uv_build>=0.9.7,<0.12"]
+requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [tool.interrogate]
@@ -79,7 +92,7 @@ ignore-magic = true
 ignore-nested-functions = false
 ignore-setters = true
 ignore-overloaded-functions = true
-exclude = ["migrations/versions", "site", "tests", ".venv"]
+exclude = ["src/draftpilot/migrations/versions", "site", "tests", ".venv"]
 
 [tool.logfire]
 ignore_no_config = true
@@ -88,3 +101,28 @@ ignore_no_config = true
 python_version = "3.13"
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
+# Generated Alembic revisions are reviewed by hand, not type-checked.
+exclude = ["src/draftpilot/migrations/versions/"]
+
+[tool.pytest.ini_options]
+base_url = "http://localhost:9000"
+# Tier 0 (deterministic) runs by default; pass `-m lmstudio` for the local-model tier.
+addopts = "-m 'not lmstudio and not postgres and not stack'"
+markers = [
+  "e2e: Playwright browser journeys against the running web stack",
+  "lmstudio: needs a local LM Studio server (Tier 1); deselected by default",
+  "postgres: needs the local stack's Postgres with pgvector; deselected by default",
+  "stack: browser journey against the real running stack (no mocks); deselected by default",
+]
+
+[tool.ruff]
+target-version = "py313"
+extend-exclude = ["src/draftpilot/migrations/versions", "site", "frontend"]
+
+[tool.ruff.lint]
+# Domain validation raises ValueError by contract; callers map it to 4xx/422.
+ignore = ["TRY004"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency markers are evaluated once by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Query", "fastapi.Header"]

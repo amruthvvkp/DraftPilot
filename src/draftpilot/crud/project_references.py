@@ -40,6 +40,7 @@ async def update(
     """Apply the given changes to a project reference and persist them."""
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(reference, key, value)
+    reference.version += 1
     session.add(reference)
     await session.commit()
     await session.refresh(reference)

@@ -1,29 +1,35 @@
 ---
 name: add-component
-description: Scaffold a new reusable NiceGUI UI component for DraftPilot and register it in the design system. Use when adding a button, card, input, panel, or other shared UI building block.
+description: Scaffold a new reusable React component for the DraftPilot studio (frontend/src) with typed props, accessible markup, CSS styling, and an e2e test. Use when adding a button, card, input, panel, or other shared UI building block.
 ---
 
 # Add a reusable UI component
 
-1. **Implement** the helper in the right module under `src/draftpilot/ui/components/`
-   (`buttons.py`, `cards.py`, `inputs.py`, or a new module). Style with `dp-*` CSS classes and the
-   token variables in `static/styles.css` — never hard-code colors. Use Quasar props via `.props(...)`.
+1. **Implement** `frontend/src/MyComponent.tsx` — a default-exported function component with a
+   typed props object. Use semantic, accessible elements (`<button>`, `<label>`, `aria-label`,
+   headings) so Playwright can find it by role/label.
 
-   ```python
-   def badge(text: str, color: str = "primary") -> ui.element:
-       return ui.badge(text, color=color).props("rounded")
+   ```tsx
+   type BadgeProps = { label: string; tone?: 'neutral' | 'warm' }
+
+   export default function Badge({ label, tone = 'neutral' }: BadgeProps) {
+     return <span className={`badge badge-${tone}`} role="status">{label}</span>
+   }
    ```
 
-2. **Export** it from `src/draftpilot/ui/components/__init__.py` (add to imports and `__all__`).
+2. **Style** it with class names in `frontend/src/styles.css` (or a feature sheet such as
+   `timeline.css`, imported by the component). Reuse the existing CSS variables; don't hard-code colors inline.
 
-3. **Showcase** it in `src/draftpilot/ui/components/design_system.py` inside a `c.panel("...")` block
-   so the living style guide documents it.
+3. **Data**: if it needs server data, add a typed function in `frontend/src/api.ts` using the shared
+   `request<T>()` helper — components never call `fetch` directly.
 
-4. **Verify**: `uv run python -c "import draftpilot.ui.components as c; print(c.__all__)"` and open
-   `/design-system` in the running app.
+4. **Use** it from the page/panel that needs it (e.g. `Workspace.tsx`, `App.tsx`).
 
-Tokens (colors, spacing, radii, fonts) live in `src/draftpilot/ui/theme/design.py` and the matching
-CSS variables in `static/styles.css`. Add new tokens in both places.
+5. **Test**: add or extend a journey in `tests/e2e/` that mocks the API with `page.route(...)` and
+   asserts the component via `get_by_role` / `get_by_label`. Python test functions need a one-line
+   docstring and type hints.
 
-Every new function/method gets a one-line Sphinx docstring and full type hints (interrogate enforces
-100%; mypy must stay clean).
+6. **Verify**: `npm --prefix frontend run build` (typecheck + build) and `uv run pytest tests/e2e`
+   (stack on :9000; first run `uv run playwright install chromium`).
+
+See the `web-frontend` skill for routing, serving, and API conventions.

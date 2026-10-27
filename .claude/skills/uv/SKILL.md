@@ -18,25 +18,25 @@ pip-tools, pipx, pyenv, virtualenv, poetry, etc. **DraftPilot is a uv project**
 Dependencies are organized into groups in `pyproject.toml`. Install what you need:
 
 ```bash
-uv sync --group ui        # NiceGUI app: nicegui, pydantic-ai, sqlmodel, asyncpg, redis, arq, alembic, otel
-uv sync --group worker    # ARQ worker (includes the ui group)
-uv sync --group mcp       # FastMCP server
-uv sync --group dev       # lint + test + docs tooling
+uv sync --all-groups --all-packages  # the app (runtime deps) + draftpilot-mcp + every tool group
+uv sync                   # the app and the dev group (lint, test, e2e, docs)
+uv sync --no-dev          # runtime only, as the Docker image installs it
 ```
 
 - `debugpy` — added to images only when `INSTALL_DEBUGPY=true` (see `compose.dev.yml`).
-- `otel` — Logfire instrumentation extras; pulled in via the `ui` group.
+- `otel` — Logfire instrumentation extras; pulled in via the `web` group.
 
-Add a dependency to a specific group: `uv add --group ui <pkg>`.
+Runtime dependencies are `[project.dependencies]` (`uv add <pkg>`); tooling goes in a group (`uv add --group test <pkg>`). `packages/draftpilot-mcp` is a workspace member (`uv add --package draftpilot-mcp <pkg>`). Frontend (npm) dependencies live
+in `frontend/package.json`, not in uv.
 
 ## Key commands
 
 ```bash
 uv add <pkg>                 # add a dependency (never pip install)
-uv add --group ui <pkg>      # add to a specific group
+uv add --group test <pkg>    # add a tooling dependency to a group
 uv remove <pkg>              # remove a dependency
 uv lock                      # refresh the lockfile
-uv sync --group ui           # install from the lockfile
+uv sync --all-groups --all-packages         # install from the lockfile
 uv run <command>             # run inside the project environment
 uv run python -c "..."       # run Python in the environment (never bare python)
 uvx <tool>@<version> <args>  # run a CLI tool without installing it
@@ -48,7 +48,8 @@ uvx <tool>@<version> <args>  # run a CLI tool without installing it
 # Bad → Good
 pip install requests   → uv add requests
 python script.py       → uv run script.py
-python -m draftpilot.ui.main  → uv run python -m draftpilot.ui.main
+python -m draftpilot.api  → uv run python -m draftpilot.api
+pytest -m lmstudio       → uv run pytest -m lmstudio
 ```
 
 After changing dependencies, the Docker build uses `uv sync --frozen`, so always

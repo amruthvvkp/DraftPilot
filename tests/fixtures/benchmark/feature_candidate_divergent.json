@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "track": "import_compare",
+  "label": "draftpilot_candidate_divergent",
+  "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "screenplay_title": "The Last Horizon",
+  "primary_language": "Spanish",
+  "translation_languages": [
+    "French"
+  ],
+  "scene_count": 2,
+  "block_count": 6,
+  "dialogue_count": 2,
+  "dual_dialogue_count": 0,
+  "element_counts": {
+    "action": 2,
+    "character": 2,
+    "dialogue": 2
+  },
+  "scene_headings": [
+    "EXT. DESERT OUTPOST - DAWN",
+    "INT. BUNKER COMMAND - CONTINUOUS"
+  ],
+  "runtime_seconds": 120
+}

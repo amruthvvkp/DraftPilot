@@ -1,0 +1,83 @@
+{
+  "assertion_rate": 1.0,
+  "cases": 5,
+  "failures": [],
+  "judge": "qwen/qwen3.8-27b",
+  "model": "qwen/qwen3.8-27b",
+  "per_case": {
+    "catfish_ring": {
+      "assertions": {
+        "LLMJudge": true,
+        "MentionsAny": true,
+        "UsedTools": true
+      },
+      "duration_s": 109.2,
+      "failures": {},
+      "metrics": {
+        "requests": 2,
+        "tokens": 12702
+      },
+      "scores": {}
+    },
+    "second_scene_heading": {
+      "assertions": {
+        "LLMJudge": true,
+        "MentionsAny": true,
+        "UsedTools": true
+      },
+      "duration_s": 56.6,
+      "failures": {},
+      "metrics": {
+        "requests": 2,
+        "tokens": 7909
+      },
+      "scores": {}
+    },
+    "wills_mother": {
+      "assertions": {
+        "LLMJudge": true,
+        "MentionsAny": true,
+        "UsedTools": true
+      },
+      "duration_s": 80.8,
+      "failures": {},
+      "metrics": {
+        "requests": 2,
+        "tokens": 12527
+      },
+      "scores": {}
+    },
+    "wills_wife": {
+      "assertions": {
+        "LLMJudge": true,
+        "MentionsAny": true,
+        "UsedTools": true
+      },
+      "duration_s": 93.6,
+      "failures": {},
+      "metrics": {
+        "requests": 2,
+        "tokens": 14854
+      },
+      "scores": {}
+    },
+    "witch_eye": {
+      "assertions": {
+        "LLMJudge": true,
+        "MentionsAny": true,
+        "MentionsAny_2": true,
+        "UsedTools": true
+      },
+      "duration_s": 303.9,
+      "failures": {},
+      "metrics": {
+        "requests": 4,
+        "tokens": 54424
+      },
+      "scores": {}
+    }
+  },
+  "recorded_at": "2026-09-27T13:42:27+00:00",
+  "scores": {},
+  "suite": "room_qa"
+}

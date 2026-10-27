@@ -1,0 +1,54 @@
+/* The chat dock and its generative-UI cards. Theme tokens only. */
+.chat-dock{box-sizing:border-box;display:flex;flex-direction:column;gap:8px;width:380px;height:100%;padding:12px 14px;background:var(--surface);border-left:1px solid var(--line);color:var(--ink)}
+.chat-dock.collapsed{width:48px;padding:12px 6px;align-items:center}
+.chat-dock-toggle{writing-mode:vertical-rl;width:34px;border:1px solid var(--line-strong);border-radius:99px;background:var(--chrome);color:var(--chrome-ink);padding:14px 8px;font-size:12px;font-weight:700;cursor:pointer}
+.chat-dock-head{display:flex;align-items:center;gap:6px}
+.chat-dock-head .eyebrow{flex:1;margin:0}
+.chat-dock-controls{display:flex;flex-wrap:wrap;gap:8px}
+.chat-dock-controls label{display:grid;gap:3px;color:var(--ink-muted);font-size:10px}
+.chat-dock-controls select{padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink);font-size:12px;max-width:170px}
+.chat-dock-log{flex:1;min-height:0;overflow:auto;display:grid;align-content:start;gap:10px;padding:4px 2px}
+.chat-dock .room-chat-compose textarea{min-height:44px}
+.chat-regenerate{align-self:flex-start}
+.chat-threads{display:grid;gap:6px;padding:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;max-height:40vh;overflow:auto}
+.chat-threads ul{display:grid;gap:4px;margin:0;padding:0;list-style:none}
+.chat-thread{display:flex;gap:4px;align-items:center}
+.chat-thread-open{flex:1;display:grid;text-align:left;padding:6px 8px;border:1px solid var(--line);border-radius:5px;background:var(--surface);color:var(--ink);font-size:12px;cursor:pointer}
+.chat-thread.current .chat-thread-open{border-color:var(--accent);background:var(--accent-wash)}
+.chat-thread-open small{color:var(--ink-faint);font-size:10px}
+.chat-thread form{display:flex;gap:4px;flex:1}
+.chat-thread input{flex:1;padding:5px 6px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
+.chat-pending{padding:8px 10px;background:var(--accent-wash);border-radius:6px;font-size:12px}
+.chat-pending summary{cursor:pointer;font-weight:700;color:var(--accent-strong)}
+.chat-pending ul{display:grid;gap:6px;margin:8px 0 0;padding:0;list-style:none;max-height:30vh;overflow:auto}
+.chat-markdown{font-size:13px;line-height:1.6}
+.chat-markdown p{margin:4px 0}
+.chat-markdown pre,.chat-markdown code{background:var(--surface-2);border-radius:4px;font-family:'DM Mono',monospace;font-size:11px}
+.chat-markdown pre{padding:8px;overflow:auto}
+.chat-markdown table{border-collapse:collapse;font-size:12px}
+.chat-markdown th,.chat-markdown td{border:1px solid var(--line);padding:3px 6px}
+.chat-markdown a{color:var(--accent-strong)}
+.chat-card{display:grid;gap:6px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;font-size:12px}
+.chat-card.approval{border-left-color:var(--danger)}
+.chat-card.approval.approved{border-left-color:var(--success)}
+.chat-card-title{margin:0;color:var(--ink-soft);font:700 11px 'DM Mono',monospace;text-transform:uppercase;letter-spacing:.04em}
+.chat-card-working{color:var(--accent)}
+.chat-card-lead{margin:0;color:var(--ink-soft);line-height:1.5}
+.chat-card pre{margin:0;max-height:220px;overflow:auto;padding:8px;background:var(--surface);border-radius:4px;font:11px/1.5 'DM Mono',monospace;white-space:pre-wrap}
+.chat-card a{color:var(--accent-strong);font-size:12px}
+.chat-tool-name{font:11px 'DM Mono',monospace;color:var(--ink-muted)}
+.chat-approval-actions,.chat-proposal-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chat-approval-actions input{flex:1 1 140px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
+.chat-checklist{margin:0;padding:0;list-style:none;display:grid;gap:3px}
+.chat-checklist li.done{color:var(--ink-muted);text-decoration:line-through}
+.chat-facts{display:grid;gap:3px;margin:0}
+.chat-facts div{display:grid;grid-template-columns:70px 1fr;gap:6px}
+.chat-facts dt{color:var(--ink-faint);text-transform:uppercase;font-size:10px}
+.chat-facts dd{margin:0}
+.chat-timeline,.chat-outline-act ol{margin:2px 0;padding-left:18px}
+.chat-chips{display:grid;gap:4px}
+.specialist p{margin:4px 0;color:var(--ink-soft);white-space:pre-wrap}
+.tool-call summary{cursor:pointer;list-style:none}
+.tool-call pre{margin:6px 0 0;max-height:200px;overflow:auto;padding:6px;background:var(--surface-2);font:10px/1.5 'DM Mono',monospace;white-space:pre-wrap}
+@media(max-width:1100px){.chat-dock{width:320px}}
+@media(max-width:760px){.project-body{grid-template-columns:1fr}.project-chat-rail{position:fixed;right:0;bottom:0;top:auto;height:70vh}.chat-dock{width:100vw}}

@@ -28,6 +28,18 @@ async def list_for_scene(session: AsyncSession, scene_id: int) -> list[Block]:
     return list(result.all())
 
 
+async def list_for_scenes(session: AsyncSession, scene_ids: list[int]) -> list[Block]:
+    """Return the blocks of many scenes in one query, ordered by scene then position."""
+    if not scene_ids:
+        return []
+    result = await session.exec(
+        select(Block)
+        .where(col(Block.scene_id).in_(scene_ids))
+        .order_by(col(Block.scene_id), col(Block.position))
+    )
+    return list(result.all())
+
+
 async def update(session: AsyncSession, block: Block, data: BlockUpdate) -> Block:
     """Apply the given changes to a block and persist them."""
     for key, value in data.model_dump(exclude_unset=True).items():

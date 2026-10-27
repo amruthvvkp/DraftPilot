@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+from pydantic import model_validator
 from sqlalchemy import JSON
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -20,6 +21,10 @@ class ProjectBase(SQLModel):
     logline: str | None = Field(default=None, max_length=500)
     description: str | None = Field(default=None)
     story_outline: str | None = Field(default=None)
+    premise: str | None = Field(default=None)
+    synopsis: str | None = Field(default=None)
+    theme: str | None = Field(default=None, max_length=1000)
+    tone: str | None = Field(default=None, max_length=500)
     visual_style: str | None = Field(default=None, max_length=300)
     camera_type: str | None = Field(default=None, max_length=200)
     screening_type: ScreeningType | None = Field(default=None)
@@ -27,6 +32,16 @@ class ProjectBase(SQLModel):
     artwork_path: str | None = Field(default=None, max_length=1000)
     genres: list[str] = Field(default_factory=list, sa_type=JSON)
     languages: list[str] = Field(default_factory=list, sa_type=JSON)
+    primary_language: str = Field(default="English", max_length=50)
+    project_instruction: str = Field(default="")
+
+
+def validate_language_separation(primary_language: str, languages: list[str]) -> None:
+    """Reject a primary screenplay language listed among dialogue translations."""
+    if primary_language.strip().casefold() in {
+        language.strip().casefold() for language in languages
+    }:
+        raise ValueError("primary_language cannot also be a dialogue translation language")
 
 
 class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg]
@@ -35,6 +50,7 @@ class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg
     __tablename__ = "project"
 
     id: int | None = Field(default=None, primary_key=True)
+    version: int = Field(default=1, ge=1)
     screenplays: list["Screenplay"] = Relationship(
         back_populates="project",
         sa_relationship_kwargs={"cascade": "all, delete-orphan"},
@@ -48,7 +64,11 @@ class Project(ProjectBase, TimestampMixin, table=True):  # type: ignore[call-arg
 class ProjectCreate(ProjectBase):
     """Schema for creating a new project."""
 
-    pass
+    @model_validator(mode="after")
+    def validate_translation_languages(self) -> "ProjectCreate":
+        """Reject the primary screenplay language as a translation target."""
+        validate_language_separation(self.primary_language, self.languages)
+        return self
 
 
 class ProjectUpdate(SQLModel):
@@ -58,6 +78,10 @@ class ProjectUpdate(SQLModel):
     logline: str | None = None
     description: str | None = None
     story_outline: str | None = None
+    premise: str | None = None
+    synopsis: str | None = None
+    theme: str | None = None
+    tone: str | None = None
     visual_style: str | None = None
     camera_type: str | None = None
     screening_type: ScreeningType | None = None
@@ -65,9 +89,12 @@ class ProjectUpdate(SQLModel):
     artwork_path: str | None = None
     genres: list[str] | None = None
     languages: list[str] | None = None
+    primary_language: str | None = None
+    project_instruction: str | None = None
 
 
 class ProjectRead(ProjectBase):
     """Schema for reading a project, including its identifier."""
 
     id: int
+    version: int

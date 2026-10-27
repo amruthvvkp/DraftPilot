@@ -14,6 +14,8 @@ from draftpilot.models.enums import BlockType
 class BlockDoc(BaseModel):
     """Represent a single typed screenplay element within a scene."""
 
+    # Persisted block id: snapshots carry it so restores keep ids (and linked translations) stable.
+    id: int | None = None
     element_type: BlockType = BlockType.ACTION
     text: str = ""
     character_extension: str | None = None
@@ -22,6 +24,7 @@ class BlockDoc(BaseModel):
     translation: str | None = None
     translation_lang: str | None = None
     marks: dict[str, Any] | None = None
+    origin: str | None = None
 
 
 class SceneDoc(BaseModel):

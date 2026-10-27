@@ -2,172 +2,67 @@
 icon: lucide/rocket
 ---
 
-# Get started
+# DraftPilot
 
-For full documentation visit [zensical.org](https://zensical.org/docs/).
+DraftPilot is a local-first screenwriting studio for one writer and a room of AI agents. You write in
+a proper screenplay editor. The **writers' room** reads your script and helps you think it through:
 
-## Commands
+- it pitches and bounces story ideas;
+- it outlines from your notes, drafts and rewrites scenes, and develops character arcs;
+- it reads your script as an audience would.
 
-* [`zensical new`][new] - Create a new project
-* [`zensical serve`][serve] - Start local web server
-* [`zensical build`][build] - Build your site
+Every change it wants to make arrives as a proposal that you approve. Everything runs on your
+machine. By default the agents use a model in [LM Studio](https://lmstudio.ai).
 
-  [new]: https://zensical.org/docs/usage/new/
-  [serve]: https://zensical.org/docs/usage/preview/
-  [build]: https://zensical.org/docs/usage/build/
+## Start the studio
 
-## Examples
+You need Docker and, for the agents, LM Studio with a chat model loaded (for example
+`qwen/qwen3.8-27b`) and an embedding model (`text-embedding-nomic-embed-text-v1.5`).
 
-### Admonitions
-
-> Go to [documentation](https://zensical.org/docs/authoring/admonitions/)
-
-!!! note
-
-    This is a **note** admonition. Use it to provide helpful information.
-
-!!! warning
-
-    This is a **warning** admonition. Be careful!
-
-### Details
-
-> Go to [documentation](https://zensical.org/docs/authoring/admonitions/#collapsible-blocks)
-
-??? info "Click to expand for more info"
-
-    This content is hidden until you click to expand it.
-    Great for FAQs or long explanations.
-
-## Code Blocks
-
-> Go to [documentation](https://zensical.org/docs/authoring/code-blocks/)
-
-``` python hl_lines="2" title="Code blocks"
-def greet(name):
-    print(f"Hello, {name}!") # (1)!
-
-greet("Python")
+```bash
+git clone https://github.com/amruthvvkp/DraftPilot && cd DraftPilot
+cp .env.example .env            # optional: every setting has a local default
+docker compose up --build
 ```
 
-1.  > Go to [documentation](https://zensical.org/docs/authoring/code-blocks/#code-annotations)
+No checkout needed: [Install](install.md) covers the published Compose stack, the Docker image, and
+`pip install draftpilot-studio` / `uvx draftpilot-mcp`.
 
-    Code annotations allow to attach notes to lines of code.
+| Address | What it is |
+|---|---|
+| <http://localhost:9000> | The studio |
+| <http://localhost:9001/mcp> | The MCP server for Claude, ChatGPT, Cursor and other agents |
+| <http://localhost:8233> | The Temporal UI, which shows every room workflow and background job step by step |
 
-Code can also be highlighted inline: `#!python print("Hello, Python!")`.
+If `API__TOKEN` is set, the studio asks for it once and then remembers you with a secure cookie.
 
-## Content tabs
+## Your first ten minutes
 
-> Go to [documentation](https://zensical.org/docs/authoring/content-tabs/)
+1. **Create a project.** Click **New project** and give it a title. **Spark with AI** can suggest a
+   logline and characters from a single line of premise.
+2. **Follow the stepper.** Each project walks **Storyline → Characters → Outline → Script**
+   ([Develop a story](guided-flow.md)). Fill the logline and premise, add your leads with what they
+   want and need, sketch the acts and beats, then create the first scene from a beat.
+3. **Or bring in a script.** In the Script, click **Import** and pick a `.fountain`, `.fdx` or `.pdf`
+   (the Big Fish files in `tests/test_screenplays` are a good first test). The cast and locations
+   fill in by themselves.
+4. **Ask the room.** In the chat on the right, ask the showrunner something only your project can
+   answer, or ask it to develop a stage. In **Edit with approval** mode it changes things directly,
+   one approved step at a time ([Chat with the room](chat.md)).
+5. **Let the room run the pipeline.** In **Writers' room**, start **Develop the story** with an idea,
+   and approve each stage as it arrives.
 
-=== "Python"
+## Where to go next
 
-    ``` python
-    print("Hello from Python!")
-    ```
-
-=== "Rust"
-
-    ``` rs
-    println!("Hello from Rust!");
-    ```
-
-## Diagrams
-
-> Go to [documentation](https://zensical.org/docs/authoring/diagrams/)
-
-``` mermaid
-graph LR
-  A[Start] --> B{Error?};
-  B -->|Yes| C[Hmm...];
-  C --> D[Debug];
-  D --> B;
-  B ---->|No| E[Yay!];
-```
-
-## Footnotes
-
-> Go to [documentation](https://zensical.org/docs/authoring/footnotes/)
-
-Here's a sentence with a footnote.[^1]
-
-Hover it, to see a tooltip.
-
-[^1]: This is the footnote.
-
-
-## Formatting
-
-> Go to [documentation](https://zensical.org/docs/authoring/formatting/)
-
-- ==This was marked (highlight)==
-- ^^This was inserted (underline)^^
-- ~~This was deleted (strikethrough)~~
-- H~2~O
-- A^T^A
-- ++ctrl+alt+del++
-
-## Icons, Emojis
-
-> Go to [documentation](https://zensical.org/docs/authoring/icons-emojis/)
-
-* :sparkles: `:sparkles:`
-* :rocket: `:rocket:`
-* :tada: `:tada:`
-* :memo: `:memo:`
-* :eyes: `:eyes:`
-
-## Maths
-
-> Go to [documentation](https://zensical.org/docs/authoring/math/)
-
-$$
-\cos x=\sum_{k=0}^{\infty}\frac{(-1)^k}{(2k)!}x^{2k}
-$$
-
-!!! warning "Needs configuration"
-    Note that MathJax is included via a `script` tag on this page and is not
-    configured in the generated default configuration to avoid including it
-    in a pages that do not need it. See the documentation for details on how
-    to configure it on all your pages if they are more Maths-heavy than these
-    simple starter pages.
-
-<script id="MathJax-script" src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
-<script>
-  window.MathJax = {
-    tex: {
-      inlineMath: [["\\(", "\\)"]],
-      displayMath: [["\\[", "\\]"]],
-      processEscapes: true,
-      processEnvironments: true
-    },
-    options: {
-      ignoreHtmlClass: ".*|",
-      processHtmlClass: "arithmatex"
-    }
-  };
-
-  document$.subscribe(() => {
-    MathJax.startup.output.clearCache()
-    MathJax.typesetClear()
-    MathJax.texReset()
-    MathJax.typesetPromise()
-  })
-</script>
-
-## Task Lists
-
-> Go to [documentation](https://zensical.org/docs/authoring/lists/#using-task-lists)
-
-* [x] Install Zensical
-* [x] Configure `zensical.toml`
-* [x] Write amazing documentation
-* [ ] Deploy anywhere
-
-## Tooltips
-
-> Go to [documentation](https://zensical.org/docs/authoring/tooltips/)
-
-[Hover me][example]
-
-  [example]: https://example.com "I'm a tooltip!"
+- [Develop a story](guided-flow.md) covers the stages, the context map and the pipeline.
+- [Chat with the room](chat.md) covers roles, modes, in-chat approvals and threads.
+- [Writing in the studio](editor.md) covers the editor, drafts, snapshots, translations and exports.
+- [Writers' room](writers-room.md) covers the agent team, the workflows, and reviewing proposals.
+- [Story tools](story-tools.md) covers the Story twin, Writer twin, knowledge graph and story studio.
+- [Settings & appearance](settings.md) covers themes, your writer profile, memories and models.
+- [Backups & recovery](backups.md) covers backups, restoring, and recently deleted projects.
+- [MCP integration](mcp.md) connects Claude, ChatGPT or Cursor to develop screenplays through
+  DraftPilot. The other advanced topics are [Provider setup](providers.md),
+  [Evals & usefulness](evals.md) and [Deployment](deployment.md).
+- If something isn't working, see [Troubleshooting](troubleshooting.md).
+- To work on DraftPilot itself, start with the [Architecture](dev/architecture.md).

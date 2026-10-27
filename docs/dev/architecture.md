@@ -1,0 +1,147 @@
+# Architecture
+
+```mermaid
+graph LR
+  Browser["React studio<br/>(Vite build)"] -->|/api/v1 · SSE| Web["web: FastAPI<br/>create_app()"]
+  Ext["Claude Code · Codex"] -->|MCP HTTP| MCP["mcp: FastMCP server"]
+  Web -->|in-process MCPToolset| MCP
+  Web --> PG[(Postgres)]
+  Web & MCP -->|start workflow| Temporal[("Temporal<br/>dev server")]
+  Worker["worker: Temporal"] -->|poll task queue| Temporal
+  Worker -->|in-process MCPToolset| MCP
+  Worker --> PG
+  Web & Worker -->|search / index| RAG["rag: hybrid index<br/>pgvector + tsvector"]
+  Web & Worker & MCP -. OTLP, opt-in .-> LGTM["otel-lgtm<br/>(observability profile)"]
+  Web & Worker -->|chat + embeddings| LMS["LM Studio"]
+  Web & Worker --> Redis[(Redis)]
+  Web -. pub/sub .-> Redis -. SSE .-> Browser
+```
+
+## Processes
+
+| Process | Entry point | Job |
+|---|---|---|
+| web | `draftpilot serve` → `api/app.py:create_app` | The REST API under `/api/v1`, AG-UI room chat, SSE live sync, and serving the studio build |
+| worker | `draftpilot worker` | A Temporal worker: durable runs (room workflows and the `develop_story` pipeline, chat turns, context workflows, evaluations), RAG indexing and purges, Story-twin refresh |
+| temporal | `temporal server start-dev` (compose) | Durable execution: workflow histories, retries, timers and cancellation; UI on :8233 |
+| mcp | `draftpilot mcp --http` (stdio: `draftpilot mcp`, or `draftpilot-mcp` from the [`draftpilot-mcp`](../install.md#draftpilot-mcp) package) | The one tool surface, shared by external agents and the in-app room |
+| rag | `draftpilot rag` | A replaceable hybrid-retrieval service: pgvector HNSW and tsvector GIN, fused with RRF |
+| migrate | `draftpilot migrate` | Applies the Alembic migrations shipped in the package (`src/draftpilot/migrations`), then exits |
+
+The `packages/draftpilot-mcp` workspace member wraps the same server with its own CLI (`serve`,
+`trust`, `revoke`, `config`, `tools`) and depends on the core package.
+
+### Serving the studio
+
+The web process serves the React build with FastAPI's `app.frontend("/", fallback="index.html")`.
+Frontend routes have low priority, so every API route, the SSE stream and `/health` match first.
+A browser deep link (`Accept: text/html`) gets `index.html`, while a missing asset, a POST to an
+unknown path, and any unmatched `/api/*` GET return 404. Hashed files under `/assets/` are sent
+with `Cache-Control: immutable`, and the HTML shell with `no-cache`, so a new build takes effect on
+the next load.
+
+Auth is on the `/api/v1` router, not the app, so the shell and its token prompt load without
+credentials. MCP runs as its own service with its own bearer auth.
+
+The `Dockerfile` builds `frontend/` in a Node stage, copies the build into the package
+(`src/draftpilot/studio/`), and installs the `draftpilot` and `draftpilot-mcp` wheels into the
+`runtime` image, which every Compose service runs with its own command (`draftpilot serve`,
+`worker`, `migrate`, `mcp --http`, `rag`). Its `dev` target is the source tree installed editable,
+for `compose.dev.yml`. `WEB__FRONTEND_DIST` defaults to the packaged build, else the checkout's
+`frontend/dist`, and `WEB__REQUIRE_FRONTEND=true` in the runtime image refuses to start without it.
+
+### Durable execution
+
+All background work runs on Temporal. The web and MCP processes start workflows by type name with
+`core/temporal.py`: `start_job`, `start_best_effort` (logs and carries on when Temporal is down),
+`start_run(run_id)` and `cancel_run`. The worker (`worker/`) serves those workflows. They are
+deterministic orchestration in `workflows.py`, and every I/O call is an activity in `activities.py`.
+A `WorkflowRun` row is a read-only copy of its workflow (`run-<id>`, stored in `temporal_workflow_id`).
+`execute_workflow` applies the run's `max_attempts` as the activity retry policy, mirrors each
+attempt's error, and writes the terminal state. Cancelling a run cancels the workflow as well, and a
+worker restart simply resumes from history. Bursty jobs share a workflow id, so they collapse. For
+example, `story-twin:<project>` has a 5-second start delay, so a run of edits becomes one refresh.
+
+## Data
+
+The screenplay hierarchy is Project → Screenplay (a draft) → Act → Scene → Block. A block is one typed
+screenplay element and carries an `origin` (`human`, `import` or `proposal:<id>`), which drives
+retention metrics. Scenes carry a `version` for optimistic concurrency. The hydration layer
+(`core/screenplay/hydrate.py`) translates between these rows and a `ScreenplayDoc`, keeping block ids
+stable. Import, export, snapshots and scene rewrites all build on it.
+
+Around the script:
+
+- the typed story (`models/story.py`, services in `core/story/`): storyline fields on the project,
+  `Character`, `CharacterRelationship`, `CharacterTimelineEvent`, `Location` and `StoryBeat` (linked
+  to acts, scenes and characters). REST, MCP and the room all write them through the same services;
+- free-form story artifacts (research, canon and reference documents);
+- the knowledge graph, for canon the typed tables don't cover (the Story twin writes characters and
+  locations to their tables instead);
+- chat threads (`ChatThread`), keyed by the AG-UI thread id;
+- the Writer twin (`writer_profile`, `writer_memory`);
+- the audit trail: proposals, workflow runs, agent runs, feedback and MCP grants, approvals and
+  audit events.
+
+## The writers' room
+
+- **Role specs:** `agents/specs/*.yaml` define each role: its instructions, temperature, request
+  limit, token cap and thinking flag.
+- **Runtime:** `agents/runtime.py` builds one durable PydanticAI `Agent` per role
+  (`room_agents()`, plus `chat_agents()` for streamed chat). Each carries `TemporalDurability`, so
+  inside a workflow every model request and tool call is an activity, and outside one the agent runs
+  in-process. A `ResolveModelId` hook (`agents/models.py`) resolves the run's model ref (the
+  installation default or a provider profile, with LM Studio `auto` resolved up front). Workflow
+  code gets a no-I/O planning model and the activity gets the real one. The tools are DraftPilot's
+  own MCP server, reached in-process through `MCPToolset` and filtered per run by permission mode.
+  Every tool call carries the run's internal identity, HMAC-signed with a process-local key, in the
+  request `_meta`. The server's `InternalAgentIdentity` middleware verifies it and binds the identity
+  for that call only, so the agent acts under an internal identity scoped to one project, and an
+  external client cannot forge it. The showrunner gets a `consult` tool that runs a specialist as a
+  nested agent run.
+- **Context:** `agents/context.py` loads the Writer and Story twin briefs into every role's single
+  system prompt. It is one prompt because local chat templates reject several.
+- **Workflows:** `agents/room_workflows.py` holds the eight room workflows, plus `room:chat` and
+  the `room:develop_story` pipeline, as Temporal workflows:
+  - draft-critique loops (plain `while` loops) for outline and rewrite;
+  - `asyncio.gather` fan-outs for arcs, brainstorm, audience panel and scene drafting;
+  - single steps for coverage and continuity.
+
+  Each step (`consult`) records its AgentRun and the trail through activities. The trail is also
+  the `progress` query. Generative workflows end at a gate activity that creates proposals, which
+  the writer decides through the proposals API. `execute_workflow` runs a room run as a child
+  workflow after preparing its context and model. `run_room_workflow` runs the same workflow on an
+  embedded Temporal test server for evals and tests.
+- **Chat (AG-UI):** each turn is a short `room:chat` workflow. The API parses the AG-UI
+  `RunAgentInput`, starts the turn and relays its Workflow Stream events (`stream_agent_events`)
+  through Pydantic AI's `AGUIAdapter` encoder. Chat agents defer approval-required MCP tools, so a
+  write ends the turn with an AG-UI interrupt; on resume, a signed *approval probe* asks the MCP
+  server to record the approval request that exact call needs (without running it), the writer's
+  decision is recorded, and the call resumes with that `approval_id`. Threads (`ChatThread`) keep the
+  full history server-side; once a thread exists the server's copy is authoritative. Studio-side
+  tools (`navigate`, `open_scene`) ride as an `ExternalToolset`.
+- **Pipeline:** `room:develop_story` chains storyline, cast, parallel timelines, a critiqued outline,
+  parallel scene drafts and coverage. Each stage proposes, then waits on `proposal_decided` signals,
+  which the proposals service sends to `run-<id>-room` after the writer decides.
+- **Measurement:** every role run is an `AgentRun`, recording tokens, tools, duration and trace id.
+
+## Safety boundaries
+
+- **Writes by the room:** agents never write silently. Writes are proposals, which the writer
+  approves and can roll back. See the approve/rollback handlers in `api/agent.py`.
+- **External MCP writes:** these need a grant. Approval-required capabilities also need a
+  writer-decided, argument-bound, single-use approval id (see `crud/mcp_access.py`).
+- **Scope:** in-app agents hold implicit grants for the one project their run is bound to.
+- **Deletion:** a project is backed up before it is deleted. The purge discovers every
+  project-scoped table from the SQLModel metadata (`core/project_lifecycle.py`).
+
+## Frontend
+
+The studio is React 19 on Vite, with react-router for pages and TanStack Query for data; live-sync
+events invalidate the affected queries. See [Frontend](frontend.md).
+
+## Live sync
+
+Every committed change publishes a project event to Redis (`core/events.py`). The web process
+streams those events to the browser as SSE (`/projects/{id}/events`). Each event carries the id of
+the originating tab, so a tab ignores its own echoes.

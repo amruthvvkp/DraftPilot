@@ -43,6 +43,7 @@ async def update(session: AsyncSession, scene: Scene, data: SceneUpdate) -> Scen
     """Apply the given changes to a scene and persist them."""
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(scene, key, value)
+    scene.version += 1
     session.add(scene)
     await session.commit()
     await session.refresh(scene)

@@ -5,17 +5,19 @@ from draftpilot.crud import (
     blocks,
     project_references,
     projects,
+    provider_profiles,
     scene_revisions,
     scenes,
     screenplays,
 )
 
 __all__ = [
-    "projects",
-    "screenplays",
     "acts",
-    "scenes",
     "blocks",
     "project_references",
+    "projects",
+    "provider_profiles",
     "scene_revisions",
+    "scenes",
+    "screenplays",
 ]

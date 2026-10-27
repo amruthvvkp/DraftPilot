@@ -1,0 +1,16 @@
+# Postgres 16 on Alpine (musl) with pgvector compiled in.
+#
+# The stack's existing data volumes were created by postgres:16-alpine; staying on the same
+# base (and C library) keeps text-index collation ordering valid, which switching to the
+# Debian-based pgvector images would not guarantee.
+FROM postgres:16-alpine
+
+ARG PGVECTOR_VERSION=v0.8.6
+
+# with_llvm=no: skip JIT bitcode, which needs the exact clang version Postgres was built with.
+RUN apk add --no-cache --virtual .build-deps git build-base \
+    && git clone --branch "${PGVECTOR_VERSION}" --depth 1 https://github.com/pgvector/pgvector.git /tmp/pgvector \
+    && make -C /tmp/pgvector OPTFLAGS="" with_llvm=no \
+    && make -C /tmp/pgvector with_llvm=no install \
+    && rm -rf /tmp/pgvector \
+    && apk del .build-deps

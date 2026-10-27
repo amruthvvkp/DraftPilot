@@ -1,0 +1,48 @@
+{
+  "assertion_rate": 0.833,
+  "cases": 2,
+  "failures": [],
+  "judge": "qwen/qwen3.8-27b",
+  "model": "qwen/qwen3.8-27b",
+  "per_case": {
+    "bedroom_subtext": {
+      "assertions": {
+        "KeepsCast": true,
+        "LLMJudge": true,
+        "ValidScene": true
+      },
+      "duration_s": 953.0,
+      "failures": {},
+      "metrics": {
+        "steps": 4
+      },
+      "scores": {
+        "CritiqueImproved": 0.9,
+        "Shorter": 1.0
+      }
+    },
+    "front_hall_tension": {
+      "assertions": {
+        "KeepsCast": true,
+        "LLMJudge": false,
+        "ValidScene": true
+      },
+      "duration_s": 1585.3,
+      "failures": {
+        "LLMJudge": "The rewrite does not meaningfully raise the tension between Will and Sandra; it mainly removes their lines and replaces them with a mild physical gesture, leaving Sandra silent and their conflict underdeveloped. It also includes critique material rather than a clean, correctly formatted screenplay rewrite."
+      },
+      "metrics": {
+        "steps": 4
+      },
+      "scores": {
+        "CritiqueImproved": 0.7
+      }
+    }
+  },
+  "recorded_at": "2026-09-27T18:43:23+00:00",
+  "scores": {
+    "CritiqueImproved": 0.8,
+    "Shorter": 1.0
+  },
+  "suite": "rewrite"
+}

@@ -103,6 +103,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+frontend/node_modules/
 env/
 venv/
 ENV/
@@ -142,3 +143,6 @@ cython_debug/
 
 # Flet
 storage/
+
+# The studio build copied into the package at release time (scripts/build_release.sh).
+src/draftpilot/studio/
