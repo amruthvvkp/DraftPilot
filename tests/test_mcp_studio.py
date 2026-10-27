@@ -159,6 +159,7 @@ PARITY: dict[str, str] = {
     "DELETE /projects/{project_id}/timeline-events/{event_id}": "delete_story_entity",
     "GET /projects/{project_id}/twin": "read_story_twin",
     "POST /projects/{project_id}/twin/refresh": "refresh_story_twin_now",
+    "GET /projects/{project_id}/visuals": "read_story_visuals",
     "GET /projects/{project_id}/workspace": "read_screenplay_scenes",
     "GET /settings/providers": EXEMPT + ": provider secrets stay with the installation",
     "POST /settings/providers": EXEMPT + ": provider secrets stay with the installation",
@@ -362,6 +363,9 @@ def test_an_external_agent_maps_a_shared_moment(studio: AsyncSession) -> None:
                 await dp.call("create_story_entity", project_id=pid, kind="timeline_event", fields=fields)
             lanes = _result(await dp.call("list_story_entities", project_id=pid, kind="timeline_event", moment_id=moment["id"]))
             assert sorted(item["intensity"] for item in lanes) == [-4, 5]
+            visuals = await dp.call("read_story_visuals", project_id=pid)
+            assert [(item["id"], item["intensity"], item["event_count"]) for item in visuals["scenes"]] == [(scene["id"], 0.5, 2)]
+            assert [(edge["shared_moments"], edge["shared_scenes"]) for edge in visuals["edges"]] == [(1, 1)]
             edited = await dp.call("update_story_entity", project_id=pid, kind="moment", entity_id=moment["id"], fields={"story_time": "1987"}, expected_version=1)
             assert edited["version"] == 2
             variant = await dp.call("create_story_entity", project_id=pid, kind="variant", fields={"name": "As shot", "scene_ids": [scene["id"]]})
