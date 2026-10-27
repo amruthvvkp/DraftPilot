@@ -86,6 +86,7 @@ nav = [
       { "Configuration" = "dev/reference/config.md" },
     ] },
     { "v1 gap analysis" = "dev/v1-gap-analysis.md" },
+    { "Design: editor & journey map" = "dev/design-editor-and-journey-map.md" },
   ] },
   { "Roadmap" = "roadmap.md" },
   { "References & credits" = "references.md" },
