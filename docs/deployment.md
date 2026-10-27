@@ -52,7 +52,9 @@ docker compose cp ui:/data/backups ./backups
 ```
 
 Backups are compressed, checksummed JSON archives. Restore always creates a new project and never
-overwrites the source. Preserve `pgdata`, `backup_data`, and `rag_data` when moving the local
+overwrites the source. The `ui`, `mcp` and `worker` services all mount `backup_data` at
+`BACKUP__ROOT` (`/data/backups`), so backups and exports made over MCP sit beside the studio's;
+keep that mount on every service if you write your own Compose overlay. Preserve `pgdata`, `backup_data`, and `rag_data` when moving the local
 stack. Preserve `temporal_data` as well if in-flight workflows must survive the move.
 
 For a disaster recovery test, stop the stack, restore the named-volume contents from an encrypted

@@ -127,6 +127,9 @@ services:
     environment:
       <<: *app-env
     extra_hosts: *extra-hosts
+    # Same volume as ui and mcp: one BACKUP__ROOT for every writer of backups and exports.
+    volumes:
+      - backup_data:/data/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -150,6 +153,9 @@ services:
       MCP__ADMIN_TOKEN: ${MCP__ADMIN_TOKEN:-draftpilot-local-admin-token}
       MCP__STDIO_CLIENT_ID: ${MCP__STDIO_CLIENT_ID:-mcp-stdio}
     extra_hosts: *extra-hosts
+    # MCP backups and exports must land where the studio's Backups drawer reads them (#52).
+    volumes:
+      - backup_data:/data/backups
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 5s
