@@ -57,11 +57,12 @@ If `API__TOKEN` is set, the studio asks for it once and then remembers you with 
 - [Develop a story](guided-flow.md) covers the stages, the context map and the pipeline.
 - [Chat with the room](chat.md) covers roles, modes, in-chat approvals and threads.
 - [Writing in the studio](editor.md) covers the editor, drafts, snapshots, translations and exports.
-- [Story tools](story-tools.md) covers the Story twin, knowledge graph, story studio and timeline.
 - [Writers' room](writers-room.md) covers the agent team, the workflows, and reviewing proposals.
+- [Story tools](story-tools.md) covers the Story twin, Writer twin, knowledge graph and story studio.
 - [Settings & appearance](settings.md) covers themes, your writer profile, memories and models.
-- [Manual test checklist](checklist.md) walks through every workflow by hand.
-- [MCP integration](mcp.md) connects Claude, ChatGPT or Cursor to develop screenplays through DraftPilot.
-- For the advanced topics, see [MCP integration](mcp.md), [Evals & usefulness](evals.md) and
-  [Deployment](deployment.md).
+- [Backups & recovery](backups.md) covers backups, restoring, and recently deleted projects.
+- [MCP integration](mcp.md) connects Claude, ChatGPT or Cursor to develop screenplays through
+  DraftPilot. The other advanced topics are [Provider setup](providers.md),
+  [Evals & usefulness](evals.md) and [Deployment](deployment.md).
+- If something isn't working, see [Troubleshooting](troubleshooting.md).
 - To work on DraftPilot itself, start with the [Architecture](dev/architecture.md).

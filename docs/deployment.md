@@ -46,7 +46,7 @@ Compose, the OTLP endpoint uses the internal hostname (`http://otel-lgtm:4318`),
 Create an application backup before upgrades or migrations:
 
 ```bash
-curl -X POST -H "Authorization: Bearer $MCP__ADMIN_TOKEN" \
+curl -X POST -H "Authorization: Bearer $API__TOKEN" \
   http://localhost:9000/api/v1/projects/PROJECT_ID/backups
 docker compose cp ui:/data/backups ./backups
 ```

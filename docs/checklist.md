@@ -45,11 +45,27 @@ models, so this checklist is the one place where the real model, real data and y
 
 - [ ] **Story twin** lists Edward (about 307 lines), Will, Sandra, Jenny, Josephine… and locations
       such as Hospital Room and Bloom House.
-- [ ] Write a note on Will. **Refresh from the draft** keeps your note and shows the *your note*
+- [ ] Write a note on Will. **Refresh from the draft** keeps your note and shows the *yours*
       badge.
 - [ ] Rename a character in a scene. Within about ten seconds, the twin reflects it.
 
-## 5. The room: chat
+## 5. Story pages
+
+- [ ] **Storyline:** fill the logline, premise, synopsis, theme and tone and save. Edit the same
+      field in a second tab and save there first: the first tab offers **Save my version** or
+      **Discard my edits**.
+- [ ] **Characters:** **Add character**, fill want, need, motive, objective and arc. Add two
+      timeline events (**Add event**, linked to a scene and a beat) and a relationship to another
+      character (**Add relationship**).
+- [ ] **Locations:** **Add location** and **Delete location** work, and imported scene headings
+      appear as locations.
+- [ ] **Outline:** **Add act**, rename it, then delete it: its beats move to *Unassigned* and its scenes to
+      the act you choose. Add
+      beats, drag one to another act and reorder with the keyboard, link characters, then **Create
+      scene from beat**: the scene opens in the script and stays linked.
+- [ ] **Context map** shows the agent brief and lists the empty fields, each linking to its page.
+
+## 6. The room: chat
 
 - [ ] Open the **chat** on the right, as the showrunner: "What does Will want from Edward?"
       Tool chips appear (Story twin, scenes, a specialist consult), and the answer cites scenes.
@@ -62,7 +78,7 @@ models, so this checklist is the one place where the real model, real data and y
 - [ ] Ask the showrunner to "plan and then check the cast's arcs and continuity": a plan checklist
       appears, and two specialists answer in parallel.
 
-## 6. The room: workflows
+## 7. The room: workflows
 
 For each workflow, start it, leave the page, come back, and check that the trail has advanced:
 
@@ -70,25 +86,23 @@ For each workflow, start it, leave the page, come back, and check that the trail
       doctor's score, then **Approve**. The scene changes, with blocks marked *agent*. **Roll back**
       restores your text exactly.
 - [ ] **Notes → outline:** paste a paragraph of notes. You get a logline and beats with a critique
-      score. Approve both proposals, and the Brief and Outline artifacts update.
-- [ ] **Beat board:** the approved outline's beats appear by act. Move one to Act 2, reorder, rewrite a
-      summary and **Save outline**; the Outline artifact's version goes up.
+      score. Approve both proposals: the storyline's logline and the **Outline** page's beats update.
 - [ ] **Outline → scenes** (after the outline): new scenes are proposed. Approve, and they're
       appended to the draft; **Roll back** removes them unless you've edited one.
-- [ ] **Character arcs** with no names: arcs for the leads land in the Characters artifact.
+- [ ] **Character arcs** with no names: arcs for the leads land on their character profiles, with timeline events.
 - [ ] **Brainstorm**, **Audience panel**, **Coverage** and **Continuity pass** each produce a readable
       report. The continuity pass cites only real scenes.
 - [ ] **Cancel run** stops a workflow at its next step, and nothing is proposed.
 - [ ] Automatic checks (✓/✗) appear on finished runs. 👍/👎 is saved.
 
-## 7. Usefulness
+## 8. Usefulness
 
 - [ ] **How useful is the room?** shows accepted, kept, thumbs and time per workflow.
 - [ ] Edit a block an approved rewrite wrote. **Kept** falls after a refresh.
 - [ ] In the Temporal UI (<http://localhost:8233>), the run's `execute_workflow` shows each step, and
       a cancelled run ends as cancelled.
 
-## 8. External agents (MCP)
+## 9. External agents (MCP)
 
 - [ ] Connect Claude Code or Codex to `http://localhost:9001/mcp` (see [MCP integration](mcp.md))
       and list the tools.
@@ -97,7 +111,7 @@ For each workflow, start it, leave the page, come back, and check that the trail
 - [ ] Ask it to apply a story operation. The studio shows an approval request, and the call succeeds
       only with the approved id.
 
-## 9. Offline evals
+## 10. Offline evals
 
 - [ ] `uv run python -m draftpilot.evals room_qa` completes and reports no regression against
       `evals/baselines/room_qa.json`.

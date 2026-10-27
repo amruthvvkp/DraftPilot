@@ -21,11 +21,15 @@ graph LR
 
 | Process | Entry point | Job |
 |---|---|---|
-| web | `python -m draftpilot.api` → `api/app.py:create_app` | The REST API under `/api/v1`, streamed room chat, SSE live sync, and serving `frontend/dist` |
-| worker | `python -m draftpilot.worker` | A Temporal worker: durable runs (room workflows, context workflows, evaluations, copilot replies), RAG indexing and purges, Story-twin refresh |
+| web | `draftpilot serve` → `api/app.py:create_app` | The REST API under `/api/v1`, AG-UI room chat, SSE live sync, and serving the studio build |
+| worker | `draftpilot worker` | A Temporal worker: durable runs (room workflows and the `develop_story` pipeline, chat turns, context workflows, evaluations), RAG indexing and purges, Story-twin refresh |
 | temporal | `temporal server start-dev` (compose) | Durable execution: workflow histories, retries, timers and cancellation; UI on :8233 |
-| mcp | `fastmcp run src/draftpilot/mcp/server.py:mcp --transport http` (stdio: `python -m draftpilot.mcp`) | The one tool surface, shared by external agents and the in-app room |
-| rag | `uvicorn draftpilot.rag_service:app` | A replaceable hybrid-retrieval service: pgvector HNSW and tsvector GIN, fused with RRF |
+| mcp | `draftpilot mcp --http` (stdio: `draftpilot mcp`, or `draftpilot-mcp` from the [`draftpilot-mcp`](../install.md#draftpilot-mcp) package) | The one tool surface, shared by external agents and the in-app room |
+| rag | `draftpilot rag` | A replaceable hybrid-retrieval service: pgvector HNSW and tsvector GIN, fused with RRF |
+| migrate | `draftpilot migrate` | Applies the Alembic migrations shipped in the package (`src/draftpilot/migrations`), then exits |
+
+The `packages/draftpilot-mcp` workspace member wraps the same server with its own CLI (`serve`,
+`trust`, `revoke`, `config`, `tools`) and depends on the core package.
 
 ### Serving the studio
 
@@ -68,8 +72,13 @@ stable. Import, export, snapshots and scene rewrites all build on it.
 
 Around the script:
 
-- story artifacts (brief, outline, characters and so on);
-- the knowledge graph, which also holds the Story twin's nodes;
+- the typed story (`models/story.py`, services in `core/story/`): storyline fields on the project,
+  `Character`, `CharacterRelationship`, `CharacterTimelineEvent`, `Location` and `StoryBeat` (linked
+  to acts, scenes and characters). REST, MCP and the room all write them through the same services;
+- free-form story artifacts (research, canon and reference documents);
+- the knowledge graph, for canon the typed tables don't cover (the Story twin writes characters and
+  locations to their tables instead);
+- chat threads (`ChatThread`), keyed by the AG-UI thread id;
 - the Writer twin (`writer_profile`, `writer_memory`);
 - the audit trail: proposals, workflow runs, agent runs, feedback and MCP grants, approvals and
   audit events.
@@ -92,7 +101,8 @@ Around the script:
   nested agent run.
 - **Context:** `agents/context.py` loads the Writer and Story twin briefs into every role's single
   system prompt. It is one prompt because local chat templates reject several.
-- **Workflows:** `agents/room_workflows.py` holds the eight room workflows as Temporal workflows:
+- **Workflows:** `agents/room_workflows.py` holds the eight room workflows, plus `room:chat` and
+  the `room:develop_story` pipeline, as Temporal workflows:
   - draft-critique loops (plain `while` loops) for outline and rewrite;
   - `asyncio.gather` fan-outs for arcs, brainstorm, audience panel and scene drafting;
   - single steps for coverage and continuity.
@@ -124,6 +134,11 @@ Around the script:
 - **Scope:** in-app agents hold implicit grants for the one project their run is bound to.
 - **Deletion:** a project is backed up before it is deleted. The purge discovers every
   project-scoped table from the SQLModel metadata (`core/project_lifecycle.py`).
+
+## Frontend
+
+The studio is React 19 on Vite, with react-router for pages and TanStack Query for data; live-sync
+events invalidate the affected queries. See [Frontend](frontend.md).
 
 ## Live sync
 

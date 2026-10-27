@@ -5,8 +5,11 @@ The workspace has three columns:
 - on the left, the **navigator**: your scenes with their estimated runtime, and a pacing gauge
   against the format's target length;
 - in the middle, the **page**;
-- on the right, the **context rail** (instructions, translations, snapshots, creative context) and
-  the **chat** with the room ([Chat with the room](chat.md)).
+- on the right, the **context rail** (instructions, translations, snapshots, creative context and
+  **External agent approvals**) and the **chat** with the room ([Chat with the room](chat.md)).
+
+Requests from an external agent over MCP that need your approval wait under **External agent
+approvals**: **Approve request** or **Reject** each one (see [MCP integration](mcp.md)).
 
 ## Screenplay elements
 
@@ -20,13 +23,26 @@ shot, page break, and so on. The type sits to the left of each block.
   - an all-caps name such as `EDWARD` or `WILL (V.O.)` becomes a character cue;
   - a line such as `(beat)` becomes a parenthetical;
   - `CUT TO:` or `FADE OUT.` becomes a transition.
-- To change a block's type, pick a new one and click **Review format**. The change is recorded as a
-  proposal, so formatting fixes can be reviewed and undone like any other edit.
+- To change a block's type, pick a new one from the type next to the block. The change saves at
+  once, like a text edit.
+- **＋ Add element** under the page adds a block of any type at the end of the scene.
 - Hover over a block, or focus it, to reveal its tools: move it up or down, delete it, and see who
   last wrote it. The authorship chip reads *agent* once an approved proposal wrote the block, and it
   disappears after you edit the block yourself.
 
-Fountain markup such as `**bold**` is kept as you typed it and exported as-is.
+The formatting toolbar above the page wraps the selected text in **bold**, *italic*, underline or an
+amber mark. These are stored as Fountain markup (`**bold**`, `*italic*`, `_underline_`), shown as
+you typed them, and exported as-is.
+
+## Scenes
+
+- A draft with no scenes shows **Your first scene starts here.** Type a heading such as
+  `INT. LIGHTHOUSE - NIGHT` and click **＋ Create the first scene**.
+- **＋ Add scene** in the navigator adds a scene after the selected one, in the same act.
+- The navigator's scene actions move the selected scene up or down, move it to another act, or
+  delete it. Deleting removes the scene, its blocks and its snapshots; beats and timeline events
+  that pointed at it lose the link.
+- **Continuous view** switches between one continuous page and page-by-page reading.
 
 ## Drafts
 

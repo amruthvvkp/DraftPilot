@@ -9,7 +9,7 @@
   `async_get_db()` dependency. Alembic owns the schema; nothing creates tables at startup.
 - `cache/redis.py` — shared async Redis client + JSON `cache_get`/`cache_set`.
 - `temporal.py` — lazy Temporal `Client` (`get_client`/`close_client`) and start-by-name helpers:
-  `start_job`, `start_best_effort`, `start_run(run_id)`, `cancel_run`. Workflows live in `worker/`.
+  `start_job`, `start_best_effort`, `start_run(run_id)`, `cancel_run`, `signal_run`. Workflows live in `worker/`.
 
 ## Conventions
 

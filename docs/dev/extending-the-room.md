@@ -49,12 +49,34 @@ against the committed histories in `tests/temporal_histories/`. A change that wo
 in-flight run has to go behind `workflow.patched("<change-id>")` so that old histories take the old
 path. Only re-record the histories when every run started on the old code has finished.
 
+## Add a pipeline stage
+
+`room:develop_story` (`DevelopStory` in `agents/room_workflows.py`) runs the stages listed in
+`PIPELINE_STAGES`, each gated on the writer. To add one:
+
+1. Add the stage name to `PipelineStage` and `PIPELINE_STAGES` in `agents/workflows.py`, in pipeline
+   order, plus any parameter it needs on `DevelopStoryParams`.
+2. In `DevelopStory.body`, consult the role(s) for the stage, create its proposals with an activity,
+   then `await self._checkpoint("<stage>", ids, params)`. The checkpoint waits for a
+   `proposal_decided` signal per proposal (sent by the proposals service after the writer decides)
+   and refreshes the story context, so the next stage builds only on what was approved.
+3. Put the new code behind `workflow.patched("<change-id>")` and pass the replay tests: runs already
+   waiting at a checkpoint must replay unchanged.
+
 ## Add an MCP tool
 
-Add an `@mcp.tool` in `mcp/server.py` that calls `authorize_invocation(...)` with a capability from
-`core/capabilities.py`. Mark mutating capabilities `approval_required=True` unless their result is
-only a proposal. To give in-app agents the tool, add it to `READ_TOOLS`, `PROPOSE_TOOLS` or
-`EDIT_TOOLS` in `agents/runtime.py`.
+Story and studio tools live in `mcp/studio_tools.py`; older project, screenplay and run tools are in
+`mcp/server.py`. Add an `@mcp.tool` that calls `authorize_invocation(...)` with a capability from
+`core/capabilities.py`, and call the shared service in `core/` rather than an `api.*` module. Mark
+mutating capabilities `approval_required=True` unless their result is only a proposal.
+
+- **In-app agents:** add the tool to `READ_TOOLS`, `PROPOSE_TOOLS` or `APPROVAL_TOOLS` (which feeds
+  `EDIT_TOOLS`) in `agents/runtime.py`. `tools_for_mode` maps the chat's permission modes onto these
+  sets: `chat_only` reads, `suggest` reads and proposes, `project_edit` also gets the approval-gated
+  tools, which the chat defers to an in-chat approval card.
+- **REST parity:** a new REST route must be mapped to its MCP tool (or an explicit exemption) in
+  `PARITY` in `tests/test_mcp_studio.py`; the test fails otherwise.
+- **Docs:** add the tool to the reference in [MCP integration](../mcp.md).
 
 ## Add an eval suite
 

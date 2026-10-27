@@ -14,7 +14,7 @@
 - Build with `npm run build` (runs `tsc --noEmit`, then Vite). The web process serves `dist/`.
   `compose.dev.yml` bind-mounts `dist/`, so a host build is live on :9000. `npm run dev` is the Vite
   dev server.
-- Browser tests are Python Playwright journeys in `tests/e2e`, which mock the API with `page.route`.
+- Browser tests are Python Playwright journeys in `tests/e2e`. Most mock the API with `page.route`; the `stack`-marked journeys (`test_real_stack.py`, `test_manual_journey.py`) run against a real stack. Vitest uses happy-dom; `npm run test:run` is the one-shot run.
   Give controls accessible names or roles, because tests select by them.
 - Never put secrets in the browser. Provider keys stay server-side, and the session is an HttpOnly
   cookie.

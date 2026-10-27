@@ -23,8 +23,9 @@ Tests and evals always use local LM Studio (`EVAL__BASE_URL`), never a cloud pro
 ## More providers
 
 **Settings → Add provider** stores extra profiles for LM Studio, Ollama, OpenAI, OpenRouter, any
-OpenAI-compatible gateway, Anthropic and Google Gemini. The room chat API (`/room/chat`) and room
-workflows accept a `provider_profile_id` to use one of them instead of the default.
+OpenAI-compatible gateway, Anthropic and Google Gemini. Pick one in the chat dock's provider picker to
+use it instead of the default. Over the API, room workflows take a `provider_profile_id`, and the AG-UI chat endpoint (`POST /api/v1/projects/{id}/room/chat`)
+reads it from the run's `forwardedProps`.
 
 API keys are write-only. The API only ever reports `has_api_key`, and keys are encrypted with
 `SECRETS__MASTER_KEY` before they are stored. Set a real Fernet key before creating profiles:

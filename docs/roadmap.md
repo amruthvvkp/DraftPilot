@@ -22,8 +22,8 @@ Tracking epic: [#13](https://github.com/amruthvvkp/DraftPilot/issues/13).
 - **Agent context** — instructions are layered and overridable: installation defaults, project
   instructions, artifact/outline/timeline instructions, scene instructions, and run/task
   instructions. Creative context is first-class structured data, not only prompt text.
-- **Assistant presence** — the Copilot conversation and agent rail is a persistent right-side
-  surface on every workflow page. Each turn is scoped to the current artifact/selection and can
+- **Assistant presence** — the chat dock is a persistent right-side surface on every project
+  page. Each turn is scoped to the current artifact/selection and can
   propose a typed change, ask a question, or advance a workflow decision; it never silently edits.
 - **Retrieval** — Compose includes a replaceable local-first RAG service for project-scoped
   retrieval over artifacts, screenplay chunks, references, and knowledge-graph edges. Approved
@@ -40,32 +40,33 @@ grounded in a Story twin and a Writer twin, with MCP as the one tool surface, LM
 and full manual editing. The audited status of each item and the execution order (G0–G9) are in the
 [v1 gap analysis](dev/v1-gap-analysis.md).
 
-**Status (2026-09-27).** Done: G0–G7 (security, the FastAPI host, the data backbone, the agent
-platform on MCP, hybrid RAG, both twins, the room team, eight room workflows, evals and usefulness
-measurement). G8 is mostly done: themes, vault lifecycle, streaming room chat, the Story twin page
-and editor fixes. G9 docs are in place. What's left for v1:
+**Status (2026-10-27).** G0–G11 and G14–G21 are done and in review as
+[PR 46](https://github.com/amruthvvkp/DraftPilot/pull/46); the first release follows its merge.
 
-- rich-text editing in the page (inline bold and italics, via TipTap); smart typing is done;
-- a client router and data layer;
-- a second local judge model for the evals (baselines for every suite are recorded).
+- **G0–G7** security, the FastAPI host, the data backbone, the agent platform on MCP, hybrid RAG,
+  both twins, the room team and workflows, evals and usefulness measurement.
+- **G8** themes, vault lifecycle, the Story twin page and editor fixes. Smart typing is done; the
+  client router and data layer landed in G15.
+- **G9** docs; **G10** SPA hosting on `app.frontend()`; **G11** Temporal replaces ARQ and
+  `pydantic_graph` orchestration, and Langfuse is removed (optional otel-lgtm instead).
 
-Planned after v1 (see [plan changes](dev/v1-gap-analysis.md#plan-changes-2026-09-27)):
-
-- **G10** SPA hosting on `app.frontend()`, with auth scoped to `/api`;
-- **G11** ✅ Temporal replaces ARQ and `pydantic_graph` orchestration, and Langfuse is removed (optional otel-lgtm instead);
-- **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
-- **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
-
-**v1.0 completion (#37, planned 2026-10-26).** Closes the gaps against the release goals; see
+**v1.0 completion (#37, 2026-10-26 → 10-27).** Closed the gaps against the release goals; see
 [v1.0 completion](dev/v1-gap-analysis.md#v10-completion-g14g21-37):
 
-- **G14** typed story domain (characters, character timelines, locations, beats, acts, storyline);
-- **G15** manual studio: router, data layer, guided Project → Storyline → Characters → Outline → Script;
-- **G16** full MCP surface with a REST parity test;
-- **G17** AG-UI chat on PydanticAI (threads, in-chat approvals, generative UI, one chat dock);
-- **G18** `develop_story` pipeline workflow, planner, parallel specialists;
-- **G19** packaging: `draftpilot` and `draftpilot-mcp` wheels, CLI, one image, release workflow;
-- **G20/G21** end-to-end verification and docs.
+- **G14** ✅ typed story domain (characters, character timelines, locations, beats, acts, storyline);
+- **G15** ✅ manual studio: router, data layer, guided Project → Storyline → Characters → Outline → Script;
+- **G16** ✅ full MCP surface with a REST parity test;
+- **G17** ✅ AG-UI chat on PydanticAI (threads, in-chat approvals, generative UI, one chat dock);
+- **G18** ✅ `develop_story` pipeline workflow, planner, parallel specialists;
+- **G19** ✅ packaging: `draftpilot-studio` and `draftpilot-mcp` wheels, CLI, one image, release workflow;
+- **G20** ✅ end-to-end verification on the real stack and LM Studio; **G21** ✅ docs.
+
+Still open after v1.0:
+
+- rich-text editing in the page (inline bold and italics, via TipTap);
+- a second local judge model for the evals (a judge grading its own model is lenient);
+- **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
+- **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
 
 ## Ground-test screenplay benchmark
 

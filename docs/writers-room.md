@@ -28,7 +28,7 @@ Every agent works from two "twins":
 
 - **The Story twin.** A live model of your project: its characters, their dialogue share and first
   appearance, and its locations. DraftPilot derives it from your working draft and refreshes it
-  shortly after you edit. Whatever you write into a character or location node yourself is never
+  shortly after you edit. Whatever you write into a character or location yourself is never
   overwritten.
 - **The Writer twin.** Who you are as a writer: your pen name, style notes, preferences and the
   things to avoid, plus memories you pin in **Settings**. It also learns from your decisions, such as
