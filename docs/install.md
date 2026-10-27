@@ -69,7 +69,7 @@ what an agent does appears live in the studio, and every write still waits for y
 uvx draftpilot-mcp trust mcp-stdio        # let the local client work on every project
 uvx draftpilot-mcp config claude-code     # prints: claude mcp add draftpilot -- uvx draftpilot-mcp
 uvx draftpilot-mcp config claude-desktop  # prints the JSON for claude_desktop_config.json
-uvx draftpilot-mcp tools                  # the 70 tools, 6 prompts and resources
+uvx draftpilot-mcp tools                  # the 71 tools, 6 prompts and resources
 ```
 
 See [MCP integration](mcp.md) for the tools, the guided prompts and how approvals work.

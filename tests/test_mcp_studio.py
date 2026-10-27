@@ -125,6 +125,7 @@ PARITY: dict[str, str] = {
     "PATCH /projects/{project_id}/scenes/{scene_id}": "update_scene",
     "POST /projects/{project_id}/scenes/{scene_id}/blocks": "create_block",
     "PUT /projects/{project_id}/scenes/{scene_id}/blocks/order": "reorder_blocks",
+    "PUT /projects/{project_id}/scenes/{scene_id}/content": "write_scene_content",
     "PATCH /projects/{project_id}/scenes/{scene_id}/blocks/{block_id}": "update_block",
     "DELETE /projects/{project_id}/scenes/{scene_id}/blocks/{block_id}": "delete_block",
     "GET /projects/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations": "read_dialogue_translations",
@@ -303,6 +304,35 @@ def test_an_external_agent_develops_a_screenplay_end_to_end(studio: AsyncSession
             assert {"develop_storyline", "develop_characters", "build_outline", "draft_script", "review_script"} <= prompts
             characters = await client.read_resource(f"draftpilot://projects/{pid}/characters")
             assert "Edward" in str(characters)
+
+    run_async(scenario())
+
+
+def test_an_external_agent_saves_a_scene_in_one_batched_write(studio: AsyncSession) -> None:
+    """``write_scene_content`` mirrors the REST content route: one approval, one version bump, agent origin."""
+
+    async def scenario() -> None:
+        """Create a scene, then rewrite its blocks through the batched tool."""
+        from draftpilot.core.screenplay.hydrate import blocks_for_scene
+
+        async with Client(server.mcp) as client:
+            dp = Studio(client, studio)
+            pid = (await dp.call("create_project", title="The River"))["id"]
+            scene = await dp.call("create_scene", project_id=pid, heading="EXT. RIVER - DAY", fountain="Edward wades in.\n\nEDWARD\nThe fish waits.")
+            first, *_, second = await blocks_for_scene(studio, scene["id"])
+            result = await dp.call(
+                "write_scene_content",
+                project_id=pid,
+                scene_id=scene["id"],
+                heading="EXT. RIVER - NIGHT",
+                blocks=[{"id": second.id, "text": "The fish waits, patient."}, {"element_type": "transition", "text": "CUT TO:"}],
+                expected_version=scene["version"],
+            )
+            assert result["version"] == scene["version"] + 1 and len(result["created_ids"]) == 1
+            assert result["block_ids"] == [second.id, result["created_ids"][0]]
+            blocks = await blocks_for_scene(studio, scene["id"])
+            assert [(block.text, block.origin) for block in blocks] == [("The fish waits, patient.", "agent"), ("CUT TO:", "agent")]
+            assert first.id not in {block.id for block in blocks}
 
     run_async(scenario())
 

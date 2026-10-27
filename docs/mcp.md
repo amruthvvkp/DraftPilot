@@ -65,8 +65,10 @@ A typical session:
 4. Outline: `create_act` / `update_act` / `delete_act`, beats via `kind="beat"`, or a whole outline at
    once with `propose_outline`; read it with `read_outline` (acts → beats → scene headings).
 5. Script: `create_scene(heading, fountain=...)`, `write_scene` (replace a scene from Fountain),
-   `move_scene`, `delete_scene`, and block-level `create_block` / `update_block` / `delete_block` /
-   `reorder_blocks`; read with `read_screenplay_scenes`.
+   `write_scene_content` (save a scene's blocks in one write: blocks that keep their `id` are
+   updated, blocks without one are created, missing ones are deleted, and the scene version bumps
+   once), `move_scene`, `delete_scene`, and block-level `create_block` / `update_block` /
+   `delete_block` / `reorder_blocks`; read with `read_screenplay_scenes`.
 6. Review: `snapshot_scene`, `diff_scene_revisions`, `restore_scene_revision`; `start_room_workflow`
    for coverage, continuity, rewrites and the audience panel; `render_screenplay_export`.
 
@@ -79,7 +81,7 @@ changed the target since.
 |---|---|
 | Projects | `list_projects`, `create_project`, `update_project`, `duplicate_project`, `delete_project`, `write_reference`, `read_project_overview` |
 | Story | `read_storyline`, `read_story_context`, `list_story_entities`, `read_character`, `read_outline`, `create_story_entity`, `update_story_entity`, `delete_story_entity`, `propose_story_change`, `propose_outline`, `apply_story_operation`, `read_project_artifacts`, `write_artifact` |
-| Structure and script | `create_act`, `update_act`, `delete_act`, `create_scene`, `write_scene`, `update_scene`, `move_scene`, `delete_scene`, `create_block`, `update_block`, `delete_block`, `reorder_blocks`, `read_screenplay_scenes`, `read_dialogue_translations`, `propose_dialogue_translation` |
+| Structure and script | `create_act`, `update_act`, `delete_act`, `create_scene`, `write_scene`, `write_scene_content`, `update_scene`, `move_scene`, `delete_scene`, `create_block`, `update_block`, `delete_block`, `reorder_blocks`, `read_screenplay_scenes`, `read_dialogue_translations`, `propose_dialogue_translation` |
 | Proposals | `list_proposals`, `propose_screenplay_change`, `review_screenplay_proposal`, `reject_proposal`, `propose_timeline_reorder`, `review_timeline_proposal`, `reject_timeline_proposal` |
 | Revisions, import and export | `snapshot_scene`, `read_scene_revisions`, `diff_scene_revisions`, `restore_scene_revision`, `import_screenplay`, `render_screenplay_export`, `create_screenplay_export`, `list_project_backups`, `create_project_backup`, `restore_project_backup` |
 | Canon, twins and search | `read_story_twin`, `refresh_story_twin_now`, `write_canon_node`, `write_canon_edge`, `read_writer_twin`, `update_writer_profile`, `remember_writer_preference`, `retrieve_project_context`, `reindex_project_search` |

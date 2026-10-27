@@ -165,6 +165,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `PATCH` | `/projects/{project_id}/scenes/{scene_id}/blocks/{block_id}` | Update a semantic screenplay block with optimistic concurrency. | `BlockUpdate` | 200 `BlockRead` |
 | `GET` | `/projects/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations` | List linked translations for a dialogue block within its project. |  | 200 list of `DialogueTranslationRead` |
 | `PUT` | `/projects/{project_id}/scenes/{scene_id}/blocks/{block_id}/translations/{language}` | Save a dialogue variant while preserving the authoritative source block. | `TranslationInput` | 200 `DialogueTranslationRead` |
+| `PUT` | `/projects/{project_id}/scenes/{scene_id}/content` | Save a scene's heading and every block in one write: keep, create, delete and renumber. | `SceneContent` | 200 `SceneContentResult` |
 | `POST` | `/projects/{project_id}/scenes/{scene_id}/move` | Move a scene within its act or to another act of the same draft. | `SceneMove` | 200 `SceneRead` |
 | `GET` | `/projects/{project_id}/scenes/{scene_id}/revisions` | List revisions only when the scene belongs to the requested project. |  | 200 list of `SceneRevisionRead` |
 | `POST` | `/projects/{project_id}/scenes/{scene_id}/revisions` | Capture an immutable scene snapshot for diff, rollback, or naming. |  | 201 `SceneRevisionDetail` |

@@ -97,6 +97,7 @@ APPROVAL_TOOLS = frozenset(
         "delete_act",
         "create_scene",
         "write_scene",
+        "write_scene_content",
         "update_scene",
         "move_scene",
         "delete_scene",
