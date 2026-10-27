@@ -17,6 +17,12 @@ import OutlinePage from './project/OutlinePage'
 import ProjectLayout from './project/ProjectLayout'
 import StorylinePage from './project/StorylinePage'
 import { useProjectId } from './project/useProjectId'
+import CorkboardPage from './visuals/Corkboard'
+import PacingHeatmapPage from './visuals/PacingHeatmap'
+import RelationshipGraphPage from './visuals/RelationshipGraph'
+import StructureTemplatesPage from './visuals/StructureTemplates'
+import TensionCurvePage from './visuals/TensionCurve'
+import VisualsLayout from './visuals/VisualsLayout'
 
 /** Render a page that takes `projectId` as a prop, remounting it when the project changes. */
 function withProject(Page: ComponentType<{ projectId: number }>) {
@@ -66,6 +72,15 @@ export function AppRoutes() {
       <Route path="context" element={<GraphPage />} />
       <Route path="room" element={<RoomPage />} />
       <Route path="twin" element={<TwinPage />} />
+      <Route path="visuals" element={<VisualsLayout />}>
+        <Route index element={<Navigate to="tension" replace />} />
+        <Route path="tension" element={<TensionCurvePage />} />
+        <Route path="relationships" element={<RelationshipGraphPage />} />
+        <Route path="corkboard" element={<CorkboardPage />} />
+        <Route path="structure" element={<StructureTemplatesPage />} />
+        <Route path="pacing" element={<PacingHeatmapPage />} />
+        <Route path="*" element={<Navigate to="tension" replace />} />
+      </Route>
       <Route path="*" element={<ProjectHome />} />
     </Route>
     <Route path="*" element={<ProjectVault />} />

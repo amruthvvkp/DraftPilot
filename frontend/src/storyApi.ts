@@ -43,6 +43,22 @@ export type StorylineFields = Partial<Omit<Storyline, 'project_id' | 'version'>>
 
 export type Act = { id: number; screenplay_id: number; title: string | null; position: number }
 
+/** What the visual tools draw: one draft's scenes in narrative order, beat milestones and the cast graph. */
+export type StoryVisuals = {
+  screenplay_id: number
+  total_runtime_seconds: number
+  acts: { id: number; title: string; position: number }[]
+  scenes: VisualScene[]
+  milestones: { beat_id: number; title: string; beat_type: string; act_id: number | null; scene_id: number | null; scene_index: number | null }[]
+  characters: { id: number; name: string; role: string; moment_count: number }[]
+  edges: VisualEdge[]
+}
+export type VisualScene = {
+  id: number; act_id: number; index: number; heading: string
+  runtime_seconds: number; start_seconds: number; intensity: number | null; event_count: number; character_ids: number[]
+}
+export type VisualEdge = { source: number; target: number; shared_moments: number; shared_scenes: number; relations: string[] }
+
 const base = (projectId: number) => `/api/v1/projects/${projectId}`
 const versioned = (version: number) => ({ 'If-Match': String(version) })
 
@@ -62,6 +78,9 @@ function remove(projectId: number, collection: Collection, id: number, version: 
 }
 
 export const storyApi = {
+  visuals: (projectId: number, screenplayId: number | null = null) =>
+    request<StoryVisuals>(`${base(projectId)}/visuals${screenplayId ? `?screenplay_id=${screenplayId}` : ''}`),
+
   storyline: (projectId: number) => request<Storyline>(`${base(projectId)}/storyline`),
   updateStoryline: (projectId: number, version: number, fields: StorylineFields) =>
     request<Storyline>(base(projectId), { method: 'PATCH', headers: versioned(version), body: JSON.stringify(fields) }),
