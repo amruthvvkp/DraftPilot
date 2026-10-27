@@ -5,11 +5,10 @@ from types import SimpleNamespace
 from typing import Any
 
 from _async import run_async
+from pydantic_evals.evaluators.common import OutputConfig
 
 from draftpilot.core import rag_client
 from draftpilot.core.db import session_scope
-from pydantic_evals.evaluators.common import OutputConfig
-
 from draftpilot.evals.baseline import _assertion_rate, agreement, compare, notes, save
 from draftpilot.evals.evaluators import (
     SECOND_JUDGE,
