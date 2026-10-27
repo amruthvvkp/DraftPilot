@@ -234,12 +234,20 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `POST` | `/projects/{project_id}/locations` | Create a location. | `LocationCreate` | 201 `LocationRead` |
 | `DELETE` | `/projects/{project_id}/locations/{location_id}` | Delete a location. |  | 204 |
 | `PATCH` | `/projects/{project_id}/locations/{location_id}` | Update a location with optimistic concurrency. | `LocationUpdate` | 200 `LocationRead` |
+| `GET` | `/projects/{project_id}/moments` | List shared story moments in story-world order (undated ones last). |  | 200 list of `StoryMomentRead` |
+| `POST` | `/projects/{project_id}/moments` | Create a moment several characters share; link their events to it with ``moment_id``. | `StoryMomentCreate` | 201 `StoryMomentRead` |
+| `DELETE` | `/projects/{project_id}/moments/{moment_id}` | Delete a shared moment; its participants' events stay, unlinked. |  | 204 |
+| `PATCH` | `/projects/{project_id}/moments/{moment_id}` | Update a shared moment with optimistic concurrency. | `StoryMomentUpdate` | 200 `StoryMomentRead` |
+| `GET` | `/projects/{project_id}/narrative-variants` | List saved narrative orders. |  | 200 list of `NarrativeVariantRead` |
+| `POST` | `/projects/{project_id}/narrative-variants` | Save a named scene order without applying it. | `NarrativeVariantCreate` | 201 `NarrativeVariantRead` |
+| `DELETE` | `/projects/{project_id}/narrative-variants/{variant_id}` | Delete a narrative variant. |  | 204 |
+| `PATCH` | `/projects/{project_id}/narrative-variants/{variant_id}` | Rename or reorder a narrative variant with optimistic concurrency. | `NarrativeVariantUpdate` | 200 `NarrativeVariantRead` |
 | `GET` | `/projects/{project_id}/relationships` | List character relationships, optionally those touching one character. |  | 200 list of `CharacterRelationshipRead` |
 | `POST` | `/projects/{project_id}/relationships` | Relate two characters. | `CharacterRelationshipCreate` | 201 `CharacterRelationshipRead` |
 | `DELETE` | `/projects/{project_id}/relationships/{relationship_id}` | Delete a relationship. |  | 204 |
 | `PATCH` | `/projects/{project_id}/relationships/{relationship_id}` | Update a relationship with optimistic concurrency. | `CharacterRelationshipUpdate` | 200 `CharacterRelationshipRead` |
 | `GET` | `/projects/{project_id}/storyline` | Return the project's logline, premise, synopsis, theme, tone and outline text. |  | 200 `object` |
-| `GET` | `/projects/{project_id}/timeline-events` | List character timeline events, optionally for one character. |  | 200 list of `CharacterTimelineEventRead` |
+| `GET` | `/projects/{project_id}/timeline-events` | List character timeline events, optionally for one character or one shared moment. |  | 200 list of `CharacterTimelineEventRead` |
 | `POST` | `/projects/{project_id}/timeline-events` | Add an event to a character's timeline. | `CharacterTimelineEventCreate` | 201 `CharacterTimelineEventRead` |
 | `DELETE` | `/projects/{project_id}/timeline-events/{event_id}` | Delete a timeline event. |  | 204 |
 | `PATCH` | `/projects/{project_id}/timeline-events/{event_id}` | Update a timeline event with optimistic concurrency. | `CharacterTimelineEventUpdate` | 200 `CharacterTimelineEventRead` |

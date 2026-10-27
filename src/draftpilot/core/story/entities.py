@@ -1,6 +1,7 @@
 """One service for every typed story entity, shared by REST, MCP, proposals and the room.
 
-Each kind (character, relationship, timeline event, location, beat) is described once in
+Each kind (character, relationship, timeline event, location, beat, shared moment, narrative
+variant) is described once in
 ``KINDS``; create/update/delete validate project scope and cross references, enforce optimistic
 concurrency, publish a live-sync event and refresh the RAG index.
 """
@@ -34,12 +35,20 @@ from draftpilot.models import (
     LocationCreate,
     LocationRead,
     LocationUpdate,
+    NarrativeVariant,
+    NarrativeVariantCreate,
+    NarrativeVariantRead,
+    NarrativeVariantUpdate,
     Scene,
     Screenplay,
     StoryBeat,
     StoryBeatCreate,
     StoryBeatRead,
     StoryBeatUpdate,
+    StoryMoment,
+    StoryMomentCreate,
+    StoryMomentRead,
+    StoryMomentUpdate,
 )
 
 
@@ -83,8 +92,20 @@ def _event_text(row: Any) -> str:
         ("When", row.story_time),
         ("What happens", row.description),
         ("Objective", row.objective),
+        ("Motivation", row.motivation),
         ("Emotional state", row.emotional_state),
+        ("History", row.history),
     )
+
+
+def _moment_text(row: Any) -> str:
+    """Render a shared story moment as retrieval text."""
+    return _lines(("Shared moment", row.title), ("When", row.story_time), ("What happens", row.summary))
+
+
+def _variant_text(row: Any) -> str:
+    """Render a narrative variant as retrieval text."""
+    return _lines(("Narrative variant", row.name), ("Scenes", len(row.scene_ids)))
 
 
 def _relationship_text(row: Any) -> str:
@@ -133,6 +154,19 @@ KINDS: dict[str, EntityKind] = {
         ),
         EntityKind("location", "Location", Location, LocationCreate, LocationUpdate, LocationRead, _location_text, ("position", "id"), True),
         EntityKind("beat", "Beat", StoryBeat, StoryBeatCreate, StoryBeatUpdate, StoryBeatRead, _beat_text, ("position", "id")),
+        EntityKind(
+            "moment", "Moment", StoryMoment, StoryMomentCreate, StoryMomentUpdate, StoryMomentRead, _moment_text, ("chrono_index", "id")
+        ),
+        EntityKind(
+            "variant",
+            "Narrative variant",
+            NarrativeVariant,
+            NarrativeVariantCreate,
+            NarrativeVariantUpdate,
+            NarrativeVariantRead,
+            _variant_text,
+            ("id",),
+        ),
     )
 }
 
@@ -151,7 +185,7 @@ def to_read(kind: EntityKind, row: Any) -> dict[str, Any]:
 
 
 async def list_entities(
-    session: AsyncSession, project_id: int, kind_name: str, *, character_id: int | None = None
+    session: AsyncSession, project_id: int, kind_name: str, *, character_id: int | None = None, moment_id: int | None = None
 ) -> list[Any]:
     """Return a project's entities of one kind in display order."""
     kind = entity_kind(kind_name)
@@ -159,12 +193,14 @@ async def list_entities(
     query = select(model).where(model.project_id == project_id)
     if character_id is not None and kind.name == "timeline_event":
         query = query.where(model.character_id == character_id)
+    if moment_id is not None and kind.name == "timeline_event":
+        query = query.where(model.moment_id == moment_id)
     if character_id is not None and kind.name == "relationship":
         query = query.where(
             (col(model.source_character_id) == character_id) | (col(model.target_character_id) == character_id)
         )
     for field_name in kind.order:
-        query = query.order_by(col(getattr(model, field_name)))
+        query = query.order_by(col(getattr(model, field_name)).asc().nulls_last())
     return list((await session.exec(query)).all())
 
 
@@ -205,11 +241,12 @@ _REFERENCES: dict[str, tuple[Any, str]] = {
     "scene_id": (Scene, "Scene"),
     "beat_id": (StoryBeat, "Beat"),
     "act_id": (Act, "Act"),
+    "moment_id": (StoryMoment, "Moment"),
 }
 _LIST_REFERENCES: dict[str, tuple[Any, str]] = {"scene_ids": (Scene, "Scene"), "character_ids": (Character, "Character")}
 
 
-async def _validate_references(session: AsyncSession, project_id: int, values: dict[str, Any]) -> None:
+async def _validate_references(session: AsyncSession, project_id: int, values: dict[str, Any], kind_name: str = "") -> None:
     """Reject references to rows outside the project."""
     for field_name, (model, label) in _REFERENCES.items():
         value = values.get(field_name)
@@ -223,6 +260,9 @@ async def _validate_references(session: AsyncSession, project_id: int, values: d
         "target_character_id"
     ):
         raise Invalid("A relationship needs two different characters")
+    scene_ids = values.get("scene_ids")
+    if kind_name == "variant" and scene_ids is not None and len(set(scene_ids)) != len(scene_ids):
+        raise Invalid("A narrative variant lists each scene once")
 
 
 def validate_input(schema: type[BaseModel], data: BaseModel | dict[str, Any]) -> BaseModel:
@@ -260,7 +300,7 @@ async def create_entity(
     kind = entity_kind(kind_name)
     parsed = validate_input(kind.create, data)
     values = parsed.model_dump()
-    await _validate_references(session, project_id, values)
+    await _validate_references(session, project_id, values, kind.name)
     model: Any = kind.model
     if "position" in values and not isinstance(values.get("position"), int):
         values["position"] = 0
@@ -292,7 +332,7 @@ async def update_entity(
     row = await get_entity(session, project_id, kind_name, entity_id)
     check_version(expected_version, row.version, kind.label, required=require_version)
     changes = validate_input(kind.update, data).model_dump(exclude_unset=True)
-    await _validate_references(session, project_id, changes)
+    await _validate_references(session, project_id, changes, kind.name)
     for key, value in changes.items():
         setattr(row, key, value)
     if kind.writer_edit_flag and source == "writer":
@@ -327,6 +367,12 @@ async def delete_entity(
                 beat.character_ids = [item for item in beat.character_ids if item != entity_id]
                 beat.version += 1
                 session.add(beat)
+    if kind.name == "moment":
+        # Each participant keeps their event; it just stops being part of the shared moment.
+        for event in (await session.exec(select(CharacterTimelineEvent).where(CharacterTimelineEvent.moment_id == entity_id))).all():
+            event.moment_id = None
+            event.version += 1
+            session.add(event)
     await session.delete(row)
     await session.commit()
     await _after_change(project_id, kind, row, "deleted")

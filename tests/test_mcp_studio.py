@@ -96,7 +96,15 @@ PARITY: dict[str, str] = {
     "GET /projects/{project_id}/mcp-approvals": EXEMPT + ": only the writer decides approvals",
     "POST /projects/{project_id}/mcp-approvals/{approval_id}/approve": EXEMPT + ": only the writer decides approvals",
     "POST /projects/{project_id}/mcp-approvals/{approval_id}/reject": EXEMPT + ": only the writer decides approvals",
+    "GET /projects/{project_id}/moments": "list_story_entities",
+    "POST /projects/{project_id}/moments": "create_story_entity",
+    "PATCH /projects/{project_id}/moments/{moment_id}": "update_story_entity",
+    "DELETE /projects/{project_id}/moments/{moment_id}": "delete_story_entity",
     "GET /projects/{project_id}/monty-executions": "read_monty_executions",
+    "GET /projects/{project_id}/narrative-variants": "list_story_entities",
+    "POST /projects/{project_id}/narrative-variants": "create_story_entity",
+    "PATCH /projects/{project_id}/narrative-variants/{variant_id}": "update_story_entity",
+    "DELETE /projects/{project_id}/narrative-variants/{variant_id}": "delete_story_entity",
     "POST /projects/{project_id}/rag/reindex": "reindex_project_search",
     "GET /projects/{project_id}/rag/search": "retrieve_project_context",
     "GET /projects/{project_id}/rag/stats": EXEMPT + ": operator diagnostics",
@@ -333,6 +341,37 @@ def test_an_external_agent_saves_a_scene_in_one_batched_write(studio: AsyncSessi
             blocks = await blocks_for_scene(studio, scene["id"])
             assert [(block.text, block.origin) for block in blocks] == [("The fish waits, patient.", "agent"), ("CUT TO:", "agent")]
             assert first.id not in {block.id for block in blocks}
+
+    run_async(scenario())
+
+
+def test_an_external_agent_maps_a_shared_moment(studio: AsyncSession) -> None:
+    """Moments, the new event fields and variants work over MCP; agents may propose moments but not variants."""
+
+    async def scenario() -> None:
+        """Create a moment, link two characters' events to it, then propose another moment."""
+        async with Client(server.mcp) as client:
+            dp = Studio(client, studio)
+            pid = (await dp.call("create_project", title="The River"))["id"]
+            scene = await dp.call("create_scene", project_id=pid, heading="EXT. RIVER - DAY", fountain="Edward wades in.")
+            edward = await dp.call("create_story_entity", project_id=pid, kind="character", fields={"name": "Edward"})
+            will = await dp.call("create_story_entity", project_id=pid, kind="character", fields={"name": "Will"})
+            moment = await dp.call("create_story_entity", project_id=pid, kind="moment", fields={"title": "The river", "chrono_index": 3, "scene_id": scene["id"]})
+            for character, intensity in ((edward, 5), (will, -4)):
+                fields = {"character_id": character["id"], "title": "At the river", "intensity": intensity, "motivation": "Love", "moment_id": moment["id"]}
+                await dp.call("create_story_entity", project_id=pid, kind="timeline_event", fields=fields)
+            lanes = _result(await dp.call("list_story_entities", project_id=pid, kind="timeline_event", moment_id=moment["id"]))
+            assert sorted(item["intensity"] for item in lanes) == [-4, 5]
+            edited = await dp.call("update_story_entity", project_id=pid, kind="moment", entity_id=moment["id"], fields={"story_time": "1987"}, expected_version=1)
+            assert edited["version"] == 2
+            variant = await dp.call("create_story_entity", project_id=pid, kind="variant", fields={"name": "As shot", "scene_ids": [scene["id"]]})
+            assert _result(await dp.call("list_story_entities", project_id=pid, kind="variant"))[0]["id"] == variant["id"]
+            proposal = await dp.call("propose_story_change", project_id=pid, kind="moment", action="create", fields={"title": "The funeral"})
+            assert proposal["target_kind"] == "moment" and proposal["status"] == "proposed"
+            with pytest.raises(ToolError):
+                await dp.call("propose_story_change", project_id=pid, kind="variant", action="create", fields={"name": "Mine"})
+            await dp.call("delete_story_entity", project_id=pid, kind="moment", entity_id=moment["id"], expected_version=2)
+            assert _result(await dp.call("list_story_entities", project_id=pid, kind="moment")) == []
 
     run_async(scenario())
 

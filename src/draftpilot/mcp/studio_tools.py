@@ -55,8 +55,8 @@ from draftpilot.models import (
     WriterMemory,
 )
 
-EntityKind = Literal["character", "relationship", "timeline_event", "location", "beat"]
-ProposalKind = Literal["character", "relationship", "timeline_event", "location", "beat", "storyline"]
+EntityKind = Literal["character", "relationship", "timeline_event", "location", "beat", "moment", "variant"]
+ProposalKind = Literal["character", "relationship", "timeline_event", "location", "beat", "moment", "storyline"]
 READ = {"read_only_hint": True}
 WRITE = {"destructive_hint": False}
 DESTRUCTIVE = {"destructive_hint": True}
@@ -197,10 +197,12 @@ async def read_storyline(project_id: int, ctx: Context) -> dict[str, object]:
 
 
 @mcp.tool(annotations=READ, tags={"story"})
-async def list_story_entities(project_id: int, kind: EntityKind, ctx: Context, character_id: int | None = None) -> list[dict[str, object]]:
-    """List characters, relationships, timeline events (optionally one character's), locations or beats."""
+async def list_story_entities(
+    project_id: int, kind: EntityKind, ctx: Context, character_id: int | None = None, moment_id: int | None = None
+) -> list[dict[str, object]]:
+    """List characters, relationships, timeline events (one character's, or one moment's participants), locations, beats, shared moments or narrative variants."""
     async with authorized(ctx, project_id, "story.read", "read", {"kind": kind}) as session:
-        rows = await entities.list_entities(session, project_id, kind, character_id=character_id)
+        rows = await entities.list_entities(session, project_id, kind, character_id=character_id, moment_id=moment_id)
         return _bounded([_entity(kind, row) for row in rows])
 
 
@@ -256,7 +258,7 @@ async def read_story_context(project_id: int, ctx: Context) -> dict[str, str]:
 async def create_story_entity(
     project_id: int, kind: EntityKind, fields: dict[str, Any], ctx: Context, approval_id: int | None = None
 ) -> dict[str, object]:
-    """Create a character, relationship, timeline event, location or beat (fields as in list_story_entities)."""
+    """Create a character, relationship, timeline event, location, beat, shared moment or narrative variant (fields as in list_story_entities)."""
     arguments = {"project_id": project_id, "kind": kind, "fields": fields}
     async with authorized(ctx, project_id, "story.write", "create", {"kind": kind}, approval_id=approval_id, arguments=arguments) as session:
         return _entity(kind, await entities.create_entity(session, project_id, kind, fields, source="agent"))
@@ -293,7 +295,7 @@ async def propose_story_change(
     entity_id: int | None = None,
     summary: str = "",
 ) -> dict[str, object]:
-    """Queue a story change for the writer to approve: create/update/delete an entity, or update the storyline."""
+    """Queue a story change for the writer to approve: create/update/delete an entity (a shared moment too), or update the storyline."""
     async with authorized(ctx, project_id, "story.propose", "propose", {"kind": kind, "action": action}) as session:
         proposal = await queue_story_change(session, project_id, kind, action, fields, entity_id=entity_id, summary=summary)
         return _dump(AgentProposalRead, proposal)
