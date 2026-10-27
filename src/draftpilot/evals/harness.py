@@ -23,6 +23,7 @@ from draftpilot.core.screenplay.adapters.fountain import parse_fountain
 from draftpilot.core.screenplay.hydrate import save_screenplay_doc
 from draftpilot.core.twins import refresh_story_twin
 from draftpilot.crud import scenes as scenes_crud
+from draftpilot.evals.evaluators import Judges
 from draftpilot.models import Project, Scene, Screenplay
 
 BIG_FISH = Path(__file__).resolve().parents[3] / "tests" / "test_screenplays" / "Big-Fish.fountain"
@@ -58,11 +59,16 @@ def eval_llm(model: str = "") -> LLMSettings:
     return LLMSettings(provider="lm_studio", base_url=settings.eval.base_url, model=model or settings.eval.chat_model or "auto")
 
 
-async def eval_models() -> tuple[Any, str, Any, str]:
-    """Return the chat model and the judge model, both on local LM Studio."""
+async def eval_models() -> tuple[Any, str, Judges]:
+    """Return the chat model and the judges (a second one when ``EVAL__SECOND_JUDGE_MODEL`` is set), all on LM Studio."""
     chat, chat_name = await build_chat_model(eval_llm())
     judge, judge_name = await build_chat_model(eval_llm(settings.eval.judge_model))
-    return chat, chat_name, judge, judge_name
+    if not settings.eval.second_judge_model:
+        return chat, chat_name, Judges(judge, judge_name)
+    second, second_name = await build_chat_model(eval_llm(settings.eval.second_judge_model))
+    if second_name == judge_name:
+        raise ValueError(f"EVAL__SECOND_JUDGE_MODEL must differ from the judge ({judge_name}) to give a second opinion")
+    return chat, chat_name, Judges(judge, judge_name, second, second_name)
 
 
 @asynccontextmanager
