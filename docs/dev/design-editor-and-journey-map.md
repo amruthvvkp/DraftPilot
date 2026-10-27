@@ -1,8 +1,9 @@
 # Design: single-document editor and character journey map
 
 !!! info "Status"
-    Agreed 2026-10-27; see [Decisions](#decisions). Nothing here is built yet. The work is tracked
-    in the epic and issues listed in [Delivery](#delivery), under the v1.2 milestone.
+    Agreed 2026-10-27; see [Decisions](#decisions). The work is tracked in the epic and issues listed
+    in [Delivery](#delivery), under the v1.2 milestone. Part 1 is built behind *Settings → Editor:
+    Document* (#54, #56); Part 2 is not built yet.
 
 Two changes make DraftPilot easier to use without agents, while keeping it agent-first:
 

@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import Locator, Page, expect
 
 pytestmark = pytest.mark.stack
 BIG_FISH = Path(__file__).parents[1] / "test_screenplays" / "Big-Fish.fountain"
@@ -51,9 +51,24 @@ def signed_in(page: Page, base_url: str) -> Iterator[Page]:
             page.request.post(f"{base_url}/api/v1/projects/deleted/{deleted['project_id']}/dismiss")
 
 
-def test_big_fish_from_import_to_cleanup(signed_in: Page, base_url: str) -> None:
+def _replace_text(box: Locator, text: str) -> None:
+    """Select a Document-editor element's whole text and type over it."""
+    box.click()
+    box.evaluate("el => { const range = document.createRange(); range.selectNodeContents(el); const selection = getSelection(); selection.removeAllRanges(); selection.addRange(range) }")
+    box.page.keyboard.type(text)
+
+
+def _saved(page: Page) -> None:
+    """Wait for the Document editor to report every change saved."""
+    expect(page.get_by_role("status", name="Save status")).to_have_text("All changes saved", timeout=30_000)
+
+
+@pytest.mark.parametrize("editor", ["classic", "document"])
+def test_big_fish_from_import_to_cleanup(signed_in: Page, base_url: str, editor: str) -> None:
     """Import Big Fish, edit it, see the Story twin, open the room, export, duplicate and delete."""
     page = signed_in
+    page.add_init_script(f"localStorage.setItem('draftpilot:editor', '{editor}')")
+    document = editor == "document"
     project = page.request.post(f"{base_url}/api/v1/projects", data={"title": "Smoke · Big Fish", "genres": ["Drama"]}).json()
     page.goto(f"{base_url}/projects/{project['id']}")
 
@@ -64,20 +79,34 @@ def test_big_fish_from_import_to_cleanup(signed_in: Page, base_url: str) -> None
     expect(page.get_by_text("This is a Southern story", exact=False)).to_be_visible(timeout=30_000)
 
     # Edit the opening action line; it saves and survives a reload.
-    editor = page.get_by_label("Edit action").first
-    editor.fill("This is a Southern story, full of lies and fabrications. (smoke edit)")
-    editor.blur()
-    page.wait_for_timeout(1500)
+    edit = "This is a Southern story, full of lies and fabrications. (smoke edit)"
+    if document:
+        _replace_text(page.get_by_role("textbox", name="Action 1", exact=True), edit)
+        _saved(page)
+    else:
+        first = page.get_by_label("Edit action").first
+        first.fill(edit)
+        first.blur()
+        page.wait_for_timeout(1500)
     page.reload()
     _open_imported_draft(page)
     expect(page.get_by_text("(smoke edit)", exact=False)).to_be_visible(timeout=30_000)
-    expect(page.get_by_role("separator", name="Page break").first).to_be_visible()
+    if document:
+        expect(page.get_by_role("textbox", name="Page break 1", exact=True)).to_be_attached()
+    else:
+        expect(page.get_by_role("separator", name="Page break").first).to_be_visible()
 
-    # Smart typing: an action line that reads as a transition becomes one when you leave it.
-    second = page.get_by_label("Edit action").nth(1)
-    second.fill("FADE OUT.")
-    second.blur()
-    expect(page.get_by_label("Edit transition").first).to_have_value("FADE OUT.", timeout=30_000)
+    # Smart typing: an action line that reads as a transition becomes one (on leaving it, or on Enter).
+    if document:
+        _replace_text(page.get_by_role("textbox", name="Action 2", exact=True), "FADE OUT.")
+        page.keyboard.press("Enter")
+        _saved(page)
+        expect(page.locator(".script-el.transition", has_text="FADE OUT.").first).to_be_visible()
+    else:
+        second = page.get_by_label("Edit action").nth(1)
+        second.fill("FADE OUT.")
+        second.blur()
+        expect(page.get_by_label("Edit transition").first).to_have_value("FADE OUT.", timeout=30_000)
 
     # The Story twin knows the cast (refresh derives it now rather than waiting for the debounce).
     page.get_by_role("navigation", name="Project tools").get_by_role("link", name="Story twin").click()

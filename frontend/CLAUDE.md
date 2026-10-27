@@ -10,6 +10,10 @@
   is `src/storyApi.ts`.
 - `src/api.ts` is the typed fetch client. Every call goes through `request()`, which sends
   same-origin credentials and turns API errors into `ApiError(status, detail)`.
+- The Document script editor (Settings → Editor) is TipTap in `src/document/`: `schema.ts` (nodes),
+  `fountain.ts`/`convert.ts` (markup ↔ marks, workspace ↔ doc), `behaviour.ts` (typing rules, block
+  ids), `sync.ts` (debounced saves, live sync, conflicts), `overlay.ts` (names, proposals). It loads
+  lazily from `Workspace.tsx`; keep `useEditor` in the memoised `EditorHost` (re-renders race typing).
 - Styles are plain CSS in `src/*.css`. Static assets and favicons live in `public/`.
 - Build with `npm run build` (runs `tsc --noEmit`, then Vite). The web process serves `dist/`.
   `compose.dev.yml` bind-mounts `dist/`, so a host build is live on :9000. `npm run dev` is the Vite
