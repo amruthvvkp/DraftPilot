@@ -32,6 +32,8 @@ the target with the `EVAL__` settings:
 - `EVAL__BASE_URL` defaults to `http://localhost:1234/v1`.
 - `EVAL__CHAT_MODEL`, `EVAL__JUDGE_MODEL` and `EVAL__EMBEDDING_MODEL` pick the models. When they're
   empty, the first *loaded* model reported by `/api/v0/models` is used.
+- `EVAL__SECOND_JUDGE_MODEL` adds an optional second judge to the evals; see
+  [Evals](evals.md#a-second-judge).
 
 If LM Studio isn't reachable, the `lmstudio` fixture fails with a clear message instead of skipping.
 Install the browser once with `uv run playwright install chromium`, and again after any Playwright

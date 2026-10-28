@@ -241,6 +241,8 @@ class EvalSettings(BaseSettings):
     base_url: str = "http://localhost:1234/v1"
     chat_model: str = ""
     judge_model: str = ""
+    # A second LM Studio model that grades alongside the judge; empty means one judge.
+    second_judge_model: str = ""
     embedding_model: str = ""
 
 

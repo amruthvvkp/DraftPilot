@@ -54,12 +54,45 @@ retrieval index built from LM Studio embeddings. Evals never touch your stack:
 Evals use the `EVAL__` settings, which are the same ones as [testing](testing.md) Tier 1:
 
 - `EVAL__CHAT_MODEL` sets the model under test.
-- `EVAL__JUDGE_MODEL` sets the LLM judge.
+- `EVAL__JUDGE_MODEL` sets the LLM judge, the one baselines compare against.
+- `EVAL__SECOND_JUDGE_MODEL` sets an optional second judge (see below).
 - `EVAL__EMBEDDING_MODEL` sets the model that builds the retrieval index.
 
-When a model setting is empty, the model LM Studio currently has loaded is used. A judge that is the
-same model as the one it grades is lenient, so for baselines you trust, load a second model and set
-`EVAL__JUDGE_MODEL`.
+When a model setting is empty, the model LM Studio currently has loaded is used. Once you have more
+than one model loaded, set `EVAL__CHAT_MODEL` and `EVAL__JUDGE_MODEL` explicitly so the right one is
+graded.
+
+### A second judge
+
+A judge that is the same model as the one it grades is lenient. To get a second opinion, load
+another model in LM Studio, ideally from a different family, and name it in `EVAL__SECOND_JUDGE_MODEL`:
+
+```bash
+lms load openai/gpt-oss-20b
+EVAL__CHAT_MODEL=qwen/qwen3.8-27b EVAL__JUDGE_MODEL=qwen/qwen3.8-27b \
+EVAL__SECOND_JUDGE_MODEL=openai/gpt-oss-20b uv run python -m draftpilot.evals room_qa
+```
+
+Every suite with an LLM judge then grades each case twice on the same rubric. The second verdict is
+reported as the `SecondJudge` assertion, and the run prints how often the judges agree and, for each
+case they split on, both verdicts and their reasons:
+
+```text
+room_qa: judges qwen/qwen3.8-27b and openai/gpt-oss-20b agree on 4/5 cases
+  witch_eye: judge=True (...) second_judge=False (...)
+```
+
+The second judge is a second opinion, not a gate:
+
+- it is left out of the assertion pass rate, so runs stay comparable with baselines recorded with
+  one judge;
+- disagreement never fails a run, it tells you which verdicts to read yourself;
+- `--save-baseline` records `second_judge` and `judge_agreement` (the rate and each split case) in
+  the baseline file next to `judge`.
+
+`EVAL__SECOND_JUDGE_MODEL` must name a different model from the judge. The run also notes when the
+baseline was recorded with a different `judge` than this run's, because the judge-graded assertions
+are then not directly comparable.
 
 !!! warning "Run evals after every agent change"
     Any change to a role spec, prompt, tool or workflow must run the affected suites on LM Studio
