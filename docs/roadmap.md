@@ -65,7 +65,7 @@ Still open after v1.0:
 
 - rich-text editing in the page: the Document editor ([#56](https://github.com/amruthvvkp/DraftPilot/issues/56),
   v1.2) brings it behind *Settings → Editor*; it becomes the default once the journeys pass on both;
-- a second local judge model for the evals (a judge grading its own model is lenient);
+- ✅ a second local judge model for the evals (`EVAL__SECOND_JUDGE_MODEL`, v1.1, #50): both judges grade, and the run reports where they agree;
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
 - **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
 

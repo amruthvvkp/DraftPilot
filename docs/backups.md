@@ -46,7 +46,8 @@ project's title exactly and press **Delete project**.
 
 Deleting removes everything in the project: every draft, scene, artifact, run, proposal and
 conversation. DraftPilot writes a backup first, so the project appears under **Recently deleted**.
-What that backup does not hold (see the table above) is gone for good.
+What that backup does not hold (see the table above) is gone for good; the delete dialog lists it
+before you confirm.
 
 ## Restore a deleted project
 
@@ -66,7 +67,12 @@ is a separate project from then on. Use it to try a radical version without touc
 ## Where backups live
 
 Backups are files in the folder set by `BACKUP__ROOT`. In the Compose stack that is `/data/backups`
-inside the `ui` container, on the `backup_data` volume.
+on the `backup_data` volume, which the `ui`, `mcp` and `worker` containers all mount. A backup made
+over MCP therefore shows up in the studio's **Backups** drawer, and an export stored over MCP
+(`create_screenplay_export`) lands in `/data/backups/exports` on the same volume.
+
+If you run the MCP server outside Compose (for example `draftpilot mcp` on your machine), point its
+`BACKUP__ROOT` at the same folder as the studio's, or its backups will not appear in the studio.
 
 !!! note "Keep your backups safe"
     Keep the `backup_data` volume when you upgrade or move the stack. For real safety, copy the

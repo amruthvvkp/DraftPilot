@@ -62,14 +62,21 @@ A typical session:
 3. Cast: `create_story_entity` / `update_story_entity` / `delete_story_entity` with
    `kind="character" | "relationship" | "timeline_event" | "location"`, read back with
    `list_story_entities` and `read_character` (profile, timeline and relationships together).
-4. Outline: `create_act` / `update_act` / `delete_act`, beats via `kind="beat"`, or a whole outline at
+   A timeline event also carries `motivation`, `history`, `intensity` (−5 a low … +5 a high) and
+   `chrono_index` (a sortable story-world position; `story_time` is its label).
+4. Journey map: `kind="moment"` is a moment several characters share (`title`, `summary`,
+   `chrono_index`, `story_time`, `scene_id`, `beat_id`); link each participant's event to it with
+   `moment_id`, and list them with `list_story_entities(kind="timeline_event", moment_id=...)`.
+   `kind="variant"` saves a named scene order (`name`, `scene_ids`) without applying it. Agents may
+   propose moments with `propose_story_change(kind="moment")`; variants stay the writer's.
+5. Outline: `create_act` / `update_act` / `delete_act`, beats via `kind="beat"`, or a whole outline at
    once with `propose_outline`; read it with `read_outline` (acts → beats → scene headings).
-5. Script: `create_scene(heading, fountain=...)`, `write_scene` (replace a scene from Fountain),
+6. Script: `create_scene(heading, fountain=...)`, `write_scene` (replace a scene from Fountain),
    `write_scene_content` (save a scene's blocks in one write: blocks that keep their `id` are
    updated, blocks without one are created, missing ones are deleted, and the scene version bumps
    once), `move_scene`, `delete_scene`, and block-level `create_block` / `update_block` /
    `delete_block` / `reorder_blocks`; read with `read_screenplay_scenes`.
-6. Review: `snapshot_scene`, `diff_scene_revisions`, `restore_scene_revision`; `start_room_workflow`
+7. Review: `snapshot_scene`, `diff_scene_revisions`, `restore_scene_revision`; `start_room_workflow`
    for coverage, continuity, rewrites and the audience panel; `render_screenplay_export`.
 
 Every write takes the `expected_version` you last read and fails with a conflict if the writer

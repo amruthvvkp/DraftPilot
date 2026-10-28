@@ -17,7 +17,9 @@ from draftpilot.core.story.structure import require_project
 from draftpilot.crud import agent_proposals as proposals_crud
 from draftpilot.models import AgentProposal, AgentProposalRead
 
-STORY_TARGETS = frozenset({*entities.KINDS, "storyline", "outline"})
+# Narrative variants are the writer's own saved orders; agents propose reorders, not variants.
+WRITER_ONLY_KINDS = frozenset({"variant"})
+STORY_TARGETS = frozenset({*(set(entities.KINDS) - WRITER_ONLY_KINDS), "storyline", "outline"})
 ACTIONS = ("create", "update", "delete")
 
 
@@ -42,6 +44,8 @@ async def propose_story_change(
         before = {name: getattr(project, name) for name in fields}
         target_id, base_version = project_id, project.version
     else:
+        if kind in WRITER_ONLY_KINDS:
+            raise Invalid(f"Agents cannot propose a {kind}; propose a timeline reorder instead")
         spec = entities.entity_kind(kind)
         if action not in ACTIONS:
             raise Invalid(f"Unknown action {action!r}; expected one of {', '.join(ACTIONS)}")

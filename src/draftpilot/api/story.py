@@ -1,4 +1,4 @@
-"""Typed story-development endpoints: storyline, characters, timelines, relationships, locations, beats."""
+"""Typed story-development endpoints: storyline, characters, timelines, relationships, locations, beats, moments, variants."""
 
 from typing import Any
 
@@ -22,9 +22,15 @@ from draftpilot.models import (
     LocationCreate,
     LocationRead,
     LocationUpdate,
+    NarrativeVariantCreate,
+    NarrativeVariantRead,
+    NarrativeVariantUpdate,
     StoryBeatCreate,
     StoryBeatRead,
     StoryBeatUpdate,
+    StoryMomentCreate,
+    StoryMomentRead,
+    StoryMomentUpdate,
 )
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["story"])
@@ -36,10 +42,12 @@ async def read_storyline(project_id: int, session: AsyncSession = Depends(async_
     return storyline(await require_project(session, project_id))
 
 
-async def _list(session: AsyncSession, project_id: int, kind: str, character_id: int | None = None) -> list[Any]:
+async def _list(
+    session: AsyncSession, project_id: int, kind: str, character_id: int | None = None, moment_id: int | None = None
+) -> list[Any]:
     """List a project's entities after checking the project exists."""
     await require_project(session, project_id)
-    return await entities.list_entities(session, project_id, kind, character_id=character_id)
+    return await entities.list_entities(session, project_id, kind, character_id=character_id, moment_id=moment_id)
 
 
 # Characters ------------------------------------------------------------------------------------
@@ -99,10 +107,13 @@ async def list_character_timeline(project_id: int, character_id: int, session: A
 
 @router.get("/timeline-events", response_model=list[CharacterTimelineEventRead])
 async def list_timeline_events(
-    project_id: int, character_id: int | None = None, session: AsyncSession = Depends(async_get_db)
+    project_id: int,
+    character_id: int | None = None,
+    moment_id: int | None = None,
+    session: AsyncSession = Depends(async_get_db),
 ) -> list[Any]:
-    """List character timeline events, optionally for one character."""
-    return await _list(session, project_id, "timeline_event", character_id)
+    """List character timeline events, optionally for one character or one shared moment."""
+    return await _list(session, project_id, "timeline_event", character_id, moment_id)
 
 
 @router.post("/timeline-events", response_model=CharacterTimelineEventRead, status_code=status.HTTP_201_CREATED)
@@ -256,3 +267,83 @@ async def delete_beat(
 ) -> None:
     """Delete a beat."""
     await entities.delete_entity(session, project_id, "beat", beat_id, expected_version=if_match)
+
+
+# Shared moments --------------------------------------------------------------------------------
+
+
+@router.get("/moments", response_model=list[StoryMomentRead])
+async def list_moments(project_id: int, session: AsyncSession = Depends(async_get_db)) -> list[Any]:
+    """List shared story moments in story-world order (undated ones last)."""
+    return await _list(session, project_id, "moment")
+
+
+@router.post("/moments", response_model=StoryMomentRead, status_code=status.HTTP_201_CREATED)
+async def create_moment(project_id: int, data: StoryMomentCreate, session: AsyncSession = Depends(async_get_db)) -> Any:
+    """Create a moment several characters share; link their events to it with ``moment_id``."""
+    await require_project(session, project_id)
+    return await entities.create_entity(session, project_id, "moment", data)
+
+
+@router.patch("/moments/{moment_id}", response_model=StoryMomentRead)
+async def update_moment(
+    project_id: int,
+    moment_id: int,
+    data: StoryMomentUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> Any:
+    """Update a shared moment with optimistic concurrency."""
+    return await entities.update_entity(session, project_id, "moment", moment_id, data, expected_version=if_match)
+
+
+@router.delete("/moments/{moment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_moment(
+    project_id: int,
+    moment_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> None:
+    """Delete a shared moment; its participants' events stay, unlinked."""
+    await entities.delete_entity(session, project_id, "moment", moment_id, expected_version=if_match)
+
+
+# Narrative variants ------------------------------------------------------------------------------
+
+
+@router.get("/narrative-variants", response_model=list[NarrativeVariantRead])
+async def list_narrative_variants(project_id: int, session: AsyncSession = Depends(async_get_db)) -> list[Any]:
+    """List saved narrative orders."""
+    return await _list(session, project_id, "variant")
+
+
+@router.post("/narrative-variants", response_model=NarrativeVariantRead, status_code=status.HTTP_201_CREATED)
+async def create_narrative_variant(
+    project_id: int, data: NarrativeVariantCreate, session: AsyncSession = Depends(async_get_db)
+) -> Any:
+    """Save a named scene order without applying it."""
+    await require_project(session, project_id)
+    return await entities.create_entity(session, project_id, "variant", data)
+
+
+@router.patch("/narrative-variants/{variant_id}", response_model=NarrativeVariantRead)
+async def update_narrative_variant(
+    project_id: int,
+    variant_id: int,
+    data: NarrativeVariantUpdate,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> Any:
+    """Rename or reorder a narrative variant with optimistic concurrency."""
+    return await entities.update_entity(session, project_id, "variant", variant_id, data, expected_version=if_match)
+
+
+@router.delete("/narrative-variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_narrative_variant(
+    project_id: int,
+    variant_id: int,
+    session: AsyncSession = Depends(async_get_db),
+    if_match: int | None = Header(default=None, alias="If-Match"),
+) -> None:
+    """Delete a narrative variant."""
+    await entities.delete_entity(session, project_id, "variant", variant_id, expected_version=if_match)

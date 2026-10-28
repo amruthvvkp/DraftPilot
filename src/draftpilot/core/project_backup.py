@@ -26,17 +26,20 @@ from draftpilot.models import (
     CharacterRelationship,
     CharacterTimelineEvent,
     Location,
+    NarrativeVariant,
     Project,
     ProjectCreate,
     ProjectReference,
     Screenplay,
     StoryArtifact,
     StoryBeat,
+    StoryMoment,
 )
 
-_STORY_ORDER = ("character", "location", "beat", "timeline_event", "relationship")
+_STORY_ORDER = ("character", "location", "beat", "moment", "timeline_event", "relationship", "variant")
 _DERIVED_FIELDS = ("cue", "dialogue_lines", "source", "writer_edited", "heading_location", "int_ext", "times")
-_REF_FIELDS = {"character_id", "source_character_id", "target_character_id", "beat_id"}
+_REF_FIELDS = {"character_id", "source_character_id", "target_character_id", "beat_id", "moment_id"}
+_OPTIONAL_REFS = {"beat_id", "moment_id"}  # a dangling optional link is dropped, not the row
 
 
 async def _structure_keys(session: AsyncSession, project_id: int) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
@@ -125,8 +128,16 @@ async def _restore_story(session: AsyncSession, project_id: int, story: dict[str
         "beat": StoryBeat,
         "timeline_event": CharacterTimelineEvent,
         "relationship": CharacterRelationship,
+        "moment": StoryMoment,
+        "variant": NarrativeVariant,
     }
-    parents = {"character_id": "character", "source_character_id": "character", "target_character_id": "character", "beat_id": "beat"}
+    parents = {
+        "character_id": "character",
+        "source_character_id": "character",
+        "target_character_id": "character",
+        "beat_id": "beat",
+        "moment_id": "moment",
+    }
     for kind_name in _STORY_ORDER:
         mapping = new_ids.setdefault(kind_name, {})
         for item in story.get(kind_name, []):
@@ -146,7 +157,7 @@ async def _restore_story(session: AsyncSession, project_id: int, story: dict[str
                 if ref is None:
                     continue
                 remapped = new_ids.get(parents[field_name], {}).get(ref)
-                if remapped is None and field_name != "beat_id":
+                if remapped is None and field_name not in _OPTIONAL_REFS:
                     skip = True
                 values[field_name] = remapped
             if skip:

@@ -9,22 +9,24 @@ import argparse
 import asyncio
 import sys
 
-from draftpilot.evals.baseline import compare, save, summarize
+from draftpilot.evals.baseline import compare, notes, save, summarize
 from draftpilot.evals.harness import eval_models, eval_project
 from draftpilot.evals.suites import SUITES
 
 
 async def run(names: list[str], save_baseline: bool, tolerance: float) -> int:
     """Run each suite on a fresh eval project and return the number of regressions."""
-    chat, chat_name, judge, judge_name = await eval_models()
-    print(f"chat={chat_name} judge={judge_name}")
+    chat, chat_name, judges = await eval_models()
+    print(f"chat={chat_name} judge={judges.name}" + (f" second_judge={judges.second_name}" if judges.second_name else ""))
     regressions = 0
     for name in names:
         async with eval_project() as project:
-            dataset, task = await SUITES[name].build(project, chat, chat_name, judge)
+            dataset, task = await SUITES[name].build(project, chat, chat_name, judges)
             report = await dataset.evaluate(task, max_concurrency=1, progress=False)
         report.print(include_input=False, include_output=False, include_durations=True)
-        summary = summarize(name, report, chat_name, judge_name)
+        summary = summarize(name, report, chat_name, judges.name, judges.second_name)
+        for line in notes(summary):
+            print(line)
         if save_baseline:
             print(f"baseline saved: {save(summary)}")
             continue

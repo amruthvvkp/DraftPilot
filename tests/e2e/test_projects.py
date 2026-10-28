@@ -200,6 +200,7 @@ def test_vault_duplicates_deletes_with_confirmation_and_restores(page: Page) -> 
     page.get_by_role("menuitem", name="Delete…").click()
     dialog = page.get_by_role("dialog", name="Delete Big Fish (copy)")
     confirm = dialog.get_by_role("button", name="Delete project")
+    expect(dialog.get_by_text("Not restored: the knowledge graph, chat conversations")).to_be_visible()
     expect(confirm).to_be_disabled()
     dialog.get_by_label("Project title to confirm").fill("Big Fish")
     expect(confirm).to_be_disabled()

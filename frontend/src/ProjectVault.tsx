@@ -155,12 +155,16 @@ function ProjectCard({ project, menuOpen, onOpen, onMenu, onDuplicate, onDelete 
   </article>
 }
 
+/** What a project backup leaves out (keep in step with docs/backups.md), so a delete says what is lost. */
+const DELETE_NOT_RESTORED = 'Not restored: the knowledge graph, chat conversations, scene snapshots, saved dialogue translations, proposals, room runs and evaluations.'
+
 function DeleteDialog({ project, onCancel, onConfirm }: { project: Project; onCancel: () => void; onConfirm: () => void }) {
   const [typed, setTyped] = useState('')
   return <div className="modal-backdrop" role="presentation" onClick={onCancel}>
     <section className="wizard delete-dialog" role="dialog" aria-modal="true" aria-label={`Delete ${project.title}`} onClick={event => event.stopPropagation()}>
       <p className="eyebrow warm">DELETE PROJECT</p><h2>Delete “{project.title}”?</h2>
-      <p>Every draft, scene, artifact, run and proposal in this project is removed. DraftPilot keeps a backup first, so you can restore it from <strong>Recently deleted</strong>.</p>
+      <p>Every draft, scene, artifact, run and proposal in this project is removed. DraftPilot keeps a backup first, so you can restore the drafts, storyline, story records and artifacts from <strong>Recently deleted</strong>.</p>
+      <p>{DELETE_NOT_RESTORED}</p>
       <label>Type the project title to confirm<input autoFocus value={typed} onChange={event => setTyped(event.target.value)} aria-label="Project title to confirm" /></label>
       <div className="dialog-actions">
         <button className="button quiet" onClick={onCancel}>Cancel</button>
