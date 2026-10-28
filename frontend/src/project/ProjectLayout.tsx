@@ -55,6 +55,7 @@ export default function ProjectLayout() {
         <NavLink to={`${base}/journey`}>Journey map</NavLink>
         <NavLink to={`${base}/context-map`}>Context map</NavLink>
         <NavLink to={`${base}/locations`}>Locations</NavLink>
+        <NavLink to={`${base}/visuals`}>Visuals</NavLink>
         <NavLink to={`${base}/twin`}>Story twin</NavLink>
         <NavLink to={`${base}/room`}>Writers’ room</NavLink>
         <NavLink to={`${base}/studio`}>Story studio</NavLink>

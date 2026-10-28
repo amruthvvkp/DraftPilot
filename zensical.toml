@@ -54,6 +54,7 @@ nav = [
     { "Writers' room" = "writers-room.md" },
     { "Story tools" = "story-tools.md" },
     { "Journey map" = "journey-map.md" },
+    { "Visual tools" = "visual-tools.md" },
     { "Settings & appearance" = "settings.md" },
     { "Backups & recovery" = "backups.md" },
     { "Troubleshooting" = "troubleshooting.md" },

@@ -9,6 +9,7 @@ from draftpilot.core.db import async_get_db
 from draftpilot.core.story import entities
 from draftpilot.core.story.storyline import storyline
 from draftpilot.core.story.structure import require_project
+from draftpilot.core.story.visuals import StoryVisuals, story_visuals
 from draftpilot.models import (
     CharacterCreate,
     CharacterRead,
@@ -267,6 +268,17 @@ async def delete_beat(
 ) -> None:
     """Delete a beat."""
     await entities.delete_entity(session, project_id, "beat", beat_id, expected_version=if_match)
+
+
+# Visual tools --------------------------------------------------------------------------------
+
+
+@router.get("/visuals", response_model=StoryVisuals)
+async def read_story_visuals(
+    project_id: int, screenplay_id: int | None = None, session: AsyncSession = Depends(async_get_db)
+) -> StoryVisuals:
+    """Return one draft's scenes with runtime and cast intensity, beat milestones and the cast graph."""
+    return await story_visuals(session, project_id, screenplay_id)
 
 
 # Shared moments --------------------------------------------------------------------------------

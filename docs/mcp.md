@@ -87,7 +87,7 @@ changed the target since.
 | Area | Tools |
 |---|---|
 | Projects | `list_projects`, `create_project`, `update_project`, `duplicate_project`, `delete_project`, `write_reference`, `read_project_overview` |
-| Story | `read_storyline`, `read_story_context`, `list_story_entities`, `read_character`, `read_outline`, `create_story_entity`, `update_story_entity`, `delete_story_entity`, `propose_story_change`, `propose_outline`, `apply_story_operation`, `read_project_artifacts`, `write_artifact` |
+| Story | `read_storyline`, `read_story_context`, `list_story_entities`, `read_character`, `read_outline`, `read_story_visuals`, `create_story_entity`, `update_story_entity`, `delete_story_entity`, `propose_story_change`, `propose_outline`, `apply_story_operation`, `read_project_artifacts`, `write_artifact` |
 | Structure and script | `create_act`, `update_act`, `delete_act`, `create_scene`, `write_scene`, `write_scene_content`, `update_scene`, `move_scene`, `delete_scene`, `create_block`, `update_block`, `delete_block`, `reorder_blocks`, `read_screenplay_scenes`, `read_dialogue_translations`, `propose_dialogue_translation` |
 | Proposals | `list_proposals`, `propose_screenplay_change`, `review_screenplay_proposal`, `reject_proposal`, `propose_timeline_reorder`, `review_timeline_proposal`, `reject_timeline_proposal` |
 | Revisions, import and export | `snapshot_scene`, `read_scene_revisions`, `diff_scene_revisions`, `restore_scene_revision`, `import_screenplay`, `render_screenplay_export`, `create_screenplay_export`, `list_project_backups`, `create_project_backup`, `restore_project_backup` |

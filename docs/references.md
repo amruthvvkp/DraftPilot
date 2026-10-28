@@ -12,6 +12,12 @@ with this project's MIT license (e.g. GPL).
   Draft code or assets are used. <https://www.finaldraft.com/>
 - **Outline drag-and-drop** — the Outline page uses the browser's native HTML drag-and-drop
   plus keyboard controls; no third-party drag-and-drop library is used.
+- **Visual tools** — the tension curve, relationship graph, corkboard and pacing heatmap are
+  hand-drawn SVG and CSS; no charting or graph library is used.
+- **Structure templates** — the target beats follow widely taught story structures, summarised
+  in our own words: Blake Snyder's *Save the Cat!* beat sheet, the Hero's Journey (Joseph
+  Campbell, as adapted for screenwriters by Christopher Vogler) and Gustav Freytag's five-act
+  pyramid. Only beat names and rough positions are used; no text from those books.
 
 ## Reused libraries
 
@@ -36,6 +42,12 @@ with this project's MIT license (e.g. GPL).
 - **Temporal** — durable execution for every background job, room workflow and chat turn, through
   the Python SDK (`temporalio`). MIT. <https://temporal.io>
 - **FastMCP** — the MCP server framework. Apache-2.0. <https://gofastmcp.com>
+- **TipTap** — the Document script editor (Settings → Editor: Document) is built on TipTap's
+  open-source core, React bindings and extensions (`@tiptap/core`, `@tiptap/react`, `@tiptap/pm`,
+  bold, italic, underline, strike, undo/redo, placeholder). No TipTap Pro extensions or TipTap
+  Cloud are used. MIT, © überdosis GbR. <https://tiptap.dev> · <https://github.com/ueberdosis/tiptap>
+- **ProseMirror** — the editing toolkit under TipTap (schema, transactions, decorations, history).
+  MIT, © Marijn Haverbeke. <https://prosemirror.net>
 - **React Router** — client routing in the studio. MIT. <https://reactrouter.com>
 - **TanStack Query** — the studio's data layer and cache. MIT. <https://tanstack.com/query>
 - **react-markdown** — Markdown in chat replies. MIT. <https://github.com/remarkjs/react-markdown>

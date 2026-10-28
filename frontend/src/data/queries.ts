@@ -34,6 +34,8 @@ export const keys = {
   variants: (projectId: number) => ['project', projectId, 'variants'] as const,
   timelineProposals: (projectId: number, screenplayId: number) => ['project', projectId, 'timeline-proposals', screenplayId] as const,
   twin: (projectId: number) => ['project', projectId, 'twin'] as const,
+  visual: (projectId: number, draftId: number | null = null) => ['project', projectId, 'visuals', draftId] as const,
+  visuals: (projectId: number) => ['project', projectId, 'visuals'] as const,
   artifacts: (projectId: number) => ['project', projectId, 'artifacts'] as const,
   proposals: (projectId: number) => ['project', projectId, 'proposals'] as const,
   runs: (projectId: number) => ['project', projectId, 'runs'] as const,
@@ -42,12 +44,12 @@ export const keys = {
 }
 
 const STORY_KIND_KEYS: Record<string, (projectId: number) => QueryKey[]> = {
-  character: id => [keys.characters(id), keys.relationships(id), keys.timelines(id), keys.beats(id), keys.twin(id)],
-  timeline_event: id => [keys.timelines(id)],
-  relationship: id => [keys.relationships(id)],
+  character: id => [keys.characters(id), keys.relationships(id), keys.timelines(id), keys.beats(id), keys.twin(id), keys.visuals(id)],
+  timeline_event: id => [keys.timelines(id), keys.visuals(id)],
+  relationship: id => [keys.relationships(id), keys.visuals(id)],
   location: id => [keys.locations(id), keys.twin(id)],
-  beat: id => [keys.beats(id), keys.timelines(id)],
-  moment: id => [keys.moments(id), keys.timelines(id)],
+  beat: id => [keys.beats(id), keys.timelines(id), keys.visuals(id)],
+  moment: id => [keys.moments(id), keys.timelines(id), keys.visuals(id)],
   variant: id => [keys.variants(id)],
 }
 
@@ -55,9 +57,9 @@ const STORY_KIND_KEYS: Record<string, (projectId: number) => QueryKey[]> = {
 export function staleKeysFor(projectId: number, event: Pick<ProjectEvent, 'kind' | 'data'>): QueryKey[] {
   switch (event.kind) {
     case 'scene.changed':
-      return [keys.workspaces(projectId), keys.twin(projectId)]
+      return [keys.workspaces(projectId), keys.twin(projectId), keys.visuals(projectId)]
     case 'structure.changed':
-      return [keys.workspaces(projectId), keys.beats(projectId), keys.characters(projectId), keys.locations(projectId), keys.timelines(projectId), ['project', projectId, 'timeline-proposals']]
+      return [keys.workspaces(projectId), keys.beats(projectId), keys.characters(projectId), keys.locations(projectId), keys.timelines(projectId), keys.visuals(projectId), ['project', projectId, 'timeline-proposals']]
     case 'timeline.changed':
       return [keys.workspaces(projectId), ['project', projectId, 'timeline-proposals']]
     case 'screenplay.changed':
@@ -135,6 +137,12 @@ export function useMoments(projectId: number) {
 
 export function useVariants(projectId: number) {
   return useQuery({ queryKey: keys.variants(projectId), queryFn: () => storyApi.variants(projectId) })
+}
+
+/** The visual tools' aggregate for the draft chosen in the URL. */
+export function useStoryVisuals(projectId: number) {
+  const draftId = useDraftId()
+  return useQuery({ queryKey: keys.visual(projectId, draftId), queryFn: () => storyApi.visuals(projectId, draftId), placeholderData: keepPreviousData })
 }
 
 export function useTwin(projectId: number) {

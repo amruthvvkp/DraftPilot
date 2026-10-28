@@ -11,6 +11,19 @@ The workspace has three columns:
 Requests from an external agent over MCP that need your approval wait under **External agent
 approvals**: **Approve request** or **Reject** each one (see [MCP integration](mcp.md)).
 
+## Two editors
+
+**Settings → Editor** chooses how you write the script. Both save to the same draft, and you can
+switch at any time.
+
+- **Classic** (the default for now): one box per element, one scene at a time. The rest of this
+  page up to [Scenes](#scenes) describes it.
+- **Document**: the whole draft as one continuous page, with the outline inline. See
+  [The Document editor](#the-document-editor).
+
+Document will become the default once every browser journey passes on both editors, and Classic
+goes one release after that.
+
 ## Screenplay elements
 
 Every line of a scene is a typed block: action, character, dialogue, parenthetical, transition,
@@ -43,6 +56,94 @@ you typed them, and exported as-is.
   delete it. Deleting removes the scene, its blocks and its snapshots; beats and timeline events
   that pointed at it lose the link.
 - **Continuous view** switches between one continuous page and page-by-page reading.
+
+## The Document editor
+
+The Document editor shows the draft as one page: the title page at the top, then each act, its
+beats and its scenes. You can select across elements and scenes and move through the script with the
+arrow keys, the way you would in Final Draft.
+
+### Typing
+
+| Key | In | Gives |
+|---|---|---|
+| ++enter++ | action | a new action |
+| ++enter++ | character | dialogue |
+| ++enter++ | dialogue | action (press it again on the empty line for a character) |
+| ++enter++ | parenthetical | dialogue |
+| ++enter++ | scene heading | the scene's first line |
+| ++tab++ | action | character |
+| ++tab++ | dialogue | parenthetical |
+| ++tab++ | character | transition |
+| ++shift+tab++ | any | the previous type in that cycle |
+| ++shift+enter++ | any | a line break inside the element |
+
+++cmd+1++ to ++cmd+9++ set the element type: section, action, character, parenthetical, dialogue,
+transition, shot, lyric, note (++cmd+2++ to ++cmd+7++ match Final Draft). Browsers that keep
+++cmd+1++–++cmd+9++ for switching tabs also accept ++cmd+alt+1++ to ++cmd+alt+9++.
+
+Smart typing still applies when you press ++enter++: `EDWARD` becomes a character cue, `(beat)` a
+parenthetical and `CUT TO:` a transition. Character cues are saved in upper case.
+
+Pasting plain text adds one element per line, reading Fountain marks (`**bold**`, `*italic*`) and
+cues as it goes.
+
+### Formatting
+
+Select text and a toolbar appears: undo and redo, the element type, **bold**, *italic*, underline,
+strike, the amber mark and, on dialogue, **Pair with previous dialogue** (dual dialogue). ++cmd+b++,
+++cmd+i++ and ++cmd+u++ work too. The **Current element type** picker above the page changes the
+element under the cursor.
+
+Formatting shows as formatting, not as markup. It is still stored as Fountain markup (`**bold**`,
+`*italic*`, `_underline_`, `~~strike~~` and `[[color:#dda05d]]…[[/color]]`), so exports, search and
+the agents see the same text as before. A line you didn't touch keeps its exact text.
+
+### The outline in the page
+
+Acts and the outline's beats appear as tinted headings above the scenes they link to. They are not
+part of the script and don't print.
+
+- Edit a beat's title or summary in place; it saves to the outline. If someone changed the beat in
+  the meantime, the save is refused and the latest version loads.
+- A beat with no scene yet shows **Create scene from beat**, which adds a scene at that point and
+  links it to the beat.
+- The **Outline** switch above the page hides acts and beats for a clean read. The arrow on an act
+  or a beat collapses it.
+- The **«** and **»** buttons collapse the navigator and the context rail, so the page can take
+  the full width. Clicking a scene in the navigator moves the cursor to its heading.
+
+Adding, deleting and moving scenes stays in the navigator: the page won't delete a scene by
+selecting across it.
+
+### Saving
+
+Each scene you change is saved about a second after you stop typing, as one write for the whole
+scene. The status above the page reads *Unsaved changes*, *Saving…* and *All changes saved*.
+
+### Changes from elsewhere
+
+When another tab, the room or an external agent changes a scene:
+
+- if you haven't touched that scene, it updates in place and your cursor stays where it was;
+- if you have unsaved edits there, or your save arrives after someone else's, a bar on the scene
+  offers **Keep mine** (save your version over theirs) or **Load theirs** (drop your edits).
+
+### Agent suggestions
+
+A proposal from an agent appears under the lines it would change: the words it would remove are
+struck through, the words it would add are underlined, and the agent and its summary sit on top.
+Nothing changes until you click **Accept**; **Reject** dismisses it. An accepted change offers
+**Roll back** on its line. A proposal is made against a saved version of the scene, so accept it
+before editing that scene, or ask the agent again afterwards.
+
+When you chat with the room, the dock sends the text you have selected and the ids of its blocks,
+so "punch up these two lines" knows exactly which lines you mean.
+
+### Not yet in the Document editor
+
+- The title page card shows what an import brought in; editing it needs a title-page route.
+- Dialogue translations are edited in the context rail, as in Classic.
 
 ## Drafts
 

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from draftpilot.api.agent import router
 from draftpilot.core.db import async_get_db
-from draftpilot.models import AgentProposal, BlockType, WorkflowRun
+from draftpilot.models import AgentProposal, BlockType, Scene, WorkflowRun
 
 
 class _Session:
@@ -80,7 +80,8 @@ def test_block_proposal_captures_scene_version_and_before_snapshot(monkeypatch) 
 
 def test_block_approval_and_rollback_refresh_the_canonical_scene(monkeypatch) -> None:
     """Refresh RAG after applying and reversing a semantic block proposal."""
-    scene = SimpleNamespace(id=7, version=3, heading="INT. ROOM - DAY", body="")
+    # A real Scene: rollback must not copy the block's snapshot (origin, element_type) onto it.
+    scene = Scene(id=7, act_id=1, version=3, heading="INT. ROOM - DAY", body="")
     block = SimpleNamespace(
         id=11,
         scene_id=7,

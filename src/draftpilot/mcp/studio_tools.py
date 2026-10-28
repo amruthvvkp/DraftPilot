@@ -26,7 +26,7 @@ from draftpilot.core.db import session_scope
 from draftpilot.core.errors import DomainError
 from draftpilot.core.scene_proposals import apply_scene_rewrite, parse_scene_fountain
 from draftpilot.core.scene_sync import scene_changed
-from draftpilot.core.story import entities, storyline, structure
+from draftpilot.core.story import entities, storyline, structure, visuals
 from draftpilot.core.story.proposals import propose_outline as queue_outline
 from draftpilot.core.story.proposals import propose_story_change as queue_story_change
 from draftpilot.core.twins import (
@@ -242,6 +242,13 @@ async def read_outline(project_id: int, ctx: Context, screenplay_id: int | None 
             "unplaced_beats": [_entity("beat", beat) for beat in beats if beat.act_id not in act_ids],
         }
         return _bounded(result)
+
+
+@mcp.tool(annotations=READ, tags={"story", "structure"})
+async def read_story_visuals(project_id: int, ctx: Context, screenplay_id: int | None = None) -> dict[str, object]:
+    """Read what the visual tools draw: scenes with runtime and cast-average intensity, beat milestones and the cast graph."""
+    async with authorized(ctx, project_id, "story.read", "read") as session:
+        return _bounded((await visuals.story_visuals(session, project_id, screenplay_id)).model_dump(mode="json"))
 
 
 @mcp.tool(annotations=READ, tags={"story"})
