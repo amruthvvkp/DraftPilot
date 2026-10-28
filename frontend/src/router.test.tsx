@@ -80,6 +80,8 @@ describe('live sync', () => {
   it('maps events to the queries they make stale', () => {
     expect(staleKeysFor(3, { kind: 'story.changed', data: { kind: 'timeline_event' } })).toContainEqual(keys.timelines(3))
     expect(staleKeysFor(3, { kind: 'structure.changed', data: {} })).toContainEqual(keys.beats(3))
+    expect(staleKeysFor(3, { kind: 'story.changed', data: { kind: 'beat' } })).toContainEqual(keys.visuals(3))
+    expect(staleKeysFor(3, { kind: 'scene.changed', data: {} })).toContainEqual(keys.visuals(3))
     expect(staleKeysFor(3, { kind: 'project.changed', data: {} })).toContainEqual(keys.storyline(3))
     expect(staleKeysFor(3, { kind: 'run.changed', data: {} })).toEqual([keys.runs(3)])
     expect(staleKeysFor(3, { kind: 'rag.reindexed', data: {} })).toEqual([])

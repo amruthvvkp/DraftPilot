@@ -251,6 +251,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `POST` | `/projects/{project_id}/timeline-events` | Add an event to a character's timeline. | `CharacterTimelineEventCreate` | 201 `CharacterTimelineEventRead` |
 | `DELETE` | `/projects/{project_id}/timeline-events/{event_id}` | Delete a timeline event. |  | 204 |
 | `PATCH` | `/projects/{project_id}/timeline-events/{event_id}` | Update a timeline event with optimistic concurrency. | `CharacterTimelineEventUpdate` | 200 `CharacterTimelineEventRead` |
+| `GET` | `/projects/{project_id}/visuals` | Return one draft's scenes with runtime and cast intensity, beat milestones and the cast graph. |  | 200 `StoryVisuals` |
 
 ## timeline
 
