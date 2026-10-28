@@ -26,6 +26,8 @@ from draftpilot.api.retrieval import router as retrieval_router
 from draftpilot.api.room import router as room_router
 from draftpilot.api.runs import router as runs_router
 from draftpilot.api.story import router as story_router
+from draftpilot.api.telemetry import public_router as telemetry_config_router
+from draftpilot.api.telemetry import router as telemetry_router
 from draftpilot.api.timeline import router as timeline_router
 from draftpilot.api.twins import project_router as twin_router
 from draftpilot.api.twins import writer_router
@@ -33,6 +35,7 @@ from draftpilot.core import events
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth_router)
+router.include_router(telemetry_config_router)
 
 
 
@@ -68,6 +71,7 @@ protected.include_router(retrieval_router)
 protected.include_router(twin_router)
 protected.include_router(writer_router)
 protected.include_router(insights_router)
+protected.include_router(telemetry_router)
 router.include_router(protected)
 
 __all__ = ["router"]

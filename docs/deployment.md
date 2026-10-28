@@ -41,6 +41,16 @@ Telemetry is off by default. To collect traces, logs and metrics, start the bund
 `otel-lgtm` with `docker compose --profile observability up -d` and set `OTEL__ENABLED=true`. In
 Compose, the OTLP endpoint uses the internal hostname (`http://otel-lgtm:4318`), not `localhost`.
 
+With telemetry on, the studio also traces itself with `@pydantic/logfire-browser` (service
+`draftpilot-browser`): page loads, fetches, clicks, route changes and Web Vitals. The browser never
+talks to the collector and holds no exporter credential. It posts OTLP to the web process at
+`/api/v1/telemetry/v1/traces` and `/metrics`, a proxy behind the same `API__TOKEN`/session auth as the
+rest of the API, which forwards to `OTEL__EXPORTER_OTLP_ENDPOINT` and refuses payloads over
+`OTEL__PROXY_MAX_BYTES` (1 MiB). Fetches to the API carry `traceparent`, so a browser action and the
+API, worker and Temporal spans it causes share one trace. URL queries and fragments are stripped,
+scrubbing is on and session replay is off. With `OTEL__ENABLED=false` the SDK is never loaded and
+the proxy drops posts with a 204. `OTEL__ENVIRONMENT` labels the spans (default `local`).
+
 ## Backups and restore
 
 Create an application backup before upgrades or migrations:
