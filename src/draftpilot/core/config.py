@@ -58,6 +58,9 @@ class OTELConfig(BaseSettings):
 
     exporter_otlp_endpoint: str = "http://localhost:4318"
     enabled: bool = False
+    environment: str = "local"
+    # Largest OTLP payload the browser proxy (`/api/v1/telemetry/v1/*`) forwards, in bytes.
+    proxy_max_bytes: int = 1_048_576
 
 
 class PostgresSettings(BaseSettings):

@@ -253,6 +253,13 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `PATCH` | `/projects/{project_id}/timeline-events/{event_id}` | Update a timeline event with optimistic concurrency. | `CharacterTimelineEventUpdate` | 200 `CharacterTimelineEventRead` |
 | `GET` | `/projects/{project_id}/visuals` | Return one draft's scenes with runtime and cast intensity, beat milestones and the cast graph. |  | 200 `StoryVisuals` |
 
+## telemetry
+
+| Method | Path | What it does | Body | Returns |
+|---|---|---|---|---|
+| `GET` | `/telemetry/config` | Return the browser telemetry switch and resource labels (never an exporter secret). |  | 200 `TelemetryConfig` |
+| `POST` | `/telemetry/v1/{signal}` | Forward one browser OTLP/HTTP export to the configured collector; a no-op when telemetry is off. |  | 204 |
+
 ## timeline
 
 | Method | Path | What it does | Body | Returns |

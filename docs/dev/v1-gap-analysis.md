@@ -198,7 +198,7 @@ M8→G6b, M9→G6c, M10→G7, M11→G9. Every step keeps the suite green, refere
 |---|---|---|---|
 | G10 · SPA hosting | ✅ done | change 4 | `app.frontend()` replaces the custom fallback; unmatched `/api/*` GETs stay JSON 404s (the frontend fallback would otherwise return the shell to `Accept: text/html`); immutable `/assets/*`, `no-cache` shell; `WEB__REQUIRE_FRONTEND` (true in `Dockerfile.ui`, false in `compose.dev.yml`). Auth was already on the API router only. Verified live on :9000 |
 | G11 · Temporal, Langfuse out | ✅ done (#32) | change 1 | Every job, run, room workflow and chat turn is a Temporal workflow served by `python -m draftpilot.worker`. Room roles are durable agents (model refs, signed MCP identity). ARQ, `pydantic_graph` orchestration and Langfuse are gone, with `otel-lgtm` available as an opt-in profile. Replay tests run over `tests/temporal_histories/`. Verified live on :9000 (jobs, runs, room workflow and cancel, streamed chat on LM Studio) |
-| G12 · Frontend telemetry | ⏳ planned | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy |
+| G12 · Frontend telemetry | 🟡 core done (#47) | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy. Landed: the proxy, the bootstrap, fetch/XHR/document-load/interaction/route spans linked to API traces, Web Vitals. Open: the manual spans, the "Send diagnostics" toggle, an ErrorBoundary and the Playwright trace check |
 | G13 · Monty code mode | ⏳ planned | change 2 (M8b) | CodeMode roles, `analyze_script`, continuity rules as code, DynamicWorkflow |
 
 Order: G10 (small and independent), then G11 (the largest; G12's workflow spans and G13's durable
@@ -336,6 +336,29 @@ Decisions made against pydantic-ai 2.51 / temporalio 1.33, landed as G11a–G11e
 - Because M1–M10 have already shipped, the bootstrap, proxy, ErrorBoundary, Web Vitals and all the
   manual spans above land together in G12. The old M11 part follows: the docs, plus a "slowest
   interactions" panel on `/insights`.
+
+**As built (#47):**
+
+- `api/telemetry.py`: public `GET /api/v1/telemetry/config` (`enabled`, `service_name`,
+  `service_version`, `environment`; never an endpoint or secret), so tracing can start before
+  sign-in, and `POST /api/v1/telemetry/v1/{traces,metrics}` on the `protected` router. The proxy
+  accepts JSON or protobuf OTLP only (415), bounds the body by `OTEL__PROXY_MAX_BYTES` (413), forwards
+  `Content-Type`/`Content-Encoding` only (no cookie or auth header), returns the collector's status
+  (502 when it is down) and returns 204 without calling out when telemetry is off. Its own export
+  runs under `logfire.suppress_instrumentation()` and is excluded from FastAPI spans, so exports do
+  not trace themselves. No rate limit yet: the batch processor already throttles a well-behaved tab.
+- The service name is `draftpilot-browser`, not `draftpilot-web`, which is already the web
+  process's name. The config lives at `/api/v1/telemetry/config` rather than `/api/system/info`
+  (there is no system-info route).
+- `frontend/src/telemetry.ts` loads the SDK as a lazy chunk only when the config says enabled.
+  `logfire.configure()` with the proxy `traceUrl`/`metricUrl`, auto-instrumentations (fetch and XHR
+  ignore the proxy and strip query/fragment from `http.url`/`url.full`), `rum.session` with an
+  id-free route template, Web Vitals and summary resource timing. `RouteTelemetry.tsx` records a
+  `navigate {route}` per route change. Same-origin fetches carry `traceparent` by default, and the
+  web process accepts it (`distributed_tracing=True`).
+- Tests: `tests/test_telemetry_proxy.py` (off → 204 no-op, on → forwards, size/type/signal bounds,
+  auth, collector down) and `frontend/src/telemetry.test.ts` (off → SDK never loaded, no credentials
+  in the config, route templates, URL stripping).
 
 ### G13 · Monty code mode (change 2, M8b)
 
