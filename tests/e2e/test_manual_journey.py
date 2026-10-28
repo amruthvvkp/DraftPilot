@@ -73,9 +73,31 @@ def _add_character(page: Page, name: str, role: str, profile: dict[str, str], ev
     expect(timeline.get_by_text(title, exact=True)).to_be_visible()
 
 
-def test_manual_screenplay_from_project_to_fountain(signed_in: Page, base_url: str) -> None:
+def _write_scene_in_document(page: Page) -> None:
+    """Write the scene in the Document editor with the keyboard: Enter and Tab pick the elements."""
+    heading = page.get_by_role("textbox", name="Scene heading 1")
+    expect(heading).to_have_text(HEADING, timeout=30_000)
+    expect(page.get_by_role("group", name="Beat: Mira arrives")).to_be_visible()
+    expect(page.get_by_role("group", name="Beat: The ledger").get_by_role("button", name="Create scene from beat")).to_be_visible()
+    heading.click()
+    page.keyboard.press("Enter")
+    page.keyboard.type("Rain drums on the roof. MIRA stands in the doorway.")
+    page.keyboard.press("Enter")
+    page.keyboard.press("Tab")
+    page.keyboard.type("mira")
+    page.keyboard.press("Enter")
+    page.keyboard.type("Hello, house.")
+    expect(page.get_by_role("status", name="Save status")).to_have_text("All changes saved", timeout=30_000)
+    page.reload()
+    expect(page.get_by_role("textbox", name="Character 1")).to_have_text("MIRA", timeout=30_000)
+    expect(page.get_by_role("textbox", name="Dialogue 1")).to_have_text("Hello, house.")
+
+
+@pytest.mark.parametrize("editor", ["classic", "document"])
+def test_manual_screenplay_from_project_to_fountain(signed_in: Page, base_url: str, editor: str) -> None:
     """A writer builds a screenplay with no agent: every stage persists and the export carries it."""
     page = signed_in
+    page.add_init_script(f"localStorage.setItem('draftpilot:editor', '{editor}')")
 
     # Project, through the wizard.
     page.goto(f"{base_url}/projects")
@@ -152,14 +174,17 @@ def test_manual_screenplay_from_project_to_fountain(signed_in: Page, base_url: s
 
     # Script: write blocks into the new scene.
     open_scene.click()
-    expect(page.get_by_label("Edit scene heading")).to_have_value(HEADING)
-    for element, text in (("action", "Rain drums on the roof. MIRA stands in the doorway."), ("character", "MIRA"), ("dialogue", "Hello, house.")):
-        page.get_by_label("New screenplay element").select_option(element)
-        page.get_by_label("New element text").fill(text)
-        page.get_by_role("button", name="＋ Add element").click()
-        expect(page.get_by_label(f"Edit {element}").last).to_have_value(text, timeout=30_000)
-    page.reload()
-    expect(page.get_by_label("Edit dialogue")).to_have_value("Hello, house.")
+    if editor == "document":
+        _write_scene_in_document(page)
+    else:
+        expect(page.get_by_label("Edit scene heading")).to_have_value(HEADING)
+        for element, text in (("action", "Rain drums on the roof. MIRA stands in the doorway."), ("character", "MIRA"), ("dialogue", "Hello, house.")):
+            page.get_by_label("New screenplay element").select_option(element)
+            page.get_by_label("New element text").fill(text)
+            page.get_by_role("button", name="＋ Add element").click()
+            expect(page.get_by_label(f"Edit {element}").last).to_have_value(text, timeout=30_000)
+        page.reload()
+        expect(page.get_by_label("Edit dialogue")).to_have_value("Hello, house.")
 
     # What the agents will see now.
     page.get_by_role("navigation", name="Studio tools").get_by_role("link", name="Context map").click()

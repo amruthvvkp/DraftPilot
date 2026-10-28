@@ -407,6 +407,16 @@ export function updateProjectBlock(projectId: number, sceneId: number, blockId: 
   })
 }
 
+export type SceneContentBlock = { id?: number; element_type: string; text: string; is_dual?: boolean; dual_group?: number | null; character_extension?: string | null }
+export type SceneContentResult = { scene_id: number; version: number; block_ids: number[]; created_ids: number[] }
+
+/** Save a scene's heading and every block in one versioned write (blocks without an id are created). */
+export function writeSceneContent(projectId: number, sceneId: number, version: number, content: { heading?: string; blocks: SceneContentBlock[] }): Promise<SceneContentResult> {
+  return request<SceneContentResult>(`/api/v1/projects/${projectId}/scenes/${sceneId}/content`, {
+    method: 'PUT', headers: { 'If-Match': String(version) }, body: JSON.stringify(content),
+  })
+}
+
 export function updateProjectScene(projectId: number, sceneId: number, version: number, changes: { heading?: string; scene_instruction?: string }): Promise<Scene> {
   return request<Scene>(`/api/v1/projects/${projectId}/scenes/${sceneId}`, {
     method: 'PATCH', headers: { 'If-Match': String(version) }, body: JSON.stringify(changes),

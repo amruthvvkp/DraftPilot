@@ -480,9 +480,11 @@ async def rollback(session: AsyncSession, project_id: int, proposal_id: int) -> 
             if key != "scene_id":
                 setattr(block, key, BlockType(value) if key == "element_type" else value)
         session.add(block)
-    for key, value in proposal.before.items():
-        if key not in {"exists", "language", "text", "status", "scene_id"}:
-            setattr(target, key, value)
+    else:
+        # A block's snapshot restores the block above; its scene only takes the version bump.
+        for key, value in proposal.before.items():
+            if key not in {"exists", "language", "text", "status", "scene_id"}:
+                setattr(target, key, value)
     target.version += 1
     session.add(target)
     proposal.status = "rolled_back"
