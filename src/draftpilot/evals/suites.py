@@ -259,7 +259,7 @@ EXACT_QUESTIONS = (
 )
 
 
-async def code_mode(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+async def code_mode(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
     """Ask exact questions about Big Fish with code mode (one Monty snippet) and with plain tool calls."""
     cases = [
         Case(
