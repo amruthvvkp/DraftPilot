@@ -28,7 +28,7 @@ type TrailStep = { step: string; role: string; duration_ms: number; output: unkn
 const ROLE_LABELS: Record<string, string> = {
   story_editor: 'Story editor', script_doctor: 'Script doctor', scene_writer: 'Scene writer', brainstormer: 'Brainstormer',
   story_architect: 'Story architect', character_specialist: 'Character specialist', audience_evaluator: 'Audience evaluator',
-  coverage_reader: 'Coverage reader', continuity_supervisor: 'Continuity supervisor',
+  coverage_reader: 'Coverage reader', continuity_supervisor: 'Continuity supervisor', twin_keeper: 'Twin keeper',
 }
 const HIDDEN_PARAMS = new Set(['beats', 'outline_artifact_id'])
 const ACTIVE = new Set(['queued', 'running'])

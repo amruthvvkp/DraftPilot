@@ -51,3 +51,34 @@ def test_list_monty_executions_returns_redacted_records(
     assert response.json()[0]["code_sha256"] == "a" * 64
     assert "code" not in response.json()[0]
     assert "inputs" not in response.json()[0]
+
+
+def test_script_analysis_routes_refuse_while_monty_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Analysis and continuity rules answer 409 while MONTY__ENABLED is off, and 404 for an unknown project."""
+    from draftpilot.api.monty import analysis_router
+
+    app = FastAPI()
+
+    async def session() -> AsyncGenerator[_Session]:
+        """Yield an isolated database marker."""
+        yield _Session()
+
+    async def get(_session: _Session, project_id: int) -> Project | None:
+        """Return the project fixture only for its expected identifier."""
+        return Project(id=7, title="Story") if project_id == 7 else None
+
+    async def refuse(*_args: object, **_kwargs: object) -> None:
+        """Refuse like the sandbox does while Monty is off."""
+        from draftpilot.core.monty import MontyDisabledError
+
+        raise MontyDisabledError("Monty execution is disabled")
+
+    app.dependency_overrides[async_get_db] = session
+    app.include_router(analysis_router, prefix="/api/v1")
+    monkeypatch.setattr("draftpilot.api.monty.projects_crud.get", get)
+    monkeypatch.setattr("draftpilot.api.monty.analyze_script", refuse)
+    monkeypatch.setattr("draftpilot.api.monty.check_continuity_rules", refuse)
+    client = TestClient(app)
+    assert client.post("/api/v1/projects/7/analyze-script", json={"code": "1"}).status_code == 409
+    assert client.post("/api/v1/projects/7/continuity-rules", json={}).status_code == 409
+    assert client.post("/api/v1/projects/8/analyze-script", json={"code": "1"}).status_code == 404

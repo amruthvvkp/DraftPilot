@@ -43,6 +43,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="runs.read", description="Inspect a project workflow run.", scope="run"),
     Capability(name="runs.control", description="Inspect, pause, resume, or cancel a workflow run.", scope="run", mutates=True, approval_required=True),
     Capability(name="monty.audit.read", description="Read redacted Monty execution audit records.", scope="project"),
+    Capability(name="script.analyze", description="Run read-only analysis code and the continuity rules over the script and Story twin in the Monty sandbox.", scope="project"),
     Capability(name="projects.read", description="List the projects this client can work on.", scope="installation"),
     Capability(name="projects.create", description="Create a new project (with its first draft and act).", scope="installation", mutates=True),
     Capability(name="projects.update", description="Edit a project's brief, storyline and settings.", scope="project", mutates=True, approval_required=True),

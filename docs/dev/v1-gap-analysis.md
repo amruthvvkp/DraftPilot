@@ -199,7 +199,7 @@ M8→G6b, M9→G6c, M10→G7, M11→G9. Every step keeps the suite green, refere
 | G10 · SPA hosting | ✅ done | change 4 | `app.frontend()` replaces the custom fallback; unmatched `/api/*` GETs stay JSON 404s (the frontend fallback would otherwise return the shell to `Accept: text/html`); immutable `/assets/*`, `no-cache` shell; `WEB__REQUIRE_FRONTEND` (true in `Dockerfile.ui`, false in `compose.dev.yml`). Auth was already on the API router only. Verified live on :9000 |
 | G11 · Temporal, Langfuse out | ✅ done (#32) | change 1 | Every job, run, room workflow and chat turn is a Temporal workflow served by `python -m draftpilot.worker`. Room roles are durable agents (model refs, signed MCP identity). ARQ, `pydantic_graph` orchestration and Langfuse are gone, with `otel-lgtm` available as an opt-in profile. Replay tests run over `tests/temporal_histories/`. Verified live on :9000 (jobs, runs, room workflow and cancel, streamed chat on LM Studio) |
 | G12 · Frontend telemetry | ⏳ planned | change 3 | `@pydantic/logfire-browser` plus a same-origin OTLP proxy |
-| G13 · Monty code mode | ⏳ planned | change 2 (M8b) | CodeMode roles, `analyze_script`, continuity rules as code, DynamicWorkflow |
+| G13 · Monty code mode | ✅ done (#48) | change 2 (M8b) | Built on `pydantic-monty` directly, not the harness (it pins `pydantic-ai-slim` 2.62; we're on 2.51). Code-mode roles (showrunner, researcher, continuity supervisor, story editor, new twin keeper spec) get `analyze_script` and `check_continuity_rules` while `MONTY__ENABLED`. `analyze_script` runs over allow-listed `ClassInstance` views of the script and Story twin (exact stats, dialogue shares, pacing curve, scene × character matrix). Six continuity rules as code run over the typed story records and canon; the `continuity` workflow runs them in an activity behind `workflow.patched("continuity-rules-as-code")`. Every execution is audited and gets a span. REST + MCP (`script.analyze`, `MCP__ENABLE_CODE_TOOLS`), `MONTY__MAX_MEMORY_MB`, `code_mode` eval suite. Deferred: harness `DynamicWorkflow`, `MONTY__POOL_SIZE` |
 
 Order: G10 (small and independent), then G11 (the largest; G12's workflow spans and G13's durable
 execution depend on it), then G12 and G13.
@@ -338,6 +338,13 @@ Decisions made against pydantic-ai 2.51 / temporalio 1.33, landed as G11a–G11e
   interactions" panel on `/insights`.
 
 ### G13 · Monty code mode (change 2, M8b)
+
+!!! info "Status"
+    Done 2026-10-27 for #48 ([user and developer guide](../monty.md)). The plan below was written
+    before G14. It is kept for the record, with these changes: the rules run over the typed G14 story
+    tables plus canon nodes; `MONTY__TIMEOUT_S` is the existing `MONTY__MAX_DURATION_SECONDS`; the
+    harness `CodeMode`/`DynamicWorkflow` and `MONTY__POOL_SIZE` are deferred until DraftPilot moves to
+    `pydantic-ai` ≥ 2.62; and the guides are one page (`docs/monty.md`) rather than four.
 
 - **Deps:** `pydantic-monty>=1,<2` (1.0.0 is installed) and
   `pydantic-ai-harness[code-mode,dynamic-workflow,temporal]`. Check the `CodeMode` and

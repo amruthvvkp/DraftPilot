@@ -22,6 +22,8 @@ class RoleSpec(BaseModel):
     max_tokens: int = Field(default=16384, ge=256, le=32768)
     # Whether the model reasons before answering. Evaluative roles turn it off: they grade, not create.
     thinking: bool = True
+    # Code mode: with MONTY__ENABLED, the role may answer exact questions with one sandboxed snippet.
+    code_mode: bool = False
 
 
 @cache

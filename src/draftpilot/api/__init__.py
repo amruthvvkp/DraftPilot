@@ -19,6 +19,7 @@ from draftpilot.api.knowledge_graph import router as knowledge_graph_router
 from draftpilot.api.lifecycle import router as lifecycle_router
 from draftpilot.api.mcp_access import router as mcp_access_router
 from draftpilot.api.mcp_approvals import router as mcp_approvals_router
+from draftpilot.api.monty import analysis_router as script_analysis_router
 from draftpilot.api.monty import router as monty_router
 from draftpilot.api.projects import router as projects_router
 from draftpilot.api.providers import router as providers_router
@@ -61,6 +62,7 @@ protected.include_router(agent_roles_router)
 protected.include_router(capabilities_router)
 protected.include_router(context_workflows_router)
 protected.include_router(monty_router)
+protected.include_router(script_analysis_router)
 protected.include_router(mcp_approvals_router)
 protected.include_router(events_router)
 protected.include_router(room_router)
