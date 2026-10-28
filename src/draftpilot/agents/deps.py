@@ -26,4 +26,6 @@ class RoomDeps:
     model_ref: str = ""
     # Whether the run may use DraftPilot tools at all (self-contained workflow steps may not).
     tools: bool = True
+    # Whether a code-mode role may use the Monty code tools this run (they also need MONTY__ENABLED).
+    code_mode: bool = True
     workflow_run_id: int | None = None

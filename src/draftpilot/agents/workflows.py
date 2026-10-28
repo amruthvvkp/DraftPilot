@@ -562,6 +562,36 @@ async def known_scene_ids(project_id: int) -> list[int]:
     return [scene.id for scene in scenes if scene.id is not None]
 
 
+@activity.defn(name="room_continuity_rules")
+async def continuity_rule_findings(project_id: int, run_id: int | None, scene_ids: list[int]) -> dict[str, Any]:
+    """Run the continuity rules in Monty (audited) when it is on; report ``enabled: False`` and run nothing otherwise."""
+    from draftpilot.core.continuity_rules import (
+        check_continuity_rules,
+        continuity_rules_enabled,
+    )
+    from draftpilot.core.monty import MontyDisabledError, MontySandboxError
+
+    if not continuity_rules_enabled():
+        return {"enabled": False, "findings": [], "errors": []}
+    async with session_scope() as session:
+        try:
+            result = await check_continuity_rules(session, project_id, scene_ids or None, run_id=run_id)
+        except (MontyDisabledError, MontySandboxError) as exc:
+            return {"enabled": True, "findings": [], "errors": [str(exc)]}
+    return {"enabled": True, **result}
+
+
+def rule_findings_text(findings: list[dict[str, Any]]) -> str:
+    """Render rule findings for the continuity supervisor's prompt."""
+    if not findings:
+        return ""
+    lines = [f"- [{item['kind']}, scenes {item['scene_ids']}] {item['description']}" for item in findings[:20]]
+    return (
+        "Exact rule checks (code over the script and Story twin) flagged these; confirm each real one as an issue "
+        "with its scenes, dismiss any that are intentional, and look for what rules cannot see:\n" + "\n".join(lines)
+    )
+
+
 @activity.defn(name="room_propose_outline")
 async def propose_outline(project_id: int, run_id: int | None, outline: Outline) -> list[int]:
     """Propose the logline onto the storyline and the beats as the outline."""
@@ -787,6 +817,7 @@ ROOM_ACTIVITIES: list[Callable[..., Any]] = [
     load_scene,
     outline_beats,
     known_scene_ids,
+    continuity_rule_findings,
     propose_outline,
     propose_arcs,
     propose_rewrite,

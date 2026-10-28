@@ -135,6 +135,8 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 
 | Method | Path | What it does | Body | Returns |
 |---|---|---|---|---|
+| `POST` | `/projects/{project_id}/analyze-script` | Run read-only analysis code over the script and Story twin in Monty (audited). | `AnalyzeScriptRequest` | 200 `object` |
+| `POST` | `/projects/{project_id}/continuity-rules` | Run the built-in continuity rules over the script and Story twin in Monty (audited). | `ContinuityRulesRequest` | 200 `object` |
 | `GET` | `/projects/{project_id}/monty-executions` | Return redacted Monty audit records for one project. |  | 200 list of `MontyExecutionRead` |
 
 ## projects

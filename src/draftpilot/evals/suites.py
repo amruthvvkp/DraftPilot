@@ -17,6 +17,7 @@ from draftpilot.agents.workflows import (
     run_room_workflow,
     scene_fountain,
 )
+from draftpilot.core.config import settings
 from draftpilot.core.db import session_scope
 from draftpilot.core.screenplay.hydrate import blocks_for_scene
 from draftpilot.evals.evaluators import (
@@ -251,6 +252,46 @@ async def cast(project: EvalProject, model: Any, name: str, judge: Any) -> tuple
     return dataset, task
 
 
+EXACT_QUESTIONS = (
+    ("scene_count", "How many scenes does the script have? Give the exact number.", "191", ["191"]),
+    ("top_speaker", "Which character speaks the most dialogue, counted in words, and what share of all dialogue words is theirs?", "Edward, about 45%", ["edward"]),
+    ("night_scenes", "How many scenes are set at NIGHT according to their headings? Give the exact number.", "50", ["50"]),
+)
+
+
+async def code_mode(project: EvalProject, model: Any, name: str, judge: Any) -> tuple[Dataset[Any, Any, Any], Task]:
+    """Ask exact questions about Big Fish with code mode (one Monty snippet) and with plain tool calls."""
+    cases = [
+        Case(
+            name=f"{key}_{mode}",
+            inputs={"question": question, "code_mode": mode == "code"},
+            expected_output=expected,
+            evaluators=(MentionsAny(terms),) + ((UsedTools(any_of=["analyze_script"]),) if mode == "code" else ()),
+        )
+        for key, question, expected, terms in EXACT_QUESTIONS
+        for mode in ("code", "tools")
+    ]
+    dataset = Dataset[Any, Any, Any](name="code_mode", cases=cases)
+
+    async def task(inputs: dict[str, Any]) -> str:
+        """Answer one question as the researcher, with Monty on and code mode on or off for the run."""
+        enabled = settings.monty.enabled
+        settings.monty.enabled = True
+        try:
+            room = RoomDeps(project_id=project.project_id, permission_mode="chat_only", code_mode=inputs["code_mode"])
+            reply: str
+            reply, record = await run_role(role_spec("researcher"), model, room, inputs["question"], str,
+                                           provider="lm_studio", model_name=name, kind="eval")
+        finally:
+            settings.monty.enabled = enabled
+        _measure(record)
+        increment_eval_metric("tool_calls", record.tool_calls)
+        set_eval_attribute("tools", record.tools_used)
+        return reply
+
+    return dataset, task
+
+
 SUITES: dict[str, Suite] = {
     suite.name: suite
     for suite in (
@@ -260,5 +301,6 @@ SUITES: dict[str, Suite] = {
         Suite("continuity", "Catching a planted timeline contradiction", continuity),
         Suite("storyline", "Notes → storyline (logline, premise, synopsis, theme, tone)", storyline),
         Suite("cast", "Notes → a principal cast with motives and objectives", cast),
+        Suite("code_mode", "Exact Big Fish stats: code mode (Monty) vs plain tool calls", code_mode),
     )
 }

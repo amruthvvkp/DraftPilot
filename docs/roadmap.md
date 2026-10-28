@@ -66,7 +66,8 @@ Still open after v1.0:
 - rich-text editing in the page (inline bold and italics, via TipTap);
 - a second local judge model for the evals (a judge grading its own model is lenient);
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy;
-- **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
+- **G13** ✅ Monty code mode: code-mode roles, `analyze_script`, continuity rules as code (#48);
+  the harness `DynamicWorkflow` waits for `pydantic-ai` ≥ 2.62.
 
 ## Ground-test screenplay benchmark
 
