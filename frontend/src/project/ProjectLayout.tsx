@@ -52,6 +52,7 @@ export default function ProjectLayout() {
         {stages.map((stage, index) => <StepLink key={stage.key} stage={stage} index={index} />)}
       </nav>
       <nav className="project-tools" aria-label="Studio tools">
+        <NavLink to={`${base}/journey`}>Journey map</NavLink>
         <NavLink to={`${base}/context-map`}>Context map</NavLink>
         <NavLink to={`${base}/locations`}>Locations</NavLink>
         <NavLink to={`${base}/twin`}>Story twin</NavLink>

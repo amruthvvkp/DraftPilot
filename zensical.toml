@@ -53,6 +53,7 @@ nav = [
     { "Chat with the room" = "chat.md" },
     { "Writers' room" = "writers-room.md" },
     { "Story tools" = "story-tools.md" },
+    { "Journey map" = "journey-map.md" },
     { "Settings & appearance" = "settings.md" },
     { "Backups & recovery" = "backups.md" },
     { "Troubleshooting" = "troubleshooting.md" },

@@ -1,4 +1,4 @@
-import { type ComponentType, useEffect } from 'react'
+import { type ComponentType, lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router'
 import { getWriterProfile } from './api'
 import { normalizeAppearance, saveAppearance } from './theme'
@@ -24,6 +24,14 @@ function withProject(Page: ComponentType<{ projectId: number }>) {
     const projectId = useProjectId()
     return <Page key={projectId} projectId={projectId} />
   }
+}
+
+// The journey map (React Flow, dnd-kit) loads in its own chunk.
+const JourneyMap = lazy(() => import('./journey/JourneyPage'))
+
+/** The Journey map page, with a quiet fallback while its chunk loads. */
+function JourneyPage() {
+  return <Suspense fallback={<p className="muted">Loading the journey map…</p>}><JourneyMap /></Suspense>
 }
 
 const ScriptPage = withProject(Workspace)
@@ -58,6 +66,7 @@ export function AppRoutes() {
         <Route index element={<NoCharacterSelected />} />
         <Route path=":characterId" element={<CharacterDetail />} />
       </Route>
+      <Route path="journey" element={<JourneyPage />} />
       <Route path="locations" element={<LocationsPage />} />
       <Route path="outline" element={<OutlinePage />} />
       <Route path="beats" element={<OutlinePage />} />

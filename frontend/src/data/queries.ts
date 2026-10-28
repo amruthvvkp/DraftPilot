@@ -30,6 +30,9 @@ export const keys = {
   relationships: (projectId: number) => ['project', projectId, 'relationships'] as const,
   locations: (projectId: number) => ['project', projectId, 'locations'] as const,
   beats: (projectId: number) => ['project', projectId, 'beats'] as const,
+  moments: (projectId: number) => ['project', projectId, 'moments'] as const,
+  variants: (projectId: number) => ['project', projectId, 'variants'] as const,
+  timelineProposals: (projectId: number, screenplayId: number) => ['project', projectId, 'timeline-proposals', screenplayId] as const,
   twin: (projectId: number) => ['project', projectId, 'twin'] as const,
   artifacts: (projectId: number) => ['project', projectId, 'artifacts'] as const,
   proposals: (projectId: number) => ['project', projectId, 'proposals'] as const,
@@ -44,6 +47,8 @@ const STORY_KIND_KEYS: Record<string, (projectId: number) => QueryKey[]> = {
   relationship: id => [keys.relationships(id)],
   location: id => [keys.locations(id), keys.twin(id)],
   beat: id => [keys.beats(id), keys.timelines(id)],
+  moment: id => [keys.moments(id), keys.timelines(id)],
+  variant: id => [keys.variants(id)],
 }
 
 /** Return the query keys a live-sync event makes stale. */
@@ -52,9 +57,10 @@ export function staleKeysFor(projectId: number, event: Pick<ProjectEvent, 'kind'
     case 'scene.changed':
       return [keys.workspaces(projectId), keys.twin(projectId)]
     case 'structure.changed':
-      return [keys.workspaces(projectId), keys.beats(projectId), keys.characters(projectId), keys.locations(projectId), keys.timelines(projectId)]
-    case 'screenplay.changed':
+      return [keys.workspaces(projectId), keys.beats(projectId), keys.characters(projectId), keys.locations(projectId), keys.timelines(projectId), ['project', projectId, 'timeline-proposals']]
     case 'timeline.changed':
+      return [keys.workspaces(projectId), ['project', projectId, 'timeline-proposals']]
+    case 'screenplay.changed':
     case 'translation.changed':
       return [keys.workspaces(projectId)]
     case 'story.changed': {
@@ -121,6 +127,14 @@ export function useLocations(projectId: number) {
 
 export function useBeats(projectId: number) {
   return useQuery({ queryKey: keys.beats(projectId), queryFn: () => storyApi.beats(projectId) })
+}
+
+export function useMoments(projectId: number) {
+  return useQuery({ queryKey: keys.moments(projectId), queryFn: () => storyApi.moments(projectId) })
+}
+
+export function useVariants(projectId: number) {
+  return useQuery({ queryKey: keys.variants(projectId), queryFn: () => storyApi.variants(projectId) })
 }
 
 export function useTwin(projectId: number) {
