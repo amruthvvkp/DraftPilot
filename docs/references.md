@@ -51,6 +51,12 @@ with this project's MIT license (e.g. GPL).
 - **React Router** — client routing in the studio. MIT. <https://reactrouter.com>
 - **TanStack Query** — the studio's data layer and cache. MIT. <https://tanstack.com/query>
 - **react-markdown** — Markdown in chat replies. MIT. <https://github.com/remarkjs/react-markdown>
+- **React Flow** (`@xyflow/react`) — the Journey map canvas: pan, zoom, custom nodes for lanes,
+  cards and shared moments, relationship edges and the minimap. MIT, © webkid GmbH.
+  <https://reactflow.dev>
+- **dnd-kit** (`@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`) — dragging on the
+  Journey map: the script strip, the lane order and the Unplaced tray. MIT, © Claudéric Demers.
+  <https://dndkit.com>
 
 ## Inspiration only — not used as code
 
