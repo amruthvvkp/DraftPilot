@@ -104,6 +104,8 @@ PARITY: dict[str, str] = {
     "PUT /projects/{project_id}/moments/{moment_id}/participants": "set_moment_participants",
     "GET /projects/{project_id}/journey": "read_journey",
     "GET /projects/{project_id}/monty-executions": "read_monty_executions",
+    "POST /projects/{project_id}/analyze-script": "analyze_script",
+    "POST /projects/{project_id}/continuity-rules": "check_continuity_rules",
     "GET /projects/{project_id}/narrative-variants": "list_story_entities",
     "POST /projects/{project_id}/narrative-variants": "create_story_entity",
     "PATCH /projects/{project_id}/narrative-variants/{variant_id}": "update_story_entity",

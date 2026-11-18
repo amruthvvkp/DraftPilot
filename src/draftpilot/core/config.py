@@ -165,6 +165,8 @@ class MCPSettings(BaseSettings):
     approval_ttl_seconds: int = Field(default=900, gt=0)
     # Identity of DraftPilot's own in-app agents when they call this MCP server in-process.
     internal_client_id: str = Field(default="draftpilot-room", min_length=1, max_length=200)
+    # Offer the Monty code tools (analyze_script, check_continuity_rules) to external MCP clients.
+    enable_code_tools: bool = False
 
 
 class RAGSettings(BaseSettings):
@@ -208,6 +210,8 @@ class MontySettings(BaseSettings):
     max_input_items: int = 100
     max_duration_seconds: float = 0.5
     max_output_chars: int = 20_000
+    # Heap ceiling for one execution inside Monty's worker process.
+    max_memory_mb: int = Field(default=64, ge=1, le=4096)
 
 
 class APISettings(BaseSettings):

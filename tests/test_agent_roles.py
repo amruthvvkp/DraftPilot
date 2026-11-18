@@ -11,7 +11,7 @@ from draftpilot.core.agent_roles import AGENT_ROLES, agent_roles
 def test_agent_role_catalog_contains_supported_roles() -> None:
     """Expose every supported built-in role with a safe default permission."""
     assert [role.key for role in agent_roles()] == [role.key for role in AGENT_ROLES]
-    assert len(AGENT_ROLES) == 13
+    assert len(AGENT_ROLES) == 14
     assert {role.default_permission for role in AGENT_ROLES} == {"chat_only"}
 
 

@@ -19,10 +19,12 @@ from starlette.responses import JSONResponse
 from draftpilot.agents.workflow_runner import create_room_workflow_run
 from draftpilot.agents.workflows import ROOM_WORKFLOWS
 from draftpilot.core import (
+    continuity_rules,
     events,
     indexing,
     proposals,
     rag_client,
+    script_analysis,
     telemetry,
     temporal,
     timeline_proposals,
@@ -44,6 +46,7 @@ from draftpilot.core.context_workflows import (
 from draftpilot.core.db import session_scope
 from draftpilot.core.exports import ExportError, write_export
 from draftpilot.core.mcp_auth import client_id_for_token
+from draftpilot.core.monty import MontyDisabledError, MontySandboxError
 from draftpilot.core.project_backup import (
     enqueue_restored_documents,
     project_payload,
@@ -1059,6 +1062,64 @@ async def read_monty_executions(project_id: int, ctx: Context) -> dict[str, obje
     if len(json.dumps(result)) > settings.mcp.max_output_chars:
         raise ValueError("Monty audit response exceeds MCP output limit")
     return result
+
+
+def _code_tool_call(ctx: Context) -> tuple[str, int | None]:
+    """Return the caller and its run id, refusing external clients unless ``MCP__ENABLE_CODE_TOOLS`` is on."""
+    internal = current_internal_agent()
+    if internal is None and not settings.mcp.enable_code_tools:
+        raise ValueError("Code tools are disabled for external clients (set MCP__ENABLE_CODE_TOOLS=true)")
+    return _client_id(ctx), internal.run_id if internal is not None else None
+
+
+def _sandbox_failure(exc: Exception) -> ValueError:
+    """Turn a refused or failed sandbox run into a tool error the caller can act on."""
+    detail = getattr(exc, "detail", "")
+    return ValueError(f"{exc}: {detail}" if detail else str(exc))
+
+
+@mcp.tool
+async def analyze_script(project_id: int, code: str, ctx: Context) -> dict[str, object]:
+    """Run one read-only Python snippet over the script and Story twin in the Monty sandbox; its last expression is the result.
+
+    ``script`` has ``title``, ``scenes`` (id, number, act, heading, int_ext, location, time, year, words,
+    action_words, dialogue_words, speakers, speaker_words, speaker_lines, action) and methods
+    ``summary()``, ``scene(id)``, ``dialogue_share(by="words"|"lines")``, ``pacing_curve()``,
+    ``scene_character_matrix(top=0)``, ``character_scenes(name)``. ``story`` has ``characters``,
+    ``relationships``, ``events``, ``locations``, ``beats``, ``facts`` and methods ``character(name)``,
+    ``events_for(name)``. No files, network or database; nothing can be changed. Every run is audited.
+    """
+    client_id, run_id = _code_tool_call(ctx)
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "script.analyze", "analyze", {"code_chars": len(code)})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            result = await script_analysis.analyze_script(session, project_id, code, run_id=run_id)
+        except (MontyDisabledError, MontySandboxError) as exc:
+            raise _sandbox_failure(exc) from exc
+    return {"project_id": project_id, "value": result.value, "stdout": result.stdout, "duration_ms": result.duration_ms}
+
+
+@mcp.tool
+async def check_continuity_rules(project_id: int, ctx: Context, scene_ids: list[int] | None = None) -> dict[str, object]:
+    """Run the built-in continuity rules (ages vs years, timeline order, events placed in the wrong scene, deaths, unknown speakers and places) as code in the Monty sandbox.
+
+    Findings are exact but not judgements: confirm or dismiss each. ``scene_ids`` keeps only findings
+    touching those scenes. Read-only and audited.
+    """
+    client_id, run_id = _code_tool_call(ctx)
+    async with session_scope() as session:
+        try:
+            await authorize_invocation(session, client_id, project_id, "script.analyze", "continuity_rules", {"scene_ids": scene_ids or []})
+        except PermissionError as exc:
+            raise ValueError(str(exc)) from exc
+        try:
+            result = await continuity_rules.check_continuity_rules(session, project_id, scene_ids, run_id=run_id)
+        except (MontyDisabledError, MontySandboxError) as exc:
+            raise _sandbox_failure(exc) from exc
+    return {"project_id": project_id, **result}
 
 
 @mcp.tool
