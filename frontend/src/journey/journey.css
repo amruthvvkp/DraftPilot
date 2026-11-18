@@ -53,6 +53,9 @@
 .journey-canvas .react-flow__node{font-family:Inter,sans-serif}
 .journey-lane-head{display:grid;align-content:start;gap:4px;padding:10px;border-right:2px solid var(--line-strong);background:var(--surface);border-radius:6px 0 0 6px;box-sizing:border-box}
 .journey-lane-head strong{font-size:14px}
+.journey-lane-head.selected{box-shadow:inset 3px 0 0 var(--accent, #c2410c)}
+.journey-lane-select{all:unset;cursor:pointer;justify-self:start;border-radius:4px}
+.journey-lane-select:focus-visible{outline:2px solid var(--accent, #c2410c);outline-offset:2px}
 .journey-lane-head small{color:var(--ink-muted);font-size:11px}
 .journey-lane-head .button.small{justify-self:start;margin-top:4px}
 .journey-lane-head .react-flow__handle{opacity:0;left:0}

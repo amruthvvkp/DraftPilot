@@ -8,9 +8,12 @@ incompatible, version it with ``workflow.patched`` or re-record the histories wi
 ``TEMPORAL_RECORD=1 uv run pytest tests/test_temporal_replay.py`` and say why in the commit.
 """
 
+import asyncio
 import json
 import os
+import re
 from collections.abc import AsyncIterator, Iterator
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +30,13 @@ from pydantic_ai.messages import (
     UserPromptPart,
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
+from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from temporalio.client import WorkflowFailureError, WorkflowHistory
+from temporalio.client import (
+    WorkflowExecutionStatus,
+    WorkflowFailureError,
+    WorkflowHistory,
+)
 from temporalio.worker import Replayer
 from test_room_workflows import (  # noqa: F401 - project is a fixture
     SCENE,
@@ -42,8 +50,8 @@ from draftpilot.agents.chat import ChatTurn
 from draftpilot.agents.deps import RoomDeps
 from draftpilot.agents.models import register_model
 from draftpilot.agents.workflows import RoomRunInput
-from draftpilot.core import temporal
-from draftpilot.models import WorkflowRun
+from draftpilot.core import proposals, temporal
+from draftpilot.models import AgentProposal, WorkflowRun
 from draftpilot.worker.activities import all_activities
 from draftpilot.worker.workflows import all_workflows
 
@@ -62,6 +70,8 @@ PAYLOADS: dict[str, Any] = {
     "Coverage": lambda _count: {"logline": "L", "synopsis": "S", "premise": 8, "structure": 6, "character": 9, "dialogue": 7, "pacing": 5, "verdict": "consider"},
     "StorylineDraft": lambda _count: {"title": "T", "logline": "L", "premise": "P", "synopsis": "S", "theme": "Th", "tone": "To"},
     "ContinuityReport": lambda _count: {"issues": [{"scene_ids": [1], "kind": "fact", "description": "The river changes name."}]},
+    "ArcCheck": lambda _count: {"summary": "Will never turns.", "notes": [{"character": "Will", "kind": "flat_arc", "note": "Flat."}]},
+    "JourneyTimeline": lambda _count: {"moments": [{"title": "Leaves home", "intensity": -2, "motivation": "Escape"}, {"title": "Comes back", "intensity": 3, "motivation": "Love"}]},
 }
 
 ROOM_SCENARIOS: dict[str, dict[str, Any]] = {
@@ -73,6 +83,7 @@ ROOM_SCENARIOS: dict[str, dict[str, Any]] = {
     "audience_panel": {"personas": ["Genre fan", "Arthouse critic"], "scene_ids": [1]},
     "coverage": {},
     "continuity": {},
+    "arc_check": {},
 }
 
 
@@ -87,6 +98,11 @@ def _model() -> FunctionModel:
         tool = info.output_tools[0]
         title = str(tool.parameters_json_schema.get("title"))
         counts[title] = counts.get(title, 0) + 1
+        if title == "SharedMoments":
+            # Pair each character's first card (the #n under each ## heading) into one shared moment.
+            prompt = "\n".join(str(part.content) for message in _messages for part in message.parts if isinstance(part, UserPromptPart))
+            firsts = [int(match) for match in re.findall(r"## [^\n]+\n- #(\d+)", prompt)]
+            return ModelResponse(parts=[ToolCallPart(tool_name=tool.name, args={"moments": [{"title": "The river", "event_ids": firsts}]})])
         return ModelResponse(parts=[ToolCallPart(tool_name=tool.name, args=PAYLOADS[title](counts[title]))])
 
     async def stream(_messages: list[ModelMessage], _info: AgentInfo) -> AsyncIterator[str]:
@@ -140,9 +156,42 @@ async def _record(database: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> di
             ids[name] = temporal.run_workflow_id(run_id)
             await client.execute_workflow(temporal.RUN_WORKFLOW, run_id, id=ids[name], task_queue=queue)
         ids["run-room-child"] = f"{ids['run-room']}-room"
+        # The journey path: timelines for the existing leads, then a shared moment, every proposal approved by a scripted writer.
+        # The run row lets each approval signal the workflow (its id is the run's room workflow id).
+        async with AsyncSession(database.bind, expire_on_commit=False) as session:
+            pipeline_run = WorkflowRun(project_id=1, kind="room_workflow", input={"workflow": "develop_story", "params": {}}, permission_mode="suggest")
+            session.add(pipeline_run)
+            await session.commit()
+            pipeline_run_id = pipeline_run.id or 0
+        ids["room-develop_story-journey"] = f"run-{pipeline_run_id}-room"
+        params = {"idea": "A tall tale.", "stages": ["timelines"], "cast_size": 2, "wait_hours": 1}
+        journey = RoomRunInput(workflow="develop_story", params=params, room=replace(room, workflow_run_id=pipeline_run_id))
+        await _approve_while_running(client, database, monkeypatch, await client.start_workflow("room:develop_story", journey, id=ids["room-develop_story-journey"], task_queue=queue))
         ids["job-refresh_story_twin"] = "replay-refresh-story-twin"
         await client.execute_workflow("refresh_story_twin", 1, id=ids["job-refresh_story_twin"], task_queue=queue)
         return {workflow_id: await client.get_workflow_handle(workflow_id).fetch_history() for workflow_id in ids.values()}
+
+
+async def _approve_while_running(client: Any, database: AsyncSession, monkeypatch: pytest.MonkeyPatch, handle: Any) -> None:
+    """Approve every timeline and moment proposal as it appears until the workflow finishes (the proposals API signals the run)."""
+
+    async def get_client() -> object:
+        """Let the proposals API signal the test server."""
+        return client
+
+    monkeypatch.setattr("draftpilot.core.temporal.get_client", get_client)
+    for _ in range(600):
+        async with AsyncSession(database.bind, expire_on_commit=False) as session:
+            # Earlier scenarios leave their own proposals pending; decide only this run's timeline and moment ones.
+            query = select(AgentProposal).where(AgentProposal.status == "proposed", AgentProposal.target_kind.in_(("timeline_event", "moment")))  # type: ignore[attr-defined]
+            pending = (await session.exec(query)).all()
+            for row in pending:
+                await proposals.approve(session, 1, row.id or 0)
+        if (await handle.describe()).status != WorkflowExecutionStatus.RUNNING:
+            break
+        await asyncio.sleep(0.05)
+    result = await handle.result()
+    assert "moments" in result["stages"], result["stages"]
 
 
 async def _replay(histories: list[WorkflowHistory]) -> None:

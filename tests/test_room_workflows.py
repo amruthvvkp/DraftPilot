@@ -569,3 +569,37 @@ def test_a_workflow_step_that_reasons_past_its_budget_answers_again_without_reas
     assert result["scenes"][0]["fountain"] == SCENE
     assert seen == [None, "none"]
     assert [run.status for run in _all(project, AgentRun)] == ["failed", "succeeded"]
+
+
+def test_arc_check_measures_the_map_then_explains_it(project: AsyncSession) -> None:
+    """The findings are measured from the cards; the specialist sees them in the prompt and returns notes, proposing nothing."""
+    from draftpilot.core.story.journey import count_turns
+    from draftpilot.models import CharacterTimelineEvent
+
+    assert [count_turns(values) for values in ([], [1, 2, 3], [0, 3, 3, -2], [-3, 2, -1, 4])] == [0, 0, 1, 2]
+
+    async def seed() -> None:
+        """Give Edward the protagonist a rising lane and Will a flat one; nobody shares anything."""
+        async with AsyncSession(project.bind, expire_on_commit=False) as session:
+            rows = {row.name: row for row in (await session.exec(select(Character))).all()}
+            rows["Edward"].role = "protagonist"
+            session.add(rows["Edward"])
+            for name, values in (("Edward", [-3, 0, 4]), ("Will", [1, 1, 2])):
+                for index, value in enumerate(values):
+                    session.add(CharacterTimelineEvent(project_id=1, character_id=rows[name].id or 0, title=f"{name} {index}", intensity=value, position=index))
+            await session.commit()
+
+    run_async(seed())
+    prompts: list[str] = []
+
+    def check(prompt: str, _count: int) -> dict[str, Any]:
+        """Record the prompt and return one note."""
+        prompts.append(prompt)
+        return {"summary": "Will is flat.", "notes": [{"character": "Will", "kind": "flat_arc", "note": "Cards #4-#6 barely move.", "suggestion": "Let him break at the hospital."}]}
+
+    result, _ = _run("arc_check", {}, {"ArcCheck": check})
+    found = {(item["character"], item["kind"]) for item in result["findings"]}
+    assert found == {("Edward", "never_turns"), ("Will", "flat_arc"), ("Will", "never_crosses_protagonist")}  # Karl has no cards: not on the map
+    assert "Edward (protagonist)" in prompts[0] and "flat_arc: Will's intensity stays between +1 and +2" in prompts[0]
+    assert result["report"]["notes"][0]["suggestion"] == "Let him break at the hospital." and result["proposes"] is False
+    assert _all(project, AgentProposal) == []

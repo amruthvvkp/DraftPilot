@@ -16,6 +16,7 @@ def test_catalog_contains_scoped_read_and_approved_mutation_capabilities() -> No
 def test_page_capabilities_are_server_authoritative() -> None:
     """Route each workflow page to only its typed capability bundle."""
     assert "timeline.propose" in capabilities_for_page("/projects/7/timeline")
+    assert {"story.read", "story.propose", "timeline.propose"} <= set(capabilities_for_page("/projects/7/journey"))
     assert "outline.read" not in capabilities_for_page("/projects/7/timeline")
     assert capabilities_for_page("unknown") == ["screenplay.read", "context.read", "revisions.read"]
 

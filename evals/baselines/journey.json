@@ -1,0 +1,51 @@
+{
+  "assertion_rate": 1.0,
+  "cases": 3,
+  "failures": [],
+  "judge": "qwen/qwen3.8-27b",
+  "model": "qwen/qwen3.8-27b",
+  "per_case": {
+    "arc_check": {
+      "assertions": {
+        "FlagsArc[Karl:too_few_cards]": true,
+        "FlagsArc[Will:flat_arc]": true
+      },
+      "duration_s": 353.4,
+      "failures": {},
+      "metrics": {},
+      "scores": {}
+    },
+    "edward_timeline": {
+      "assertions": {
+        "LLMJudge": true,
+        "SensibleIntensities": true
+      },
+      "duration_s": 402.3,
+      "failures": {},
+      "metrics": {
+        "requests": 1,
+        "tokens": 8870
+      },
+      "scores": {}
+    },
+    "shared_moments": {
+      "assertions": {
+        "FindsSharedMoments": true
+      },
+      "duration_s": 119.2,
+      "failures": {},
+      "metrics": {
+        "requests": 1,
+        "tokens": 4870
+      },
+      "scores": {
+        "shared_moment_recall": 1.0
+      }
+    }
+  },
+  "recorded_at": "2026-11-18T13:52:45+00:00",
+  "scores": {
+    "shared_moment_recall": 1.0
+  },
+  "suite": "journey"
+}

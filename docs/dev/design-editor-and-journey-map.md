@@ -146,6 +146,11 @@ When `scene.changed` arrives for a scene:
 
 Real-time co-editing (Yjs) can come later without changing the document schema.
 
+Built in [#58](https://github.com/amruthvvkp/DraftPilot/issues/58): the chat focus (`journey` artifact,
+the selected card, moment or lane), `read_journey` (`core/story/journey.py`), `propose_journey_event`,
+`propose_shared_moment` and `set_moment_participants`, the **Journey map** chat card, the
+`journey-timelines` patch in `develop_story`, `room:arc_check`, and the `journey` eval suite.
+
 ### Rollout
 
 1. Build the batched content endpoint and its tests first. The current editor can use it too.

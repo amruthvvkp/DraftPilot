@@ -2,12 +2,14 @@ import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core'
 import { useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useMemo, useState } from 'react'
 import { Link } from 'react-router'
+import { useChatFocus } from '../chat/focus'
 import { errorMessage, keys, useBeats, useCharacters, useMoments, useRelationships, useTimeline, useVariants, useWorkspace } from '../data/queries'
 import { persistPositions } from '../project/order'
 import { beatsIn, planBeatMove } from '../project/outlinePlan'
 import { useProjectId } from '../project/useProjectId'
 import { type Beat, type StoryMomentFields, storyApi, type TimelineEvent, type TimelineEventFields } from '../storyApi'
 import { EventPanel, MomentPanel } from './CardPanel'
+import { journeyFocus } from './focus'
 import JourneyCanvas, { type JourneyActions, JourneyContext, type Move, type Target } from './JourneyCanvas'
 import {
   type Axis, CARD_WIDTH, chronoAt, columnAt, COLUMN_WIDTH, HEADER_WIDTH, type JourneyData, type JourneyLayout, layoutJourney, mergeCandidates,
@@ -39,6 +41,7 @@ export default function JourneyPage() {
   const [axis, setAxis] = useState<Axis>('narrative')
   const [laneOrder, setLaneOrder] = useState<number[] | undefined>()
   const [selected, setSelected] = useState<Target | null>(null)
+  const [selectedLane, setSelectedLane] = useState<number | null>(null)
   const [mergeIds, setMergeIds] = useState<Set<number>>(new Set())
   const [hoveredScene, setHoveredScene] = useState<number | null>(null)
   const [stripScene, setStripScene] = useState<number | null>(null)
@@ -62,6 +65,9 @@ export default function JourneyPage() {
   const actOf = useMemo(() => new Map(scenes.map(scene => [scene.id, scene.act_id])), [scenes])
   const sceneById = useMemo(() => new Map(scenes.map(scene => [scene.id, scene])), [scenes])
   const characterById = useMemo(() => new Map((characters ?? []).map(row => [row.id, row])), [characters])
+  // The map is a chat focus: the room sees the selected card or moment, else the selected lane.
+  const focus = useMemo(() => journeyFocus(data, selected, selectedLane), [data, selected, selectedLane])
+  useChatFocus('journey', focus.selection, focus.sceneId)
   const candidates = useMemo(() => mergeCandidates(data.events, scenes, data.beats), [data.events, scenes, data.beats])
 
   /** Run a write, report failures (409s explain themselves), then refetch what it touched. */
@@ -238,8 +244,9 @@ export default function JourneyPage() {
 
   const variant = variants.find(row => String(row.id) === variantId)
   const actions: JourneyActions = {
-    axis, selected, mergeIds, hoveredScene,
+    axis, selected, selectedLane, mergeIds, hoveredScene,
     open: target => setSelected(target),
+    selectLane: id => { setSelected(null); setSelectedLane(current => (current === id ? null : id)) },
     toggleMerge: id => setMergeIds(current => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next }),
     move, addCard,
   }

@@ -28,6 +28,7 @@ baseline in `evals/baselines/<suite>.json`.
 | `continuity` | A **continuity pass** over two scenes after a timeline contradiction is planted (Will is 17 in 1987 but "35" in 1998) | The planted error is caught; no issue cites a scene outside the draft |
 | `storyline` | The story architect develops the lighthouse notes into a storyline | Every storyline field is filled and the logline is one sentence; the notes' elements appear; an LLM judge checks it is specific, dramatic and faithful to the notes |
 | `cast` | The character specialist builds the lighthouse cast | Each character has a distinct want, a need and an objective, with one protagonist; an LLM judge checks the wants collide and the cast serves the notes |
+| `journey` | On a seeded Big Fish Journey map: the character specialist traces Edward's timeline (the `develop_story` prompt), the story editor finds the moments Edward and Will share, and the **Arc check** runs | Intensities stay in −5…+5, span at least three steps and turn, with motivations; both shared moments are found and no unrelated card is merged; the arc check flags Will's flat arc and Karl's single card; an LLM judge checks each intensity and motivation fits its moment |
 
 ### On the running stack
 

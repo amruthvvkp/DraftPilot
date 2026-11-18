@@ -227,3 +227,14 @@ def test_journey_reorder_is_a_proposal_until_applied(page: Page) -> None:
     expect(page.get_by_text("Proposed order.")).to_be_hidden()
     page.get_by_role("article", name="Card Catches the fish").get_by_role("button", name="Catches the fish").press("Alt+ArrowLeft")
     expect(page.get_by_text("Proposed order.")).to_be_visible()
+
+
+def test_journey_selection_is_the_chat_focus(page: Page) -> None:
+    """Selecting a lane, then a card, tells the chat dock what the writer is looking at."""
+    _open(page)
+    lane = page.get_by_role("button", name="Edward lane")
+    lane.click()
+    expect(lane).to_have_attribute("aria-pressed", "true")
+    expect(page.get_by_text("Lane: Edward (character #2), 2 cards")).to_be_visible()
+    page.get_by_role("article", name="Card Flies home").get_by_role("button", name="Flies home").click()
+    expect(page.get_by_text("Card #10 “Flies home” in Will’s lane (intensity -2, story time 1998, scene #70)")).to_be_visible()

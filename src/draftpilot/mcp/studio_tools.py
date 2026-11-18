@@ -26,7 +26,7 @@ from draftpilot.core.db import session_scope
 from draftpilot.core.errors import DomainError
 from draftpilot.core.scene_proposals import apply_scene_rewrite, parse_scene_fountain
 from draftpilot.core.scene_sync import scene_changed
-from draftpilot.core.story import entities, storyline, structure, visuals
+from draftpilot.core.story import entities, journey, storyline, structure, visuals
 from draftpilot.core.story.proposals import propose_outline as queue_outline
 from draftpilot.core.story.proposals import propose_story_change as queue_story_change
 from draftpilot.core.twins import (
@@ -306,6 +306,63 @@ async def propose_story_change(
     async with authorized(ctx, project_id, "story.propose", "propose", {"kind": kind, "action": action}) as session:
         proposal = await queue_story_change(session, project_id, kind, action, fields, entity_id=entity_id, summary=summary)
         return _dump(AgentProposalRead, proposal)
+
+
+@mcp.tool(annotations=READ, tags={"story", "journey"})
+async def read_journey(project_id: int, ctx: Context) -> dict[str, object]:
+    """Read the Journey map in brief: each character's lane in story order (cards with intensity −5…+5, motivation, scene and shared moment), the shared moments, and the arc check's findings (flat arcs, arcs that never turn, characters who never cross the protagonist)."""
+    async with authorized(ctx, project_id, "story.read", "read") as session:
+        return _bounded((await journey.journey_summary(session, project_id)).model_dump(mode="json"))
+
+
+@mcp.tool(annotations=WRITE, tags={"story", "journey", "proposals"})
+async def propose_journey_event(
+    project_id: int,
+    event_id: int,
+    ctx: Context,
+    motivation: str | None = None,
+    history: str | None = None,
+    intensity: Annotated[int | None, Field(ge=-5, le=5)] = None,
+    chrono_index: float | None = None,
+    moment_id: int | None = None,
+    summary: str = "",
+) -> dict[str, object]:
+    """Queue a change to one Journey map card for the writer to approve: why the character acts (motivation), the backstory it draws on (history), intensity (−5 a low … +5 a high), story-world position (chrono_index) or the shared moment it belongs to."""
+    given = {"motivation": motivation, "history": history, "intensity": intensity, "chrono_index": chrono_index, "moment_id": moment_id}
+    change = journey.JourneyEventChange.model_validate({**{key: value for key, value in given.items() if value is not None}, "summary": summary})
+    async with authorized(ctx, project_id, "story.propose", "propose", {"kind": "timeline_event", "entity_id": event_id}) as session:
+        return _dump(AgentProposalRead, await journey.propose_event_change(session, project_id, event_id, change))
+
+
+@mcp.tool(annotations=WRITE, tags={"story", "journey", "proposals"})
+async def propose_shared_moment(
+    project_id: int,
+    title: str,
+    event_ids: list[int],
+    ctx: Context,
+    description: str = "",
+    story_time: str = "",
+    chrono_index: float | None = None,
+    scene_id: int | None = None,
+    summary: str = "",
+) -> dict[str, object]:
+    """Queue a shared moment for the writer to approve: the cards (event ids from two or more characters) that are the same moment seen from each side. Nothing is merged until the writer approves."""
+    proposal = journey.SharedMomentProposal(
+        title=title, event_ids=event_ids, description=description, story_time=story_time, chrono_index=chrono_index, scene_id=scene_id, summary=summary
+    )
+    async with authorized(ctx, project_id, "story.propose", "propose", {"kind": "moment", "events": len(event_ids)}) as session:
+        return _dump(AgentProposalRead, await journey.propose_shared_moment(session, project_id, proposal))
+
+
+@mcp.tool(annotations=WRITE, tags={"story", "journey"})
+async def set_moment_participants(
+    project_id: int, moment_id: int, event_ids: list[int], expected_version: int, ctx: Context, approval_id: int | None = None
+) -> list[dict[str, object]]:
+    """Make exactly these cards (timeline event ids) a shared moment's participants; any card left out leaves the moment."""
+    arguments = {"project_id": project_id, "moment_id": moment_id, "event_ids": event_ids, "expected_version": expected_version}
+    async with authorized(ctx, project_id, "story.write", "update", {"kind": "moment", "entity_id": moment_id}, approval_id=approval_id, arguments=arguments) as session:
+        rows = await journey.set_moment_participants(session, project_id, moment_id, journey.MomentParticipants(event_ids=event_ids, expected_version=expected_version))
+        return [_entity("timeline_event", row) for row in rows]
 
 
 @mcp.tool(annotations=WRITE, tags={"story", "proposals"})

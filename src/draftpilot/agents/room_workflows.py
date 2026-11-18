@@ -46,6 +46,8 @@ with workflow.unsafe.imports_passed_through():
         SELF_CONTAINED,
         STEP_ACTIVITY,
         STEP_GUIDANCE,
+        ArcCheck,
+        ArcCheckParams,
         ArcParams,
         BrainstormParams,
         Cast,
@@ -59,6 +61,7 @@ with workflow.unsafe.imports_passed_through():
         DevelopStoryParams,
         DraftScenesParams,
         IdeaSet,
+        JourneyTimeline,
         Outline,
         OutlineParams,
         PanelParams,
@@ -67,13 +70,16 @@ with workflow.unsafe.imports_passed_through():
         RewriteParams,
         RoomRunInput,
         SceneDraft,
+        SharedMoments,
         Shortlist,
         StorylineDraft,
         cast_ids,
         continuity_rule_findings,
         critique_text,
         find_leads,
+        journey_cards,
         known_scene_ids,
+        lead_ids,
         link_beat_scenes,
         load_scene,
         outline_beats,
@@ -82,11 +88,14 @@ with workflow.unsafe.imports_passed_through():
         propose_arcs,
         propose_beats,
         propose_cast,
+        propose_journey_timeline,
         propose_outline,
         propose_rewrite,
         propose_scenes,
+        propose_shared_moments,
         propose_storyline,
         propose_timeline,
+        read_journey_map,
         record_agent_run,
         record_progress,
         rewrite_facts,
@@ -446,6 +455,36 @@ class CoverageReport(RoomWorkflowBase):
         return {"coverage": report.model_dump()}
 
 
+@workflow.defn(name="room:arc_check")
+class ArcCheckReport(RoomWorkflowBase):
+    """Read the Journey map and report flat arcs, arcs that never turn, and characters who never cross the protagonist."""
+
+    key = "arc_check"
+
+    @workflow.run
+    async def run(self, run: RoomRunInput) -> dict[str, Any]:
+        """Read the map, then consult the character specialist."""
+        return await self.execute(run, ArcCheckParams, self.body)
+
+    async def body(self, params: ArcCheckParams) -> dict[str, Any]:
+        """The map's deterministic findings, explained and given fixes by the character specialist."""
+        journey: dict[str, Any] = await self.activity(read_journey_map, self.room.project_id)
+        findings = journey["summary"]["findings"]
+        if not journey["summary"]["lanes"]:
+            return {"findings": [], "report": {"summary": "The Journey map has no lanes yet: add characters and their cards first.", "notes": []}}
+        report = await self.consult(
+            "arc check",
+            "character_specialist",
+            "Check the arcs on this Journey map. The findings below were measured from the cards; explain each one in "
+            "story terms, citing card ids (#n), and suggest a concrete fix (a card whose intensity should turn, a moment to "
+            "share with the protagonist, a motivation to sharpen). Add any other arc problem you see as kind 'other'. "
+            "If an arc is fine, leave it out." + (f" Focus: {params.focus}" if params.focus else "") + f"\n\n{journey['text']}",
+            ArcCheck,
+            tools=False,
+        )
+        return {"findings": findings, "report": report.model_dump()}
+
+
 # A continuity pass over this many scenes or fewer gets their text in the prompt.
 INLINE_SCENES = 12
 
@@ -593,8 +632,29 @@ class DevelopStory(RoomWorkflowBase):
         self.stage = f"done: {stage}"
         return states
 
+    async def _shared_moments(self, states: dict[int, dict[str, Any]], params: DevelopStoryParams, record: Callable[..., None]) -> None:
+        """Find where the approved timelines meet and propose those shared moments; the writer decides each one."""
+        approved = [state["created_id"] for state in states.values() if state["status"] == "approved" and state.get("created_id")]
+        cards: dict[str, Any] = await self.activity(journey_cards, self.room.project_id, approved)
+        if cards["characters"] < 2:
+            return
+        self.stage = "moments"
+        found = await self.consult(
+            "shared moments",
+            "story_editor",
+            "These are the approved timelines of the cast, card by card. Find the moments two or more characters share "
+            "(the same event seen from each side: the same scene, place and time). For each, give a title, the story time, "
+            "one line on what happens, and the card ids (#n) of every participant's side. Propose only real meetings; "
+            f"an empty list is a fine answer.\n\n{cards['text']}",
+            SharedMoments,
+            tools=False,
+        )
+        ids: list[int] = await self.activity(propose_shared_moments, self.room.project_id, self.room.workflow_run_id, approved, found)
+        if ids:
+            record("moments", ids, await self._checkpoint("moments", ids, params))
+
     async def body(self, params: DevelopStoryParams) -> dict[str, Any]:
-        """Storyline, cast, timelines, outline, scenes, coverage — each gated on the writer."""
+        """Storyline, cast, timelines (and their shared moments), outline, scenes, coverage — each gated on the writer."""
         result: dict[str, Any] = {"stages": {}, "proposal_ids": []}
 
         def record(stage: str, ids: list[int], states: dict[int, dict[str, Any]], **extra: Any) -> None:
@@ -634,11 +694,28 @@ class DevelopStory(RoomWorkflowBase):
             record("characters", ids, states, cast=cast_names)
         if "timelines" in params.stages:
             self.stage = "timelines"
+            # The journey path: intensity and motivation on every moment, then proposed shared moments.
+            journey = workflow.patched("journey-timelines")
             known: dict[str, int] = await self.activity(cast_ids, self.room.project_id, cast_names) if cast_names else {}
+            if not cast_names and journey:
+                # No cast stage this run: develop the leads the project already has.
+                known = await self.activity(lead_ids, self.room.project_id, max(1, params.cast_size))
             leads = list(known.items())[: min(4, max(1, params.cast_size))]
 
             async def timeline(name: str, character_id: int) -> list[int]:
                 """Develop one lead's timeline and propose it."""
+                if journey:
+                    arc = await self.consult(
+                        f"timeline: {name}",
+                        "character_specialist",
+                        f"Trace {name}'s arc through the story as 4-8 moments in story order: when it happens, what happens, "
+                        "what they want in that moment, why they act (motivation), how they feel, and its intensity from -5 "
+                        "(their lowest low) to +5 (their highest high). Let the intensity rise and fall: an arc turns.",
+                        JourneyTimeline,
+                        tools=False,
+                    )
+                    journey_ids: list[int] = await self.activity(propose_journey_timeline, self.room.project_id, self.room.workflow_run_id, character_id, name, arc)
+                    return journey_ids
                 moments = await self.consult(
                     f"timeline: {name}",
                     "character_specialist",
@@ -652,7 +729,10 @@ class DevelopStory(RoomWorkflowBase):
 
             ids = [item for batch in await asyncio.gather(*(timeline(name, character_id) for name, character_id in leads)) for item in batch]
             if ids:
-                record("timelines", ids, await self._checkpoint("timelines", ids, params), characters=[name for name, _ in leads])
+                states = await self._checkpoint("timelines", ids, params)
+                record("timelines", ids, states, characters=[name for name, _ in leads])
+                if journey:
+                    await self._shared_moments(states, params, record)
         if "outline" in params.stages:
             self.stage = "outline"
             outline = await self.consult(
@@ -731,4 +811,5 @@ ROOM_WORKFLOW_CLASSES: list[type] = [
     CoverageReport,
     ContinuityPass,
     DevelopStory,
+    ArcCheckReport,
 ]

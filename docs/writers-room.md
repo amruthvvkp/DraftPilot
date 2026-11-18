@@ -57,7 +57,8 @@ steps updates live.
 | **Audience panel** | One audience evaluator per persona, in parallel | Engagement per persona, the share who would recommend it, and the sticking points they have in common |
 | **Coverage** | Coverage reader | Logline, synopsis, grades for premise, structure, character, dialogue and pacing, and a verdict |
 | **Continuity pass** | Continuity supervisor | Continuity issues with the scenes they cite. Issues that cite scenes outside your draft are dropped |
-| **Develop the story** | Story architect, character specialist, story editor ⇄ script doctor, scene writers, coverage reader | Your idea taken through storyline, cast, a timeline per lead, a critiqued outline and the first scenes, with coverage at the end. It pauses after every stage until you have decided its proposals, and builds only on what you approved ([Develop a story](guided-flow.md)) |
+| **Arc check** | Character specialist | Reads the [Journey map](journey-map.md#arc-check) and reports flat arcs, arcs that never turn, and characters who never cross the protagonist, each with a suggested fix |
+| **Develop the story** | Story architect, character specialist, story editor ⇄ script doctor, scene writers, coverage reader | Your idea taken through storyline, cast, a timeline per lead, a critiqued outline and the first scenes, with coverage at the end. Every timeline card carries an intensity and a motivation, and the moments the leads share are proposed as shared moments. It pauses after every stage until you have decided its proposals, and builds only on what you approved ([Develop a story](guided-flow.md)) |
 
 The two loops, **Notes → outline** and **Rewrite a scene**, run as evaluator-optimizer loops. The
 drafter writes, the script doctor grades from 1 to 10, and the drafter revises until the score

@@ -15,6 +15,9 @@ export type Move = 'earlier' | 'later' | 'previous-act' | 'next-act'
 export type JourneyActions = {
   axis: JourneyLayout['axis']
   selected: Target | null
+  /** The lane the writer selected (a character id), for the chat's focus. */
+  selectedLane: number | null
+  selectLane: (characterId: number) => void
   mergeIds: ReadonlySet<number>
   hoveredScene: number | null
   open: (target: Target) => void
@@ -51,11 +54,14 @@ type CurveData = { paths: { d: string; name: string; dots: { x: number; y: numbe
 
 /** A lane's header: the character, an Add card button, and the relationship edge handles. */
 function LaneHeader({ data }: NodeProps<Node<LaneData>>) {
-  const { addCard } = useJourney()
-  return <div className="journey-lane-head" style={{ width: HEADER_WIDTH - 16, height: data.height - 8 }}>
+  const { addCard, selectedLane, selectLane } = useJourney()
+  const chosen = selectedLane === data.characterId
+  return <div className={`journey-lane-head${chosen ? ' selected' : ''}`} style={{ width: HEADER_WIDTH - 16, height: data.height - 8 }}>
     <Handle type="source" id="out" position={Position.Left} isConnectable={false} />
     <Handle type="target" id="in" position={Position.Left} isConnectable={false} />
-    <strong>{data.name}</strong>
+    <button type="button" className="journey-lane-select nodrag" aria-pressed={chosen} onClick={() => selectLane(data.characterId)}>
+      <strong>{data.name}</strong><span className="visually-hidden"> lane</span>
+    </button>
     {data.role && <small>{data.role}</small>}
     <button type="button" className="button quiet small nodrag" onClick={() => addCard(data.characterId)}>Add card<span className="visually-hidden"> for {data.name}</span></button>
   </div>
@@ -161,7 +167,9 @@ function buildNodes(layout: JourneyLayout, actLabels: Map<number, string>, showC
     nodes.push({ id: column.key, type: 'column', position: { x: column.x + 6, y: 0 }, data: { label: column.label, moved: column.movedFrom, actLabel, sceneId: column.sceneId }, draggable: false, selectable: false })
   }
   for (const lane of layout.lanes) {
-    nodes.push({ id: `lane-${lane.character.id}`, type: 'lane', position: { x: 0, y: lane.y + 4 }, data: { name: lane.character.name, role: lane.character.role, characterId: lane.character.id, height: lane.height }, draggable: false, selectable: false })
+    nodes.push({ id: `lane-${lane.character.id}`, type: 'lane', position: { x: 0, y: lane.y + 4 }, data: { name: lane.character.name, role: lane.character.role, characterId: lane.character.id, height: lane.height }, draggable: false, selectable: false,
+      // A node that is neither draggable nor selectable gets no pointer events; its buttons must stay clickable.
+      style: { pointerEvents: 'all' } })
   }
   const sceneOf = (column: number) => layout.columns[column]?.sceneId
   for (const card of layout.cards) {

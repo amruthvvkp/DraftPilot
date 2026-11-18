@@ -7,6 +7,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.core.db import async_get_db
 from draftpilot.core.story import entities
+from draftpilot.core.story.journey import (
+    JourneySummary,
+    MomentParticipants,
+    journey_summary,
+    set_moment_participants,
+)
 from draftpilot.core.story.storyline import storyline
 from draftpilot.core.story.structure import require_project
 from draftpilot.core.story.visuals import StoryVisuals, story_visuals
@@ -281,6 +287,12 @@ async def read_story_visuals(
     return await story_visuals(session, project_id, screenplay_id)
 
 
+@router.get("/journey", response_model=JourneySummary)
+async def read_journey(project_id: int, session: AsyncSession = Depends(async_get_db)) -> JourneySummary:
+    """Return the Journey map in brief: lanes in story order, shared moments and the arc check's findings."""
+    return await journey_summary(session, project_id)
+
+
 # Shared moments --------------------------------------------------------------------------------
 
 
@@ -359,3 +371,9 @@ async def delete_narrative_variant(
 ) -> None:
     """Delete a narrative variant."""
     await entities.delete_entity(session, project_id, "variant", variant_id, expected_version=if_match)
+
+
+@router.put("/moments/{moment_id}/participants", response_model=list[CharacterTimelineEventRead])
+async def put_moment_participants(project_id: int, moment_id: int, data: MomentParticipants, session: AsyncSession = Depends(async_get_db)) -> list[Any]:
+    """Make exactly these timeline events a shared moment's participants; any other event leaves it."""
+    return await set_moment_participants(session, project_id, moment_id, data)

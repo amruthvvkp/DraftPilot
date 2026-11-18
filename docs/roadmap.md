@@ -65,6 +65,9 @@ Still open after v1.0:
 
 - rich-text editing in the page: the Document editor ([#56](https://github.com/amruthvvkp/DraftPilot/issues/56),
   v1.2) brings it behind *Settings → Editor*; it becomes the default once the journeys pass on both;
+- ✅ the character journey map (v1.2, epic #53): data (#55), the map (#57), visual tools (#59) and
+  its agents (#58: chat focus and card, `read_journey` and journey proposals, `develop_story`
+  intensities and proposed shared moments, the arc check, the `journey` eval suite);
 - ✅ a second local judge model for the evals (`EVAL__SECOND_JUDGE_MODEL`, v1.1, #50): both judges grade, and the run reports where they agree;
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy: the proxy,
   the bootstrap and linked fetch/route spans landed (v1.1, #47); manual spans, a "Send diagnostics"

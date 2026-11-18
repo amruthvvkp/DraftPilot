@@ -191,3 +191,58 @@ class CastDeveloped(Evaluator[Any, Any, Any]):
         leads = sum(str(member.get("role", "")).casefold() == "protagonist" for member in cast)
         ok = len(cast) >= 3 and complete and len(wants) == len(cast) and leads >= 1
         return EvaluationReason(value=ok, reason=f"cast={len(cast)} complete={complete} distinct_wants={len(wants)} protagonists={leads}")
+
+
+@dataclass
+class SensibleIntensities(Evaluator[Any, Any, Any]):
+    """A journey timeline's intensities stay in −5…+5, span a real range, turn at least once, and carry motivations."""
+
+    min_range: int = 3
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
+        """Check the shape of ``output['moments']``."""
+        from draftpilot.core.story.journey import count_turns
+
+        moments = list((ctx.output or {}).get("moments", []))
+        values = [int(moment.get("intensity", 0)) for moment in moments]
+        motivated = sum(bool(str(moment.get("motivation", "")).strip()) for moment in moments)
+        spread = max(values) - min(values) if values else 0
+        turns = count_turns(values)
+        ok = len(values) >= 4 and all(-5 <= value <= 5 for value in values) and spread >= self.min_range and turns >= 1 and motivated >= 0.75 * len(values)
+        return EvaluationReason(value=ok, reason=f"intensities={values} range={spread} turns={turns} motivated={motivated}/{len(values)}")
+
+
+@dataclass
+class FindsSharedMoments(Evaluator[Any, Any, Any]):
+    """Every expected meeting is proposed (all its cards in one moment) and no proposed moment pairs unrelated cards."""
+
+    expected: list[list[int]]
+    unrelated: list[int] = field(default_factory=list)
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> dict[str, EvaluationReason | float]:
+        """Score recall over the expected meetings; pass only with full recall and no unrelated card merged."""
+        found = [set(moment.get("event_ids", [])) for moment in (ctx.output or {}).get("moments", [])]
+        hits = [pair for pair in self.expected if any(set(pair) <= moment for moment in found)]
+        stray = sorted({card for moment in found for card in moment if card in self.unrelated})
+        recall = len(hits) / len(self.expected) if self.expected else 1.0
+        reason = f"found {len(hits)}/{len(self.expected)} meetings; unrelated cards merged: {stray}; proposed={[sorted(item) for item in found]}"
+        return {"FindsSharedMoments": EvaluationReason(value=recall == 1.0 and not stray, reason=reason), "shared_moment_recall": recall}
+
+
+@dataclass
+class FlagsArc(Evaluator[Any, Any, Any]):
+    """The arc check reports this character with this kind of finding, and its note explains it."""
+
+    character: str
+    kind: str
+
+    def get_default_evaluation_name(self) -> str:
+        """Name each check by what it looks for, so two of them don't collide in a report."""
+        return f"FlagsArc[{self.character}:{self.kind}]"
+
+    def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
+        """Look for the note in ``output['report']``."""
+        notes = list(((ctx.output or {}).get("report") or {}).get("notes", []))
+        match = [note for note in notes if str(note.get("character", "")).casefold().startswith(self.character.casefold()) and note.get("kind") == self.kind]
+        ok = bool(match) and all(str(note.get("note", "")).strip() for note in match)
+        return EvaluationReason(value=ok, reason=f"{self.character}/{self.kind} in {[(note.get('character'), note.get('kind')) for note in notes]}")

@@ -176,3 +176,36 @@ export function SceneCard({ call, args, result, projectId }: CardProps) {
     {sceneId !== null && call.status === 'done' && <Link to={`/projects/${projectId}?scene=${sceneId}`}>Open {heading} ↗</Link>}
   </CardShell>
 }
+
+type JourneyCardEvent = { id: number; title: string; intensity: number; moment_id: number | null }
+type JourneyCardLane = { character_id: number; name: string; events: JourneyCardEvent[] }
+
+/** The Journey map's intensity bands, as the map colours its cards. */
+function band(intensity: number): string {
+  if (intensity <= -3) return 'deep-low'
+  if (intensity < 0) return 'low'
+  if (intensity === 0) return 'even'
+  return intensity >= 3 ? 'peak' : 'high'
+}
+
+/** `read_journey`: a mini lane strip (one row of intensity-banded cards per character) and the arc check's findings. */
+export function JourneyCard({ call, result, projectId }: CardProps) {
+  const map = isObject(result) ? result : {}
+  const lanes = (Array.isArray(map.lanes) ? map.lanes.filter(isObject) : []) as unknown as JourneyCardLane[]
+  const findings = (Array.isArray(map.findings) ? map.findings.filter(isObject) : []).map(item => text(item.detail)).filter(Boolean)
+  const moments = Array.isArray(map.moments) ? map.moments.length : 0
+  return <CardShell call={call} title="Journey map">
+    {lanes.length === 0 && !working(call) && <p className="empty-copy">No lanes yet.</p>}
+    {lanes.length > 0 && <p className="chat-card-lead">{lanes.length} lane{lanes.length === 1 ? '' : 's'} · {moments} shared moment{moments === 1 ? '' : 's'}</p>}
+    <div className="chat-journey">{lanes.map(lane => <div className="chat-journey-lane" key={lane.character_id}>
+      <strong>{lane.name}</strong>
+      <ol aria-label={`${lane.name}'s cards`}>{(Array.isArray(lane.events) ? lane.events : []).map(event => (
+        <li key={event.id} className={`chat-journey-card band-${band(event.intensity)}${event.moment_id !== null ? ' shared' : ''}`}
+          title={`#${event.id} ${event.title} (${event.intensity > 0 ? '+' : ''}${event.intensity})`}>
+          <span className="visually-hidden">{event.title}, intensity {event.intensity}</span>
+        </li>))}</ol>
+    </div>)}</div>
+    {findings.length > 0 && <ul className="chat-journey-findings">{findings.map((finding, index) => <li key={index}>{finding}</li>)}</ul>}
+    <Link to={`/projects/${projectId}/journey`}>Open the journey map ↗</Link>
+  </CardShell>
+}

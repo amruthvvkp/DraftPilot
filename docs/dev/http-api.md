@@ -232,6 +232,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `GET` | `/projects/{project_id}/characters/{character_id}` | Return one character. |  | 200 `CharacterRead` |
 | `PATCH` | `/projects/{project_id}/characters/{character_id}` | Update a character profile with optimistic concurrency. | `CharacterUpdate` | 200 `CharacterRead` |
 | `GET` | `/projects/{project_id}/characters/{character_id}/timeline` | List one character's timeline events in story order. |  | 200 list of `CharacterTimelineEventRead` |
+| `GET` | `/projects/{project_id}/journey` | Return the Journey map in brief: lanes in story order, shared moments and the arc check's findings. |  | 200 `JourneySummary` |
 | `GET` | `/projects/{project_id}/locations` | List locations. |  | 200 list of `LocationRead` |
 | `POST` | `/projects/{project_id}/locations` | Create a location. | `LocationCreate` | 201 `LocationRead` |
 | `DELETE` | `/projects/{project_id}/locations/{location_id}` | Delete a location. |  | 204 |
@@ -240,6 +241,7 @@ Every endpoint lives under `/api/v1`. Except for the `auth` endpoints, all of th
 | `POST` | `/projects/{project_id}/moments` | Create a moment several characters share; link their events to it with ``moment_id``. | `StoryMomentCreate` | 201 `StoryMomentRead` |
 | `DELETE` | `/projects/{project_id}/moments/{moment_id}` | Delete a shared moment; its participants' events stay, unlinked. |  | 204 |
 | `PATCH` | `/projects/{project_id}/moments/{moment_id}` | Update a shared moment with optimistic concurrency. | `StoryMomentUpdate` | 200 `StoryMomentRead` |
+| `PUT` | `/projects/{project_id}/moments/{moment_id}/participants` | Make exactly these timeline events a shared moment's participants; any other event leaves it. | `MomentParticipants` | 200 list of `CharacterTimelineEventRead` |
 | `GET` | `/projects/{project_id}/narrative-variants` | List saved narrative orders. |  | 200 list of `NarrativeVariantRead` |
 | `POST` | `/projects/{project_id}/narrative-variants` | Save a named scene order without applying it. | `NarrativeVariantCreate` | 201 `NarrativeVariantRead` |
 | `DELETE` | `/projects/{project_id}/narrative-variants/{variant_id}` | Delete a narrative variant. |  | 204 |

@@ -14,6 +14,7 @@ from fastmcp.exceptions import ToolError
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from draftpilot.api.app import create_app
+from draftpilot.core import proposals
 from draftpilot.core.agent_identity import InternalAgent, identity_meta
 from draftpilot.crud.mcp_access import decide_approval
 from draftpilot.mcp import server, studio_tools
@@ -102,6 +103,8 @@ PARITY: dict[str, str] = {
     "POST /projects/{project_id}/moments": "create_story_entity",
     "PATCH /projects/{project_id}/moments/{moment_id}": "update_story_entity",
     "DELETE /projects/{project_id}/moments/{moment_id}": "delete_story_entity",
+    "PUT /projects/{project_id}/moments/{moment_id}/participants": "set_moment_participants",
+    "GET /projects/{project_id}/journey": "read_journey",
     "GET /projects/{project_id}/monty-executions": "read_monty_executions",
     "POST /projects/{project_id}/analyze-script": "analyze_script",
     "POST /projects/{project_id}/continuity-rules": "check_continuity_rules",
@@ -380,6 +383,60 @@ def test_an_external_agent_maps_a_shared_moment(studio: AsyncSession) -> None:
                 await dp.call("propose_story_change", project_id=pid, kind="variant", action="create", fields={"name": "Mine"})
             await dp.call("delete_story_entity", project_id=pid, kind="moment", entity_id=moment["id"], expected_version=2)
             assert _result(await dp.call("list_story_entities", project_id=pid, kind="moment")) == []
+
+    run_async(scenario())
+
+
+def test_an_agent_reads_the_journey_and_proposes_cards_and_shared_moments(studio: AsyncSession) -> None:
+    """read_journey summarises lanes and findings; journey proposals change nothing until approved, and roll back cleanly."""
+
+    async def scenario() -> None:
+        """Build two lanes, read the map, propose a card change and a shared moment, approve, roll back, then edit directly."""
+        async with Client(server.mcp) as client:
+            dp = Studio(client, studio)
+            pid = (await dp.call("create_project", title="The River"))["id"]
+            edward = await dp.call("create_story_entity", project_id=pid, kind="character", fields={"name": "Edward", "role": "protagonist"})
+            will = await dp.call("create_story_entity", project_id=pid, kind="character", fields={"name": "Will"})
+            karl = await dp.call("create_story_entity", project_id=pid, kind="character", fields={"name": "Karl"})
+            cards = {}
+            for character, rows in ((edward, [("Witch", 1, -3), ("Circus", 2, 2), ("River", 3, 4)]), (will, [("Wedding", 1, 0), ("Hospital", 2, 1)]), (karl, [("Cave", 1, 3)])):
+                for title, chrono, intensity in rows:
+                    fields = {"character_id": character["id"], "title": title, "chrono_index": chrono, "intensity": intensity}
+                    cards[title] = (await dp.call("create_story_entity", project_id=pid, kind="timeline_event", fields=fields))["id"]
+            journey = await dp.call("read_journey", project_id=pid)
+            assert journey["protagonist_id"] == edward["id"]
+            first = journey["lanes"][0]
+            assert (first["name"], [event["title"] for event in first["events"]]) == ("Edward", ["Witch", "Circus", "River"])
+            found = {(item["character"], item["kind"]) for item in journey["findings"]}
+            assert found == {("Edward", "never_turns"), ("Will", "flat_arc"), ("Will", "never_crosses_protagonist"), ("Karl", "too_few_cards"), ("Karl", "never_crosses_protagonist")}
+
+            change = await dp.call("propose_journey_event", project_id=pid, event_id=cards["Hospital"], intensity=-4, motivation="He is afraid to lose him")
+            assert change["target_kind"] == "timeline_event" and change["operation"]["fields"] == {"intensity": -4, "motivation": "He is afraid to lose him"}
+            with pytest.raises(ToolError):
+                await dp.call("propose_journey_event", project_id=pid, event_id=cards["Hospital"])
+            with pytest.raises(ToolError, match="two characters"):
+                await dp.call("propose_shared_moment", project_id=pid, title="Alone", event_ids=[cards["Witch"], cards["River"]])
+            shared = await dp.call("propose_shared_moment", project_id=pid, title="The hospital", event_ids=[cards["River"], cards["Hospital"]], story_time="today")
+            journey = await dp.call("read_journey", project_id=pid)
+            assert journey["moments"] == [] and journey["lanes"][1]["events"][1]["intensity"] == 1  # nothing applied yet
+
+            await proposals.approve(studio, pid, change["id"])
+            approved = await proposals.approve(studio, pid, shared["id"])
+            journey = await dp.call("read_journey", project_id=pid)
+            assert [(moment["title"], moment["character_ids"]) for moment in journey["moments"]] == [("The hospital", sorted([edward["id"], will["id"]]))]
+            will_lane = next(lane for lane in journey["lanes"] if lane["name"] == "Will")
+            assert will_lane["crosses_protagonist"] and will_lane["events"][1]["motivation"] == "He is afraid to lose him"
+            assert not [item for item in journey["findings"] if item["character"] == "Will"]  # no longer flat, and now crosses Edward
+
+            await proposals.rollback(studio, pid, approved.id)
+            journey = await dp.call("read_journey", project_id=pid)
+            assert journey["moments"] == [] and all(event["moment_id"] is None for lane in journey["lanes"] for event in lane["events"])
+
+            moment = await dp.call("create_story_entity", project_id=pid, kind="moment", fields={"title": "The cave"})
+            linked = await dp.call("set_moment_participants", project_id=pid, moment_id=moment["id"], event_ids=[cards["Cave"], cards["Witch"]], expected_version=1)
+            assert sorted(row["id"] for row in _result(linked)) == sorted([cards["Cave"], cards["Witch"]])
+            linked = await dp.call("set_moment_participants", project_id=pid, moment_id=moment["id"], event_ids=[cards["Cave"]], expected_version=1)
+            assert [row["id"] for row in _result(linked)] == [cards["Cave"]]
 
     run_async(scenario())
 

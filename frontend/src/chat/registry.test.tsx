@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it } from 'vitest'
 import { mockApi } from '../test/harness'
-import { CharacterCard, GenericCard, OutlineCard, PlanCard, ProposalCard, SceneCard, SpecialistCard, WorkflowCard } from './cards'
+import { CharacterCard, GenericCard, JourneyCard, OutlineCard, PlanCard, ProposalCard, SceneCard, SpecialistCard, WorkflowCard } from './cards'
 import type { ToolEntry } from './reducer'
 import { cardFor, ToolCard } from './registry'
 
@@ -33,6 +33,27 @@ describe('generative UI registry', () => {
     expect(cardFor(call('consult_many'))).toBe(SpecialistCard)
     expect(cardFor(call('write_scene'))).toBe(SceneCard)
     expect(cardFor(call('read_project_overview'))).toBe(GenericCard)
+    expect(cardFor(call('read_journey'))).toBe(JourneyCard)
+    expect(cardFor(call('propose_shared_moment'))).toBe(ProposalCard)
+  })
+
+  it('renders the journey map as a mini lane strip with the arc check', () => {
+    const map = {
+      protagonist_id: 1, moments: [{ id: 9 }],
+      lanes: [
+        { character_id: 1, name: 'Edward', events: [{ id: 3, title: 'The witch', intensity: -4, moment_id: null }, { id: 4, title: 'The river', intensity: 5, moment_id: 9 }] },
+        { character_id: 2, name: 'Will', events: [{ id: 5, title: 'The wedding', intensity: 0, moment_id: null }] },
+      ],
+      findings: [{ kind: 'too_few_cards', detail: 'Will has 1 card on the map, too few to read an arc.' }],
+    }
+    show(call('read_journey', { project_id: 3 }, map))
+    expect(screen.getByText('2 lanes · 1 shared moment')).toBeTruthy()
+    const edward = screen.getByRole('list', { name: "Edward's cards" })
+    expect(edward.querySelectorAll('li')).toHaveLength(2)
+    expect(edward.querySelector('.band-deep-low')).toBeTruthy()
+    expect(edward.querySelector('.band-peak.shared')).toBeTruthy()
+    expect(screen.getByText('Will has 1 card on the map, too few to read an arc.')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Open the journey map ↗' }).getAttribute('href')).toBe('/projects/3/journey')
   })
 
   it('renders a plan as a checklist', () => {

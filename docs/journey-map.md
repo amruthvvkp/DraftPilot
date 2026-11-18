@@ -95,3 +95,45 @@ Every drag has a keyboard equivalent:
 | Place an unplaced card | Pick its scene in the panel (Narrative), or **Place on axis** (Chronology) |
 
 On the Chronology axis, a step moves a card past the neighbouring column of story time.
+
+## The room on the map
+
+The map is a chat focus. Open a card or a shared moment, or click a character's name in their lane
+header to select the lane, and the [chat](chat.md) knows what you are looking at. Ask about it in
+plain words:
+
+- "Where is Will's emotional low?" The room reads the map and names the cards.
+- "Give Josephine a reason to be here." It proposes a **motivation** on her card.
+- "Move the confrontation before the funeral." It proposes a scene reorder, which appears here as
+  ghosts until you apply it.
+
+The room only ever proposes. Card changes and shared moments arrive under **For your review** in
+the chat (and on the writers' room page), and nothing on the map changes until you approve them.
+A shared moment the room proposes merges its cards only when you approve it; rolling it back takes
+everyone out of it again.
+
+When the room reads the map, the chat shows a **Journey map** card: a small strip of each lane's
+cards, coloured by intensity, with the arc check's findings.
+
+### Develop the story
+
+In **Develop the story** ([writers' room](writers-room.md)), each lead's timeline arrives with an
+intensity and a motivation on every card. After you approve the timelines, the story editor looks
+for the moments the leads share and proposes them as shared moments, one proposal each. Run only
+the **timelines** stage to do this for the cast you already have.
+
+### Arc check
+
+**Arc check** in the writers' room reads the map and reports, per character:
+
+| Finding | Means |
+|---|---|
+| Flat arc | the lane's intensity stays within one step across its cards |
+| Never turns | the intensity only rises or only falls (three cards or more) |
+| Never crosses the protagonist | the character shares no moment and no scene with the lead (the character whose role is protagonist) |
+| Too few cards | a single card, too few to read an arc |
+
+Characters with no cards are left out: they are not on the map yet. The findings are measured
+from the cards, so the same map always gets the same findings. The
+character specialist then explains each one with card ids and suggests a fix. The check is a
+report; it changes nothing.
