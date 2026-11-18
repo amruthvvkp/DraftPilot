@@ -19,6 +19,7 @@ AgentRoleKey = Literal[
     "continuity_supervisor",
     "associate_director",
     "audience_evaluator",
+    "twin_keeper",
 ]
 
 
@@ -45,6 +46,7 @@ AGENT_ROLES: tuple[AgentRole, ...] = (
     AgentRole(key="continuity_supervisor", label="Continuity supervisor", description="Check timeline, canon, props, locations, and character continuity."),
     AgentRole(key="associate_director", label="Associate director", description="Develop staging, camera, lighting, and production-facing context."),
     AgentRole(key="audience_evaluator", label="Audience evaluator", description="Evaluate audience clarity, tone, pacing, and emotional impact."),
+    AgentRole(key="twin_keeper", label="Twin keeper", description="Keep the Story twin true to the script: cast, places, timelines, and canon."),
 )
 
 AGENT_ROLE_KEYS = frozenset(role.key for role in AGENT_ROLES)

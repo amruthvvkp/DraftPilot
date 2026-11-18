@@ -70,6 +70,7 @@ with workflow.unsafe.imports_passed_through():
         Shortlist,
         StorylineDraft,
         cast_ids,
+        continuity_rule_findings,
         critique_text,
         find_leads,
         known_scene_ids,
@@ -89,6 +90,7 @@ with workflow.unsafe.imports_passed_through():
         record_agent_run,
         record_progress,
         rewrite_facts,
+        rule_findings_text,
         scope_text,
         story_brief,
         summarize_panel,
@@ -473,6 +475,12 @@ class ContinuityPass(RoomWorkflowBase):
                 + f"\n\n{scenes}"
             )
             tools = False
+        rules: dict[str, Any] | None = None
+        if workflow.patched("continuity-rules-as-code"):
+            # Exact checks first, as code in the Monty sandbox (a no-op unless MONTY__ENABLED); the supervisor judges them.
+            rules = await self.activity(continuity_rule_findings, self.room.project_id, self.room.workflow_run_id, params.scene_ids)
+            if rules["findings"]:
+                scope = f"{scope}\n\n{rule_findings_text(rules['findings'])}"
         report = await self.consult(
             "continuity",
             "continuity_supervisor",
@@ -482,7 +490,11 @@ class ContinuityPass(RoomWorkflowBase):
         )
         known = set(await self.activity(known_scene_ids, self.room.project_id))
         issues = [issue.model_dump() for issue in report.issues if all(scene_id in known for scene_id in issue.scene_ids)]
-        return {"issues": issues, "dropped": len(report.issues) - len(issues)}
+        result: dict[str, Any] = {"issues": issues, "dropped": len(report.issues) - len(issues)}
+        if rules is not None:
+            result["rule_findings"] = rules["findings"]
+            result["rules_enabled"] = rules["enabled"]
+        return result
 
 
 @workflow.defn(name="room:chat")

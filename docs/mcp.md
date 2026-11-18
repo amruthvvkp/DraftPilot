@@ -92,7 +92,7 @@ changed the target since.
 | Proposals | `list_proposals`, `propose_screenplay_change`, `review_screenplay_proposal`, `reject_proposal`, `propose_timeline_reorder`, `review_timeline_proposal`, `reject_timeline_proposal` |
 | Revisions, import and export | `snapshot_scene`, `read_scene_revisions`, `diff_scene_revisions`, `restore_scene_revision`, `import_screenplay`, `render_screenplay_export`, `create_screenplay_export`, `list_project_backups`, `create_project_backup`, `restore_project_backup` |
 | Canon, twins and search | `read_story_twin`, `refresh_story_twin_now`, `write_canon_node`, `write_canon_edge`, `read_writer_twin`, `update_writer_profile`, `remember_writer_preference`, `retrieve_project_context`, `reindex_project_search` |
-| Room and runs | `list_room_workflows`, `start_room_workflow`, `start_context_workflow`, `apply_context_workflow`, `start_evaluation`, `read_project_evaluations`, `read_workflow_run`, `control_workflow_run`, `read_monty_executions` |
+| Room and runs | `list_room_workflows`, `start_room_workflow`, `start_context_workflow`, `apply_context_workflow`, `start_evaluation`, `read_project_evaluations`, `read_workflow_run`, `control_workflow_run`, `read_monty_executions`, `analyze_script`, `check_continuity_rules` |
 
 Resources: `draftpilot://capabilities`, `draftpilot://schemas/context`, `draftpilot://context-workflows`,
 and per project `.../storyline`, `.../characters`, `.../outline`, `.../locations`, `.../timeline`,
@@ -200,6 +200,9 @@ storyline, characters and outline, prefer the story-entity tools and `propose_st
   Creating and restoring need approval, and a restore always creates a new project.
 - `read_monty_executions` returns only redacted [Monty](monty.md) audit fields; generated code and
   inputs are never returned.
+- `analyze_script` runs one read-only snippet over the script and Story twin in the [Monty sandbox](monty.md),
+  and `check_continuity_rules` runs the built-in continuity rules there. Both need `MONTY__ENABLED`, the
+  `script.analyze` grant and, for external clients, `MCP__ENABLE_CODE_TOOLS=true`. Every run is audited.
 - `read_project_evaluations` returns project evaluations.
 
 ### Runs

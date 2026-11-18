@@ -122,6 +122,14 @@ APPROVAL_TOOLS = frozenset(
     }
 )
 EDIT_TOOLS = APPROVAL_TOOLS | {"start_context_workflow", "import_screenplay", "duplicate_project"}
+# Read-only Monty tools, offered only to code-mode roles while MONTY__ENABLED is on.
+CODE_TOOLS = frozenset({"analyze_script", "check_continuity_rules"})
+
+
+def code_mode_active(role: str, deps: RoomDeps) -> bool:
+    """Return whether this run of ``role`` gets the code tools: a code-mode role, tools on, and Monty enabled."""
+    spec = load_specs().get(role)
+    return bool(spec and spec.code_mode and deps.tools and deps.code_mode and settings.monty.enabled)
 
 
 def tools_for_mode(permission_mode: str) -> frozenset[str]:
@@ -153,6 +161,8 @@ def room_toolset(*, gate_writes: bool = False) -> Any:
     def allowed(ctx: RunContext[Any], tool: ToolDefinition) -> bool:
         """Offer a tool only when the run may use tools and its permission mode allows this one."""
         deps: RoomDeps = ctx.deps
+        if tool.name in CODE_TOOLS:
+            return code_mode_active(getattr(getattr(ctx, "agent", None), "name", None) or "", deps)
         return deps.tools and tool.name in tools_for_mode(deps.permission_mode)
 
     toolset: MCPToolset[RoomDeps] = MCPToolset(mcp, id="draftpilot", process_tool_call=_stamp_identity)
@@ -214,6 +224,21 @@ BASE_INSTRUCTIONS = (
 )
 
 
+CODE_MODE_INSTRUCTIONS = (
+    "Code mode: for exact questions about the script or the Story twin (counts, shares, who appears where, "
+    "pacing, timelines), call analyze_script with one short Python snippet instead of reading many scenes. "
+    "It sees two read-only objects. `script`: `script.title`, `script.scenes` (dicts in script order with "
+    "id, number, act, heading, int_ext, location, time, year, words, action_words, dialogue_words, speakers, "
+    "speaker_words, speaker_lines, action), and methods `script.summary()`, `script.scene(id)`, "
+    "`script.dialogue_share(by='words'|'lines')`, `script.pacing_curve()`, `script.scene_character_matrix(top=0)`, "
+    "`script.character_scenes(name)`. `story`: `story.characters`, `story.relationships`, `story.events` "
+    "(timeline events), `story.locations`, `story.beats`, `story.facts` (canon), and `story.character(name)`, "
+    "`story.events_for(name)`. The snippet's last expression is the result; there is no file, network or "
+    "database access, and it cannot change anything. check_continuity_rules runs the built-in continuity rules. "
+    "Quote the exact numbers it returns."
+)
+
+
 def role_model_settings(spec: RoleSpec, thinking: bool | None = None) -> ModelSettings:
     """Return a role's sampling settings, with reasoning off when asked, or when the role or ``LLM__THINKING`` says so."""
     model_settings = ModelSettings(temperature=spec.temperature, max_tokens=spec.max_tokens)
@@ -269,7 +294,10 @@ def _build_role_agent(spec: RoleSpec, durability: TemporalDurability[RoomDeps], 
         Local chat templates (e.g. Qwen in LM Studio) reject more than one system message,
         so base, role, and run-context layers are joined rather than sent separately.
         """
-        return "\n\n".join([BASE_INSTRUCTIONS, spec.instructions.strip(), _context_instructions(ctx)])
+        layers = [BASE_INSTRUCTIONS, spec.instructions.strip(), _context_instructions(ctx)]
+        if code_mode_active(spec.key, ctx.deps):
+            layers.append(CODE_MODE_INSTRUCTIONS)
+        return "\n\n".join(layers)
 
     return agent
 
@@ -329,6 +357,7 @@ SPECIALISTS = frozenset(
         "associate_director",
         "audience_evaluator",
         "coverage_reader",
+        "twin_keeper",
     }
 )
 
@@ -351,7 +380,7 @@ def _add_consult_tool(agent: Agent[RoomDeps, Any]) -> None:
 
         role: one of story_architect, story_editor, brainstormer, character_specialist, scene_writer,
         script_editor, script_doctor, researcher, continuity_supervisor, associate_director,
-        audience_evaluator, coverage_reader.
+        audience_evaluator, coverage_reader, twin_keeper.
         """
         from draftpilot.agents.specs import role_spec
 
