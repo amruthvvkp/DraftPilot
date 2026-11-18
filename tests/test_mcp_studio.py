@@ -27,6 +27,8 @@ PARITY: dict[str, str] = {
     "DELETE /auth/session": EXEMPT + ": browser logout",
     "GET /auth/status": EXEMPT + ": browser login",
     "GET /capabilities": EXEMPT + ": published as the draftpilot://capabilities resource",
+    "GET /telemetry/config": EXEMPT + ": browser telemetry bootstrap",
+    "POST /telemetry/v1/{signal}": EXEMPT + ": browser OTLP transport",
     "POST /mcp/clients": EXEMPT + ": MCP administration needs the admin token, never a client",
     "GET /mcp/grants": EXEMPT + ": MCP administration",
     "POST /mcp/grants": EXEMPT + ": MCP administration",

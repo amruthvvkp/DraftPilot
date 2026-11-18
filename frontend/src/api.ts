@@ -209,6 +209,12 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+export type TelemetryConfig = { enabled: boolean; service_name: string; service_version: string; environment: string }
+
+export function getTelemetryConfig(): Promise<TelemetryConfig> {
+  return request<TelemetryConfig>('/api/v1/telemetry/config')
+}
+
 export function listProjects(): Promise<Project[]> {
   return request<Project[]>('/api/v1/projects')
 }

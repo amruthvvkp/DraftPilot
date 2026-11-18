@@ -71,7 +71,8 @@ def setup(web: bool = False, mcp: bool = False, worker: bool = False) -> None:
 def instrument_app(app: "FastAPI") -> None:
     """Instrument the web process's FastAPI app when telemetry is enabled."""
     if settings.otel.enabled:
-        logfire.instrument_fastapi(app)
+        # The browser OTLP proxy is transport, not application work: tracing it would add a span per export.
+        logfire.instrument_fastapi(app, excluded_urls="/api/v1/telemetry/v1/")
 
 
 def instrument_mcp() -> None:
