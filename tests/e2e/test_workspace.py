@@ -100,7 +100,8 @@ def test_project_opens_react_screenplay_workspace(page: Page) -> None:
     expect(page).to_have_url(re.compile(r"/projects/9001$"))
     expect(page.get_by_role("heading", name="The Lantern House")).to_be_visible()
     expect(page.get_by_label("Edit scene heading")).to_have_value("INT. LANTERN HOUSE - NIGHT")
-    expect(page.get_by_role("button", name="Unpair")).to_be_visible()
+    # A lone dual dialogue (no partner speech before it) offers no unpair, only a disabled pair.
+    expect(page.get_by_role("button", name="Pair with previous dialogue (block 2)")).to_be_disabled()
     expect(page.get_by_label("New scene heading")).to_have_value("INT. - DAY")
     expect(page.get_by_label("New screenplay element")).to_have_value("action")
     expect(page.get_by_role("button", name="Paginated")).to_be_visible()

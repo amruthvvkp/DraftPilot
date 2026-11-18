@@ -29,6 +29,16 @@
 .script-document .script-el.section{font-weight:700;text-transform:uppercase;letter-spacing:.08em}
 .script-document .script-el.page_break{border-top:1px dashed var(--line-strong);min-height:0;height:0;margin:24px 0;overflow:hidden}
 .script-document .script-el.dual{border-right:3px solid var(--accent-wash)}
+/* Dual dialogue: a scene with a pair becomes a two-column grid; paired speeches fill one column each. */
+.script-document .script-scene.has-dual{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:row dense;column-gap:24px;align-items:start}
+.script-document .script-scene.has-dual>*{grid-column:1 / -1}
+.script-document .script-scene.has-dual>.dual-left{grid-column:1}
+.script-document .script-scene.has-dual>.dual-right{grid-column:2}
+.script-document .script-el.dual-left,.script-document .script-el.dual-right{border-right:0}
+.script-document .script-el.character.dual-left,.script-document .script-el.character.dual-right{margin:18px 0 0 30%}
+.script-document .script-el.dialogue.dual-left,.script-document .script-el.dialogue.dual-right{margin:0 4% 12px 6%}
+.script-document .script-el.parenthetical.dual-left,.script-document .script-el.parenthetical.dual-right{margin:0 10% 0 18%}
+.document-toolbar .dual-button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-wash);color:var(--accent-strong)}
 .script-document .script-el.agent-authored{box-shadow:inset 2px 0 0 color-mix(in srgb, var(--accent) 45%, transparent)}
 .script-document .script-color{color:var(--accent-strong)}
 .script-document .is-empty::before{content:attr(data-placeholder);float:left;height:0;color:var(--ink-faint);pointer-events:none}

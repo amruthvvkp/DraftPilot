@@ -22,6 +22,12 @@ function scriptBackend(initial: Scene[]) {
     'POST /api/v1/projects/3/scenes/7/move': call => { Object.assign(scenes[0], { act_id: (call.body as { act_id: number }).act_id, position: 0, version: 2 }); return scenes[0] },
     'DELETE /api/v1/projects/3/scenes/7': () => { scenes.splice(0, 1); return { status: 204 } },
     'PATCH /api/v1/projects/3/scenes/7/blocks/20': call => { Object.assign(blocks[7][0], call.body); return blocks[7][0] },
+    'PUT /api/v1/projects/3/scenes/7/content': call => {
+      const sent = (call.body as { blocks: (Partial<ReturnType<typeof block>> & { id: number })[] }).blocks
+      blocks[7] = sent.map(item => ({ ...blocks[7].find(row => row.id === item.id)!, ...item }))
+      scenes[0].version += 1
+      return { scene_id: 7, version: scenes[0].version, block_ids: sent.map(item => item.id), created_ids: [] }
+    },
   })
   return { api, scenes, blocks }
 }
@@ -71,6 +77,26 @@ describe('Script workspace', () => {
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(document.activeElement).toBe(dialogue)
     expect(action.value).toBe('The **house** breathes.')
+  })
+
+  it('pairs a dialogue with the previous speech and unpairs it in one content write', async () => {
+    const { api, blocks } = scriptBackend([scene(7, 'INT. HALL - NIGHT', 4, 0)])
+    blocks[7].push(block(21, 7, 'character', 'MIRA'), block(22, 7, 'dialogue', 'We should go.'), block(23, 7, 'character', 'EDWARD'), block(24, 7, 'dialogue', 'Not yet.'))
+    renderAt('/projects/3')
+    // The first speech has nothing before it to pair with.
+    expect((await screen.findByRole('button', { name: 'Pair with previous dialogue (block 3)' })).hasAttribute('disabled')).toBe(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Pair with previous dialogue (block 5)' }))
+    await waitFor(() => expect(blocks[7].slice(1).every(row => row.is_dual && row.dual_group === 1)).toBe(true))
+    const write = api.calls.find(call => call.method === 'PUT')!
+    expect(write.headers.get('If-Match')).toBe('1')
+    expect((write.body as { blocks: { id: number; is_dual: boolean }[] }).blocks.map(row => [row.id, row.is_dual])).toEqual([[20, false], [21, true], [22, true], [23, true], [24, true]])
+    expect(document.querySelector('.semantic-blocks.has-dual')).not.toBeNull()
+    expect(document.querySelectorAll('.semantic-row.dual-left')).toHaveLength(2)
+    expect(document.querySelectorAll('.semantic-row.dual-right')).toHaveLength(2)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Unpair dual dialogue (block 3)' }))
+    await waitFor(() => expect(blocks[7].every(row => !row.is_dual && row.dual_group === null)).toBe(true))
+    await waitFor(() => expect(document.querySelector('.has-dual')).toBeNull())
   })
 
   it('toggles the continuous view for real', async () => {

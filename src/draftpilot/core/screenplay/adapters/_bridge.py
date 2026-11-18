@@ -5,6 +5,8 @@ Both the Fountain and FDX adapters parse into / render from the same
 lives here and is shared.
 """
 
+from itertools import pairwise
+
 from screenplay_tools import screenplay as st
 
 from draftpilot.core.screenplay.schema import ActDoc, BlockDoc, SceneDoc, ScreenplayDoc
@@ -46,6 +48,59 @@ def _element_to_block(element: st.Element) -> BlockDoc:
     return BlockDoc(element_type=block_type, text=element.text)
 
 
+_SPEECH = {BlockType.CHARACTER, BlockType.PARENTHETICAL, BlockType.DIALOGUE}
+
+
+def _speeches(blocks: list[BlockDoc]) -> list[range]:
+    """Split a scene's blocks into speeches: a cue and the dialogue under it."""
+    found: list[range] = []
+    start: int | None = None
+    for index, block in enumerate(blocks):
+        if block.element_type not in _SPEECH:
+            if start is not None:
+                found.append(range(start, index))
+            start = None
+        elif block.element_type is BlockType.CHARACTER or start is None:
+            if start is not None:
+                found.append(range(start, index))
+            start = index
+    if start is not None:
+        found.append(range(start, len(blocks)))
+    return found
+
+
+def _link_dual_dialogue(blocks: list[BlockDoc]) -> None:
+    """Group each ``^`` cue's speech with the speech before it (both get ``is_dual`` and a group)."""
+    group = 0
+    for previous, speech in pairwise(_speeches(blocks)):
+        cue = blocks[speech.start]
+        if (
+            not cue.is_dual
+            or cue.dual_group is not None
+            or previous.stop != speech.start
+        ):
+            continue
+        group += 1
+        for index in [*previous, *speech]:
+            blocks[index].is_dual = True
+            blocks[index].dual_group = group
+
+
+def _second_dual_cues(blocks: list[BlockDoc]) -> set[int]:
+    """Return the indexes of cues that close a dual dialogue pair (they carry the ``^``)."""
+    seen: set[int] = set()
+    second: set[int] = set()
+    for index, block in enumerate(blocks):
+        if block.element_type is not BlockType.CHARACTER or not block.is_dual:
+            continue
+        # Without a group (older imports) only the second cue was ever marked dual.
+        if block.dual_group is None or block.dual_group in seen:
+            second.add(index)
+        else:
+            seen.add(block.dual_group)
+    return second
+
+
 def script_to_doc(script: st.Script) -> ScreenplayDoc:
     """Convert a ``screenplay-tools`` ``Script`` into a single-act ``ScreenplayDoc``."""
     title_page = {entry.key: entry.text for entry in script.titleEntries}
@@ -60,15 +115,17 @@ def script_to_doc(script: st.Script) -> ScreenplayDoc:
             current = SceneDoc(heading="")
             scenes.append(current)
         current.blocks.append(_element_to_block(element))
+    for scene in scenes:
+        _link_dual_dialogue(scene.blocks)
     return ScreenplayDoc(title_page=title_page, acts=[ActDoc(scenes=scenes)])
 
 
-def _block_to_element(block: BlockDoc) -> st.Element:
+def _block_to_element(block: BlockDoc, dual: bool = False) -> st.Element:
     """Convert one ``BlockDoc`` back into a ``screenplay-tools`` element."""
     match block.element_type:
         case BlockType.CHARACTER:
             return st.Character(
-                block.text, extension=block.character_extension, dual=block.is_dual
+                block.text, extension=block.character_extension, dual=dual
             )
         case BlockType.SECTION:
             level = int((block.marks or {}).get("level", 1))
@@ -106,6 +163,7 @@ def doc_to_script(doc: ScreenplayDoc) -> st.Script:
         for scene in act.scenes:
             if scene.heading:
                 script.add_element(st.SceneHeading(scene.heading))
-            for block in scene.blocks:
-                script.add_element(_block_to_element(block))
+            second = _second_dual_cues(scene.blocks)
+            for index, block in enumerate(scene.blocks):
+                script.add_element(_block_to_element(block, dual=index in second))
     return script

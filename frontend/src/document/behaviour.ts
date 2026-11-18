@@ -7,6 +7,8 @@
 import { Extension } from '@tiptap/core'
 import { Fragment, type Node as PMNode, type NodeType, Slice } from '@tiptap/pm/model'
 import { type EditorState, Plugin, PluginKey, TextSelection, type Transaction } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { type DualItem, dualAction, dualLayout, planDualToggle } from '../script/dualDialogue'
 import { inferElement } from '../smartTyping'
 import { inlineContent, structureKey } from './convert'
 import { newUid } from './schema'
@@ -24,7 +26,7 @@ declare module '@tiptap/core' {
       scriptEnter: () => ReturnType
       /** Tab or Shift+Tab, by the typing rules. */
       scriptTab: (shift?: boolean) => ReturnType
-      /** Toggle "pair with previous dialogue" on the dialogue under the cursor. */
+      /** Pair the speech under the cursor with the previous one, or unpair it (dual dialogue). */
       toggleDualDialogue: () => ReturnType
     }
   }
@@ -112,32 +114,67 @@ export function setElementType(type: string) {
   }
 }
 
-/** Pair a dialogue element with the previous dialogue (dual dialogue), or unpair it. */
+/** The dual dialogue fields of a scene's elements, in order (the heading is child 0). */
+function sceneItems(scene: PMNode): DualItem[] {
+  const items: DualItem[] = []
+  scene.forEach((child, _offset, index) => {
+    if (index > 0) items.push({ element_type: String(child.attrs.element_type), is_dual: Boolean(child.attrs.is_dual), dual_group: (child.attrs.dual_group as number | null) ?? null })
+  })
+  return items
+}
+
+/** Whether the element under the cursor can be paired with the previous speech, unpaired, or neither. */
+export function dualDialogueAction(state: EditorState): 'pair' | 'unpair' | null {
+  const current = currentElement(state)
+  return current ? dualAction(sceneItems(current.scene), current.index - 1) : null
+}
+
+/** Pair the speech under the cursor with the previous one (dual dialogue), or unpair its pair. */
 export function toggleDualDialogue(state: EditorState, dispatch: Dispatch): boolean {
   const current = currentElement(state)
-  if (!current || current.node.attrs.element_type !== 'dialogue') return false
+  if (!current) return false
+  const plan = planDualToggle(sceneItems(current.scene), current.index - 1)
+  if (!plan) return false
   if (!dispatch) return true
   const tr = state.tr
-  if (current.node.attrs.is_dual) {
-    tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, is_dual: false, dual_group: null })
-  } else {
-    // The pair shares a dual_group: the previous dialogue's, or a new one.
-    let group: number | null = null
-    let previousPos = -1
-    let pos = current.scenePos + 1
-    for (let index = 0; index < current.index; index += 1) {
-      const child = current.scene.child(index)
-      if (child.attrs.element_type === 'dialogue') { group = (child.attrs.dual_group as number | null) ?? null; previousPos = pos }
-      pos += child.nodeSize
-    }
-    if (previousPos < 0) return false
-    const previous = tr.doc.nodeAt(previousPos)!
-    const groupId = group ?? Date.now() % 1_000_000
-    tr.setNodeMarkup(previousPos, undefined, { ...previous.attrs, is_dual: true, dual_group: groupId })
-    tr.setNodeMarkup(current.pos, undefined, { ...current.node.attrs, is_dual: true, dual_group: groupId })
+  const positions: number[] = []
+  current.scene.forEach((_child, offset) => { positions.push(current.scenePos + 1 + offset) })
+  for (const change of plan.changes) {
+    const pos = positions[change.index + 1]
+    const node = tr.doc.nodeAt(pos)!
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, is_dual: change.is_dual, dual_group: change.dual_group })
   }
   dispatch(tr)
   return true
+}
+
+/** Lay paired speeches out side by side: column classes on their elements and a grid on the scene. */
+function dualLayoutPlugin(): Plugin {
+  const build = (doc: PMNode): DecorationSet => {
+    const decorations: Decoration[] = []
+    doc.descendants((node, pos) => {
+      if (node.type.name !== 'scene') return node.type.name === 'act' || node.type.name === 'doc'
+      const layout = dualLayout(sceneItems(node))
+      if (!layout.size) return false
+      decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: 'has-dual' }))
+      node.forEach((child, offset, index) => {
+        const place = layout.get(index - 1)
+        if (!place) return
+        const from = pos + 1 + offset
+        decorations.push(Decoration.node(from, from + child.nodeSize, { class: `dual-${place.side}`, ...(place.span > 1 ? { style: `grid-row: span ${place.span}` } : {}) }))
+      })
+      return false
+    })
+    return DecorationSet.create(doc, decorations)
+  }
+  return new Plugin({
+    key: new PluginKey('scriptDualLayout'),
+    state: {
+      init: (_config, state) => build(state.doc),
+      apply: (tr, previous) => tr.docChanged ? build(tr.doc) : previous,
+    },
+    props: { decorations(state) { return this.getState(state) } },
+  })
 }
 
 /**
@@ -220,7 +257,7 @@ function pastePlugin(): Plugin {
   })
 }
 
-/** Typing rules, element shortcuts, identity, the structure guard and paste handling. */
+/** Typing rules, element shortcuts, identity, the structure guard, paste handling and dual dialogue layout. */
 export const ScriptBehaviour = Extension.create<BehaviourOptions>({
   name: 'scriptBehaviour',
   priority: 1000,
@@ -239,6 +276,9 @@ export const ScriptBehaviour = Extension.create<BehaviourOptions>({
       'Shift-Enter': () => this.editor.commands.insertContent('\n'),
       Tab: () => this.editor.commands.scriptTab(false),
       'Shift-Tab': () => this.editor.commands.scriptTab(true),
+      // Final Draft's dual dialogue shortcut; ⌘⌥D for browsers that keep ⌘D for bookmarks.
+      'Mod-d': () => this.editor.commands.toggleDualDialogue(),
+      'Mod-Alt-d': () => this.editor.commands.toggleDualDialogue(),
     }
     SHORTCUT_TYPES.forEach((type, index) => {
       shortcuts[`Mod-${index + 1}`] = () => this.editor.commands.setElementType(type)
@@ -247,6 +287,6 @@ export const ScriptBehaviour = Extension.create<BehaviourOptions>({
     return shortcuts
   },
   addProseMirrorPlugins() {
-    return [identityPlugin(this.options.owner), structureGuard(), pastePlugin()]
+    return [identityPlugin(this.options.owner), structureGuard(), pastePlugin(), dualLayoutPlugin()]
   },
 })

@@ -128,6 +128,64 @@ def test_dual_dialogue_groups_are_positive_and_new() -> None:
     assert dual_dialogue_group(4, 7) == 8
 
 
+DUAL = """INT. HOUSE - NIGHT
+
+MIRA
+We should go.
+
+EDWARD ^
+(quietly)
+Not yet.
+
+They leave.
+
+MIRA
+Now.
+
+EDWARD
+Fine.
+"""
+
+
+def test_fountain_dual_dialogue_groups_both_speeches() -> None:
+    """Import a ``^`` cue as a pair: both speeches share ``is_dual`` and one group."""
+    blocks = parse_fountain(DUAL).acts[0].scenes[0].blocks
+    assert [(b.text, b.is_dual, b.dual_group) for b in blocks[:5]] == [
+        ("MIRA", True, 1),
+        ("We should go.", True, 1),
+        ("EDWARD", True, 1),
+        ("quietly", True, 1),
+        ("Not yet.", True, 1),
+    ]
+    assert not any(b.is_dual for b in blocks[5:])
+
+
+def test_fountain_dual_dialogue_round_trips() -> None:
+    """Export the ``^`` on the second cue only, and read it back to the same pair."""
+    doc = parse_fountain(DUAL)
+    text = render_fountain(doc)
+    assert "EDWARD ^" in text
+    assert "MIRA ^" not in text
+    assert text.count("^") == 1
+    assert parse_fountain(text) == doc
+
+
+def test_fountain_exports_ungrouped_dual_cue() -> None:
+    """Keep the ``^`` for drafts that marked only the second cue (no group)."""
+    doc = parse_fountain("INT. HOUSE - NIGHT\n\nMIRA\nGo.\n\nEDWARD\nStay.\n")
+    blocks = doc.acts[0].scenes[0].blocks
+    blocks[2].is_dual = True
+    assert "EDWARD ^" in render_fountain(doc)
+
+
+def test_fountain_unpaired_dialogue_exports_without_caret() -> None:
+    """Drop the ``^`` once the pair is cleared."""
+    doc = parse_fountain(DUAL)
+    for block in doc.acts[0].scenes[0].blocks:
+        block.is_dual, block.dual_group = False, None
+    assert "^" not in render_fountain(doc)
+
+
 def test_revision_snapshot_contains_selectable_scene_sections() -> None:
     """Represent named revision content as independently restorable sections."""
     revision = SceneRevision(

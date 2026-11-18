@@ -287,3 +287,57 @@ def test_document_conflict_from_a_second_tab(page: Page) -> None:
     bar.get_by_role("button", name="Keep mine").click()
     _saved(page)
     assert studio.texts(7) == [("action", "One. First tab. Mine wins.")]
+
+
+DUAL_SCENE = [(7, "INT. LANTERN HOUSE - NIGHT", [("character", "MIRA"), ("dialogue", "We should go."), ("character", "EDWARD"), ("dialogue", "Not yet."), ("action", "They wait.")])]
+
+
+def _dual(studio: FakeStudio) -> list[tuple[bool, int | None]]:
+    """Return each block's dual dialogue fields."""
+    return [(block["is_dual"], block["dual_group"]) for block in studio.blocks[7]]
+
+
+def _changed_then_saved(page: Page) -> None:
+    """Wait for an edit to be noticed (the save is debounced), then for it to save."""
+    expect(page.get_by_role("status", name="Save status")).not_to_have_text("All changes saved")
+    _saved(page)
+
+
+def test_document_dual_dialogue_pair_and_unpair(page: Page) -> None:
+    """⌘D pairs a speech with the previous one side by side; the toolbar button unpairs it."""
+    studio = FakeStudio(DUAL_SCENE)
+    _open(page.context, page, studio)
+    tools = page.get_by_role("toolbar", name="Document tools")
+    page.get_by_role("textbox", name="Dialogue 1").click()
+    expect(tools.get_by_role("button", name="Pair with previous dialogue")).to_be_disabled()
+    page.get_by_role("textbox", name="Dialogue 2").click()
+    expect(tools.get_by_role("button", name="Pair with previous dialogue")).to_be_enabled()  # the caret has moved
+    page.keyboard.press("ControlOrMeta+d")
+    expect(tools.get_by_role("button", name="Unpair dual dialogue")).to_have_attribute("aria-pressed", "true")
+    _changed_then_saved(page)
+    assert _dual(studio) == [(True, 1)] * 4 + [(False, None)]
+    first = page.get_by_role("textbox", name="Character 1").bounding_box()
+    second = page.get_by_role("textbox", name="Character 2").bounding_box()
+    assert first and second and abs(first["y"] - second["y"]) < 4 and second["x"] > first["x"] + first["width"] / 2, "the pair sits side by side"
+
+    tools.get_by_role("button", name="Unpair dual dialogue").click()
+    expect(tools.get_by_role("button", name="Pair with previous dialogue")).to_be_enabled()
+    _changed_then_saved(page)
+    assert _dual(studio) == [(False, None)] * 5
+    assert page.get_by_role("textbox", name="Character 2").bounding_box()["y"] > first["y"] + 20  # type: ignore[index]
+
+
+def test_classic_dual_dialogue_pair_and_unpair(page: Page) -> None:
+    """The Classic editor pairs a dialogue with the previous speech and unpairs it, one content write each."""
+    studio = FakeStudio(DUAL_SCENE)
+    page.route("**/api/v1/**", studio.respond)
+    page.goto("/projects/9001")
+    expect(page.get_by_role("button", name="Pair with previous dialogue (block 2)")).to_be_disabled()
+    page.get_by_role("button", name="Pair with previous dialogue (block 4)").click()
+    expect(page.get_by_role("button", name="Unpair dual dialogue (block 2)")).to_be_visible()
+    assert _dual(studio) == [(True, 1)] * 4 + [(False, None)]
+    assert len(studio.writes) == 1
+    expect(page.locator(".semantic-blocks.has-dual .dual-right")).to_have_count(2)
+    page.get_by_role("button", name="Unpair dual dialogue (block 2)").click()
+    expect(page.get_by_role("button", name="Pair with previous dialogue (block 4)")).to_be_enabled()
+    assert _dual(studio) == [(False, None)] * 5

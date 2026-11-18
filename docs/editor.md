@@ -47,6 +47,18 @@ The formatting toolbar above the page wraps the selected text in **bold**, *ital
 amber mark. These are stored as Fountain markup (`**bold**`, `*italic*`, `_underline_`), shown as
 you typed them, and exported as-is.
 
+### Dual dialogue
+
+Two characters speaking at once sit side by side. On a dialogue block, **⫴ Pair with previous
+dialogue** pairs its speech (the character cue, any parenthetical and the dialogue) with the speech
+just before it; the two then show in two columns. On either side of a pair the same button reads
+**Unpair dual dialogue** and puts them back one under the other.
+
+Only adjacent speeches pair: the button is disabled on the first speech of a scene, after an
+action, or when the speech before is already in a pair. The pair saves in one write, together with
+any text you were still typing. In Fountain the second cue carries a `^` (`EDWARD ^`); imports read
+it as a pair and exports write it back.
+
 ## Scenes
 
 - A draft with no scenes shows **Your first scene starts here.** Type a heading such as
@@ -91,9 +103,13 @@ cues as it goes.
 ### Formatting
 
 Select text and a toolbar appears: undo and redo, the element type, **bold**, *italic*, underline,
-strike, the amber mark and, on dialogue, **Pair with previous dialogue** (dual dialogue). ++cmd+b++,
-++cmd+i++ and ++cmd+u++ work too. The **Current element type** picker above the page changes the
-element under the cursor.
+strike, the amber mark and, on a cue, parenthetical or dialogue, **Pair with previous dialogue**.
+++cmd+b++, ++cmd+i++ and ++cmd+u++ work too. The **Current element type** picker above the page
+changes the element under the cursor.
+
+**Dual dialogue** works as in Classic (see [Dual dialogue](#dual-dialogue)): with the cursor in a
+speech, ++cmd+d++ (or ++cmd+alt+d++, for browsers that keep ++cmd+d++ for bookmarks) or the ⫴ button
+above the page pairs it with the speech before, side by side, and pressing it again unpairs.
 
 Formatting shows as formatting, not as markup. It is still stored as Fountain markup (`**bold**`,
 `*italic*`, `_underline_`, `~~strike~~` and `[[color:#dda05d]]…[[/color]]`), so exports, search and

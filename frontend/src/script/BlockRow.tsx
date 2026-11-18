@@ -27,11 +27,15 @@ type BlockRowProps = {
   onTypeChange: (elementType: string) => void
   onMove: (delta: -1 | 1) => void
   onDelete: () => void
+  /** Dual dialogue: the pair action on a dialogue row, and where the row sits in a pair. */
+  dual?: { action: 'pair' | 'unpair' | null; side?: 'left' | 'right'; span?: number; onToggle: () => void }
 }
 
 /** One screenplay element: its type (changed directly), its text, and move/delete controls. */
-export default function BlockRow({ block, index, count, draft, onDraft, onFocus, onBlur, onTypeChange, onMove, onDelete }: BlockRowProps) {
-  return <div className={block.is_dual ? 'semantic-row dual-block' : 'semantic-row'}>
+export default function BlockRow({ block, index, count, draft, onDraft, onFocus, onBlur, onTypeChange, onMove, onDelete, dual }: BlockRowProps) {
+  const className = ['semantic-row', block.is_dual && 'dual-block', dual?.side && `dual-${dual.side}`].filter(Boolean).join(' ')
+  const pairLabel = dual?.action === 'unpair' ? 'Unpair dual dialogue' : 'Pair with previous dialogue'
+  return <div className={className} style={dual?.span && dual.span > 1 ? { gridRow: `span ${dual.span}` } : undefined}>
     <select className="element-selector" value={block.element_type} onChange={event => onTypeChange(event.target.value)} aria-label={`Format ${block.element_type}`}>
       {ELEMENT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
     </select>
@@ -43,6 +47,10 @@ export default function BlockRow({ block, index, count, draft, onDraft, onFocus,
         aria-label={`Edit ${block.element_type}`} aria-keyshortcuts="Tab" />}
     <div className="block-actions" role="group" aria-label={`Block ${index + 1} actions`}>
       {block.origin && block.origin !== 'human' && <span className="block-origin" title="Last authored by">{block.origin.startsWith('proposal:') ? 'agent' : block.origin}</span>}
+      {dual && block.element_type === 'dialogue' && <button type="button" className="mini-button dual-button" aria-pressed={dual.action === 'unpair'} disabled={!dual.action}
+        // Keep the textarea focused, so the pair saves with its unsaved text instead of racing its blur save.
+        onMouseDown={event => event.preventDefault()} onClick={dual.onToggle}
+        aria-label={`${pairLabel} (block ${index + 1})`} title={dual.action ? pairLabel : 'Pair needs a speech right before this one'}>⫴</button>}
       <button type="button" className="mini-button" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Move block ${index + 1} up`}>↑</button>
       <button type="button" className="mini-button" onClick={() => onMove(1)} disabled={index === count - 1} aria-label={`Move block ${index + 1} down`}>↓</button>
       <button type="button" className="mini-button danger" onClick={onDelete} aria-label={`Delete block ${index + 1}`}>✕</button>
