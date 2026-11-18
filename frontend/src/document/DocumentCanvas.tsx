@@ -10,7 +10,7 @@ import { storyApi } from '../storyApi'
 import { REMOTE, ScriptBehaviour } from './behaviour'
 import BeatNoteView, { type BeatActions } from './BeatNoteView'
 import { buildDoc, sceneNodes } from './convert'
-import FloatingToolbar, { ElementTypeSelect } from './FloatingToolbar'
+import FloatingToolbar, { DualDialogueButton, ElementTypeSelect } from './FloatingToolbar'
 import { type OverlayActions, overlayKey, ScriptOverlay } from './overlay'
 import { BeatNote, ELEMENT_LABELS, schemaExtensions } from './schema'
 import { dispatchRemote, DocumentSync, flushPendingDOM, type SyncStatus } from './sync'
@@ -209,6 +209,7 @@ export default function DocumentCanvas({ projectId, workspace, onFocusChange, ju
   return <div className={`document-canvas${outlineHidden ? ' outline-hidden' : ''}`} ref={container}>
     <div className="document-toolbar" role="toolbar" aria-label="Document tools">
       {editor && <ElementTypeSelect editor={editor} label="Current element type" />}
+      {editor && <DualDialogueButton editor={editor} />}
       <button type="button" className="view-switch" role="switch" aria-checked={!outlineHidden} onClick={() => setOutlineHidden(value => !value)}>
         Outline <i className={outlineHidden ? 'toggle' : 'toggle on'} aria-hidden="true" />
       </button>

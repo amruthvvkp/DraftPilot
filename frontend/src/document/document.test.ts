@@ -247,12 +247,42 @@ describe('typing rules', () => {
     expect(sceneOf(editor).content.blocks.map(item => item.text)).toEqual(['First.', 'Already here'])
   })
 
-  it('pairs a dialogue with the previous one', () => {
+  it('pairs a speech with the previous one, lays them side by side, and unpairs', () => {
+    const editor = makeEditor({ 7: [block(1, 'character', 'A'), block(2, 'dialogue', 'One'), block(3, 'character', 'B'), block(4, 'dialogue', 'Two'), block(5, 'action', 'After.')] })
+    cursorIn(editor, 'Two')
+    expect(editor.commands.toggleDualDialogue()).toBe(true)
+    let blocks = sceneOf(editor).content.blocks
+    expect(blocks.slice(0, 4).map(item => [item.is_dual, item.dual_group])).toEqual([[true, 1], [true, 1], [true, 1], [true, 1]])
+    expect(blocks[4].is_dual).toBe(false)
+    const dom = editor.view.dom
+    expect(dom.querySelector('.script-scene.has-dual')).not.toBeNull()
+    expect([...dom.querySelectorAll('.dual-left')].map(node => node.textContent)).toEqual(['A', 'One'])
+    expect([...dom.querySelectorAll('.dual-right')].map(node => node.textContent)).toEqual(['B', 'Two'])
+
+    cursorIn(editor, 'A')
+    expect(editor.commands.toggleDualDialogue()).toBe(true)
+    blocks = sceneOf(editor).content.blocks
+    expect(blocks.every(item => !item.is_dual && item.dual_group === null)).toBe(true)
+    expect(dom.querySelector('.has-dual')).toBeNull()
+  })
+
+  it('pairs and unpairs with ⌘D, and refuses the first speech', () => {
     const editor = makeEditor({ 7: [block(1, 'character', 'A'), block(2, 'dialogue', 'One'), block(3, 'character', 'B'), block(4, 'dialogue', 'Two')] })
+    cursorIn(editor, 'One')
+    expect(editor.commands.toggleDualDialogue()).toBe(false)
+    cursorIn(editor, 'Two')
+    press(editor, 'Mod-d')
+    expect(sceneOf(editor).content.blocks.every(item => item.is_dual)).toBe(true)
+    press(editor, 'Mod-Alt-d')
+    expect(sceneOf(editor).content.blocks.some(item => item.is_dual)).toBe(false)
+  })
+
+  it('saves an older single-cue pair as a pair and unpairs it fully', () => {
+    const editor = makeEditor({ 7: [block(1, 'character', 'A'), block(2, 'dialogue', 'One'), block(3, 'character', 'B', { is_dual: true }), block(4, 'dialogue', 'Two')] })
+    expect(editor.view.dom.querySelectorAll('.dual-left')).toHaveLength(2)
     cursorIn(editor, 'Two')
     editor.commands.toggleDualDialogue()
-    const blocks = sceneOf(editor).content.blocks
-    expect(blocks[1].is_dual && blocks[3].is_dual && blocks[1].dual_group === blocks[3].dual_group).toBe(true)
+    expect(sceneOf(editor).content.blocks.some(item => item.is_dual)).toBe(false)
   })
 })
 

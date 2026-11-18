@@ -2,7 +2,7 @@ import './room.css'
 import { type ChangeEvent, lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { CLIENT_ID, createProjectBackup, deleteProjectBlock, getDialogueTranslations, importScreenplay, listProjectBackups, ProjectBackup, ProjectWorkspace, reorderProjectBlocks, restoreProjectBackup, saveDialogueTranslation, Scene, ScreenplayBlock, subscribeProjectEvents, updateProject, updateProjectBlock, updateProjectScene } from './api'
+import { CLIENT_ID, createProjectBackup, deleteProjectBlock, getDialogueTranslations, importScreenplay, listProjectBackups, ProjectBackup, ProjectWorkspace, reorderProjectBlocks, restoreProjectBackup, saveDialogueTranslation, Scene, ScreenplayBlock, subscribeProjectEvents, updateProject, updateProjectBlock, updateProjectScene, writeSceneContent } from './api'
 import { errorMessage, keys, useWorkspace } from './data/queries'
 import { storyApi } from './storyApi'
 import Timeline from './Timeline'
@@ -13,6 +13,7 @@ import BlockCreationPanel from './BlockCreationPanel'
 import SceneCreationPanel from './SceneCreationPanel'
 import ConfirmDialog from './project/ConfirmDialog'
 import BlockRow from './script/BlockRow'
+import { dualAction, dualLayout, planDualToggle } from './script/dualDialogue'
 import { useEditorView } from './script/editorView'
 import SceneNavigator, { type SceneMoves, type Timing } from './script/SceneNavigator'
 import { inferElement } from './smartTyping'
@@ -211,6 +212,20 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
     if (!window.confirm('Delete this block? Its dialogue translations are deleted too.')) return
     void mutate(() => deleteProjectBlock(projectId, scene.id, block.id, scene.version), 'Unable to delete block')
   }
+  /** Pair the speech at `index` with the previous one, or unpair it, in one scene content write. */
+  function toggleDual(scene: Scene, index: number): void {
+    const blocks = workspace?.blocks[scene.id] ?? []
+    const plan = planDualToggle(blocks, index)
+    if (!plan) return
+    const changes = new Map(plan.changes.map(change => [change.index, change]))
+    void mutate(() => writeSceneContent(projectId, scene.id, scene.version, {
+      blocks: blocks.map((block, position) => {
+        const change = changes.get(position)
+        return { id: block.id, element_type: block.element_type, text: drafts[block.id] ?? block.text, character_extension: block.character_extension,
+          is_dual: change ? change.is_dual : block.is_dual, dual_group: change ? change.dual_group : block.dual_group }
+      }),
+    }), 'Unable to change dual dialogue')
+  }
   function switchDraft(screenplayId: number): void {
     const next = new URLSearchParams(params)
     next.set('draft', String(screenplayId))
@@ -312,6 +327,7 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
 
   const otherLanguages = workspace.project.languages.filter(language => language !== workspace.project.primary_language)
   const sceneBlocks = selectedScene ? workspace.blocks[selectedScene.id] ?? [] : []
+  const sceneDual = dualLayout(sceneBlocks)
   return <div className="workspace-shell">
     <header className="workspace-topbar">
       <div className="workspace-left">
@@ -362,11 +378,12 @@ export default function Workspace({ projectId, initialTimeline = false }: Worksp
           <DocumentCanvas key={workspace.screenplay?.id ?? 0} projectId={projectId} workspace={workspace} jump={jump} onFocusChange={setDocumentFocus} />
         </Suspense> : selectedScene ? <article className="script-page">
           <input className="script-heading" list="screenplay-headings" value={sceneHeading} onChange={event => setSceneHeading(event.target.value)} onBlur={() => void saveSceneHeading()} aria-label="Edit scene heading" />
-          {sceneBlocks.length ? <div className="semantic-blocks">{sceneBlocks.map((block, index) => <BlockRow key={block.id} block={block} index={index} count={sceneBlocks.length}
+          {sceneBlocks.length ? <div className={sceneDual.size ? 'semantic-blocks has-dual' : 'semantic-blocks'}>{sceneBlocks.map((block, index) => <BlockRow key={block.id} block={block} index={index} count={sceneBlocks.length}
             draft={drafts[block.id] ?? block.text} onDraft={text => setDrafts(previous => ({ ...previous, [block.id]: text }))}
             onFocus={() => setActiveBlockId(block.id)} onBlur={() => void saveBlock(selectedScene, block)}
             onTypeChange={elementType => changeBlockType(selectedScene, block, elementType)}
-            onMove={delta => moveBlock(selectedScene, index, delta)} onDelete={() => removeBlock(selectedScene, block)} />)}</div>
+            onMove={delta => moveBlock(selectedScene, index, delta)} onDelete={() => removeBlock(selectedScene, block)}
+            dual={{ action: dualAction(sceneBlocks, index), ...sceneDual.get(index), onToggle: () => toggleDual(selectedScene, index) }} />)}</div>
             : <p className="script-body">{selectedScene.body || 'Begin writing this scene…'}</p>}
           <FormatToolbar onWrap={wrapper => wrapSelection(wrapper, wrapper, 'text')} onColor={() => wrapSelection('[[color:#dda05d]]', '[[/color]]', 'colored')} />
           <BlockCreationPanel key={selectedScene.id} projectId={projectId} scene={selectedScene} />
