@@ -15,9 +15,24 @@ export type CharacterFields = Partial<Omit<Character, 'id' | 'project_id' | 'ver
 export type TimelineEvent = {
   id: number; project_id: number; version: number; character_id: number; position: number
   story_time: string; title: string; description: string; objective: string; emotional_state: string
-  scene_id: number | null; beat_id: number | null
+  motivation: string; history: string
+  /** Emotional valence, −5 (a low) … +5 (a high). */
+  intensity: number
+  /** Sortable story-world position; `story_time` is its label. Null means undated. */
+  chrono_index: number | null
+  scene_id: number | null; beat_id: number | null; moment_id: number | null
 }
 export type TimelineEventFields = Partial<Omit<TimelineEvent, 'id' | 'project_id' | 'version'>>
+
+/** A moment several characters share; each participant's event links to it with `moment_id`. */
+export type StoryMoment = {
+  id: number; project_id: number; version: number
+  title: string; summary: string; chrono_index: number | null; story_time: string; scene_id: number | null; beat_id: number | null
+}
+export type StoryMomentFields = Partial<Omit<StoryMoment, 'id' | 'project_id' | 'version'>>
+
+/** A named narrative order (scene ids in telling order) saved without applying it. */
+export type NarrativeVariant = { id: number; project_id: number; version: number; name: string; scene_ids: number[] }
 
 export type Relationship = { id: number; project_id: number; version: number; source_character_id: number; target_character_id: number; relation: string; description: string }
 
@@ -62,7 +77,7 @@ export type VisualEdge = { source: number; target: number; shared_moments: numbe
 const base = (projectId: number) => `/api/v1/projects/${projectId}`
 const versioned = (version: number) => ({ 'If-Match': String(version) })
 
-type Collection = 'characters' | 'timeline-events' | 'relationships' | 'locations' | 'beats'
+type Collection = 'characters' | 'timeline-events' | 'relationships' | 'locations' | 'beats' | 'moments' | 'narrative-variants'
 
 function list<T>(projectId: number, collection: Collection, query = ''): Promise<T[]> {
   return request<T[]>(`${base(projectId)}/${collection}${query}`)
@@ -111,6 +126,15 @@ export const storyApi = {
   createBeat: (projectId: number, fields: BeatFields & { title: string }) => create<Beat>(projectId, 'beats', fields),
   updateBeat: (projectId: number, row: Beat, fields: BeatFields) => update<Beat>(projectId, 'beats', row.id, row.version, fields),
   deleteBeat: (projectId: number, row: Beat) => remove(projectId, 'beats', row.id, row.version),
+
+  moments: (projectId: number) => list<StoryMoment>(projectId, 'moments'),
+  createMoment: (projectId: number, fields: StoryMomentFields & { title: string }) => create<StoryMoment>(projectId, 'moments', fields),
+  updateMoment: (projectId: number, row: StoryMoment, fields: StoryMomentFields) => update<StoryMoment>(projectId, 'moments', row.id, row.version, fields),
+  deleteMoment: (projectId: number, row: StoryMoment) => remove(projectId, 'moments', row.id, row.version),
+
+  variants: (projectId: number) => list<NarrativeVariant>(projectId, 'narrative-variants'),
+  createVariant: (projectId: number, fields: { name: string; scene_ids: number[] }) => create<NarrativeVariant>(projectId, 'narrative-variants', fields),
+  deleteVariant: (projectId: number, row: NarrativeVariant) => remove(projectId, 'narrative-variants', row.id, row.version),
 
   createAct: (projectId: number, title: string, screenplayId?: number) =>
     request<Act>(`${base(projectId)}/acts`, { method: 'POST', body: JSON.stringify({ title, screenplay_id: screenplayId ?? null }) }),

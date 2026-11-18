@@ -30,7 +30,7 @@ export const TOOL_LABELS: Record<string, string> = {
 export const ROLE_LABELS: Record<string, string> = {
   showrunner: 'Showrunner', story_editor: 'Story editor', script_doctor: 'Script doctor', scene_writer: 'Scene writer',
   brainstormer: 'Brainstormer', story_architect: 'Story architect', character_specialist: 'Character specialist',
-  audience_evaluator: 'Audience evaluator', coverage_reader: 'Coverage reader', continuity_supervisor: 'Continuity supervisor',
+  audience_evaluator: 'Audience evaluator', coverage_reader: 'Coverage reader', continuity_supervisor: 'Continuity supervisor', twin_keeper: 'Twin keeper',
   researcher: 'Researcher', associate_director: 'Associate director',
 }
 

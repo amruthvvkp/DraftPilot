@@ -1,5 +1,7 @@
 """Run tightly bounded model-generated glue code through Pydantic Monty."""
 
+import asyncio
+from collections.abc import Callable
 from dataclasses import dataclass
 from hashlib import sha256
 from time import monotonic
@@ -17,7 +19,12 @@ class MontyDisabledError(RuntimeError):
 
 
 class MontySandboxError(RuntimeError):
-    """Signal rejected or failed sandbox execution."""
+    """Signal rejected or failed sandbox execution; ``detail`` is the sandbox's own error, never audited."""
+
+    def __init__(self, message: str, detail: str = "") -> None:
+        """Keep the audited message apart from the sandbox detail shown to the caller."""
+        super().__init__(message)
+        self.detail = detail
 
 
 @dataclass(frozen=True)
@@ -29,6 +36,7 @@ class MontyExecutionConfig:
     max_input_items: int = 100
     max_duration_seconds: float = 0.5
     max_output_chars: int = 20_000
+    max_memory_mb: int = 64
 
 
 @dataclass(frozen=True)
@@ -69,6 +77,7 @@ def execution_config(settings: MontySettings) -> MontyExecutionConfig:
         max_input_items=settings.max_input_items,
         max_duration_seconds=settings.max_duration_seconds,
         max_output_chars=settings.max_output_chars,
+        max_memory_mb=settings.max_memory_mb,
     )
 
 
@@ -76,8 +85,13 @@ def execute_glue(
     code: str,
     inputs: dict[str, Any] | None = None,
     config: MontyExecutionConfig | None = None,
+    host: dict[str, Callable[..., Any]] | None = None,
 ) -> MontyExecutionResult:
-    """Execute code with Monty and no ambient host capabilities."""
+    """Execute code with Monty; it reaches the host only through the ``host`` functions it is handed.
+
+    ``inputs`` may hold ``pydantic_monty.ClassInstance`` wrappers, which expose only their
+    allow-listed attributes and methods.
+    """
     effective = config or MontyExecutionConfig()
     if not effective.enabled:
         raise MontyDisabledError("Monty execution is disabled")
@@ -103,18 +117,27 @@ def execute_glue(
         with (
             Monty(request_timeout=effective.max_duration_seconds) as pool,
             pool.checkout(
-                limits=ResourceLimits(max_feed_duration_secs=effective.max_duration_seconds),
-                type_check=not values,
+                limits=ResourceLimits(
+                    max_feed_duration_secs=effective.max_duration_seconds,
+                    max_memory=effective.max_memory_mb * 1024 * 1024,
+                ),
+                type_check=not values and not host,
             ) as session,
         ):
-            value = session.feed_run(code, inputs=values, print_callback=capture_stdout)
+            value = session.feed_run(
+                code, inputs=values, external_lookup=dict(host or {}), print_callback=capture_stdout
+            )
         duration_ms = round((monotonic() - started) * 1000)
         logfire.info("Monty glue execution completed in {duration_ms}ms", duration_ms=duration_ms)
         return MontyExecutionResult(value=value, stdout="".join(output), duration_ms=duration_ms)
     except MontySandboxError:
         raise
     except Exception as exc:
-        raise MontySandboxError("Monty execution failed") from exc
+        # The sandbox's own error (e.g. "NameError: ...") helps a model fix its code. It may quote the
+        # code, so it travels as ``detail`` and never reaches the audit record.
+        text = str(exc).strip()
+        detail = text.splitlines()[-1][:300] if text and type(exc).__name__ in {"MontyRuntimeError", "MontySyntaxError"} else ""
+        raise MontySandboxError("Monty execution failed", detail) from exc
 
 
 async def execute_glue_audited(
@@ -124,19 +147,26 @@ async def execute_glue_audited(
     inputs: dict[str, Any] | None = None,
     config: MontyExecutionConfig | None = None,
     run_id: int | None = None,
+    host: dict[str, Callable[..., Any]] | None = None,
+    purpose: str = "glue",
 ) -> MontyExecutionResult:
-    """Execute bounded glue and persist a redacted success or failure audit."""
+    """Execute bounded code off the event loop and persist a redacted success or failure audit."""
     from draftpilot.crud import monty_executions as executions_crud
 
-    try:
-        result = execute_glue(code, inputs, config)
-    except (MontyDisabledError, MontySandboxError) as exc:
+    digest = sha256(code.encode("utf-8")).hexdigest()
+    with logfire.span("monty {purpose}", purpose=purpose, project_id=project_id, run_id=run_id, code_sha256=digest) as span:
+        try:
+            result = await asyncio.to_thread(execute_glue, code, inputs, config, host)
+        except (MontyDisabledError, MontySandboxError) as exc:
+            span.set_attribute("status", "failed")
+            await executions_crud.create(
+                session,
+                audit_record(project_id, code, inputs, run_id=run_id, error=str(exc)),
+            )
+            raise
+        span.set_attribute("status", "completed")
+        span.set_attribute("duration_ms", result.duration_ms)
         await executions_crud.create(
-            session,
-            audit_record(project_id, code, inputs, run_id=run_id, error=str(exc)),
+            session, audit_record(project_id, code, inputs, result=result, run_id=run_id)
         )
-        raise
-    await executions_crud.create(
-        session, audit_record(project_id, code, inputs, result=result, run_id=run_id)
-    )
     return result

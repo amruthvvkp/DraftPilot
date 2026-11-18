@@ -69,7 +69,8 @@ Still open after v1.0:
 - **G12** frontend telemetry with `@pydantic/logfire-browser` via a same-origin OTLP proxy: the proxy,
   the bootstrap and linked fetch/route spans landed (v1.1, #47); manual spans, a "Send diagnostics"
   toggle and an ErrorBoundary are still open;
-- **G13** Monty code mode: CodeMode roles, `analyze_script`, continuity rules as code.
+- **G13** ✅ Monty code mode: code-mode roles, `analyze_script`, continuity rules as code (#48);
+  the harness `DynamicWorkflow` waits for `pydantic-ai` ≥ 2.62.
 
 ## Ground-test screenplay benchmark
 
