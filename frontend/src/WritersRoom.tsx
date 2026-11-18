@@ -231,5 +231,10 @@ function RunResult({ workflow, result }: { workflow: string; result: Json }) {
     const issues = get<Json[]>('issues')
     return <div className="room-result">{issues.length === 0 ? <p>No continuity problems found.</p> : <ul>{issues.map((issue, index) => <li key={index}><small>{String(issue.kind).toUpperCase()} · scenes {(issue.scene_ids as number[]).join(', ') || '—'}</small> {String(issue.description)}{issue.suggestion ? <em> — {String(issue.suggestion)}</em> : null}</li>)}</ul>}</div>
   }
+  if (workflow === 'arc_check') {
+    const report = get<{ summary: string; notes: Json[] }>('report')
+    const kinds: Record<string, string> = { flat_arc: 'Flat arc', never_turns: 'Never turns', never_crosses_protagonist: 'Never crosses the protagonist', too_few_cards: 'Too few cards', other: 'Note' }
+    return <div className="room-result"><p>{report.summary}</p>{report.notes.length === 0 ? <p>No arc problems found.</p> : <ul>{report.notes.map((note, index) => <li key={index}><small>{(kinds[String(note.kind)] ?? String(note.kind)).toUpperCase()} · {String(note.character)}</small> {String(note.note)}{note.suggestion ? <em> — {String(note.suggestion)}</em> : null}</li>)}</ul>}</div>
+  }
   return <pre>{JSON.stringify(result, null, 2)}</pre>
 }

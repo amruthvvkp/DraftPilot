@@ -36,6 +36,12 @@ from draftpilot.core.screenplay.adapters.fountain import render_fountain
 from draftpilot.core.screenplay.hydrate import scene_to_doc
 from draftpilot.core.screenplay.schema import ActDoc, BlockType, ScreenplayDoc
 from draftpilot.core.story import entities as story_entities
+from draftpilot.core.story.journey import (
+    SharedMomentProposal,
+    journey_summary,
+    journey_text,
+    propose_shared_moment,
+)
 from draftpilot.core.story.proposals import propose_outline as propose_outline_beats
 from draftpilot.core.story.proposals import propose_story_change
 from draftpilot.core.twins import normalize_cue, story_twin_brief, working_screenplay
@@ -296,6 +302,56 @@ class CharacterTimeline(BaseModel):
     """A character's arc as moments in story order."""
 
     moments: list[TimelineMoment] = Field(min_length=2, max_length=10)
+
+
+class JourneyMoment(TimelineMoment):
+    """A timeline moment as the Journey map draws it: with its intensity and the reason the character acts."""
+
+    intensity: int = Field(default=0, ge=-5, le=5, description="Emotional valence: -5 the lowest low, +5 the highest high, 0 neutral.")
+    motivation: str = Field(default="", max_length=1000, description="Why the character acts in this moment.")
+
+
+class JourneyTimeline(BaseModel):
+    """A character's arc as moments in story order, each with an intensity and a motivation."""
+
+    moments: list[JourneyMoment] = Field(min_length=2, max_length=10)
+
+
+class SharedMomentDraft(BaseModel):
+    """One moment several characters share, found across their timelines."""
+
+    title: str = Field(min_length=1, max_length=300)
+    event_ids: list[int] = Field(min_length=2, max_length=12, description="The card ids (#n) of each character's side of this moment.")
+    story_time: str = Field(default="", max_length=100)
+    description: str = Field(default="", max_length=2000)
+
+
+class SharedMoments(BaseModel):
+    """The moments where the cast's timelines meet (none is a fine answer)."""
+
+    moments: list[SharedMomentDraft] = Field(default_factory=list, max_length=8)
+
+
+class ArcNote(BaseModel):
+    """One note of the arc check: a character, what is wrong with their arc, and a fix."""
+
+    character: str = Field(min_length=1, max_length=200)
+    kind: Literal["flat_arc", "never_turns", "never_crosses_protagonist", "too_few_cards", "other"]
+    note: str = Field(min_length=1, max_length=1500, description="What the map shows, citing card ids (#n).")
+    suggestion: str = Field(default="", max_length=1500, description="A concrete fix the writer could make.")
+
+
+class ArcCheck(BaseModel):
+    """The arc check's report on the Journey map."""
+
+    summary: str = Field(min_length=1, max_length=2000)
+    notes: list[ArcNote] = Field(default_factory=list, max_length=20)
+
+
+class ArcCheckParams(BaseModel):
+    """Check the Journey map's arcs (optionally with a focus)."""
+
+    focus: str = Field(default="", max_length=2000)
 
 
 PipelineStage = Literal["storyline", "characters", "timelines", "outline", "scenes", "coverage"]
@@ -755,6 +811,75 @@ async def propose_timeline(project_id: int, run_id: int | None, character_id: in
     return ids
 
 
+@activity.defn(name="room_propose_journey_timeline")
+async def propose_journey_timeline(project_id: int, run_id: int | None, character_id: int, name: str, timeline: JourneyTimeline) -> list[int]:
+    """Propose a character's timeline moments in order, with their intensity and motivation."""
+    ids: list[int] = []
+    async with session_scope() as session:
+        start = len(await story_entities.list_entities(session, project_id, "timeline_event", character_id=character_id))
+        for position, moment in enumerate(timeline.moments):
+            fields = {"character_id": character_id, "position": start + position, **moment.model_dump()}
+            proposal = await propose_story_change(session, project_id, "timeline_event", "create", fields, run_id=run_id, summary=f"{name}: {moment.title}")
+            ids.append(proposal.id or 0)
+    return ids
+
+
+@activity.defn(name="room_lead_ids")
+async def lead_ids(project_id: int, top: int) -> dict[str, int]:
+    """Return the project's leads by name with their ids (none is fine: there is nothing to develop)."""
+    async with session_scope() as session:
+        names = await lead_characters(session, project_id, top)
+        rows = await story_entities.list_entities(session, project_id, "character")
+    ids = {row.name: row.id or 0 for row in rows}
+    return {name: ids[name] for name in names if name in ids}
+
+
+@activity.defn(name="room_journey_cards")
+async def journey_cards(project_id: int, event_ids: list[int]) -> dict[str, Any]:
+    """Describe the given cards by character for a prompt, and say how many characters they span."""
+    async with session_scope() as session:
+        names = {row.id: row.name for row in await story_entities.list_entities(session, project_id, "character")}
+        wanted = set(event_ids)
+        rows = [row for row in await story_entities.list_entities(session, project_id, "timeline_event") if row.id in wanted]
+    lines: list[str] = []
+    for character_id in dict.fromkeys(row.character_id for row in rows):
+        lines.append(f"## {names.get(character_id, '?')}")
+        for row in (item for item in rows if item.character_id == character_id):
+            when = f"[{row.story_time}] " if row.story_time else ""
+            lines.append(f"- #{row.id} {when}{row.title}" + (f" — {row.description[:200]}" if row.description else ""))
+    return {"text": "\n".join(lines), "characters": len({row.character_id for row in rows})}
+
+
+@activity.defn(name="room_propose_shared_moments")
+async def propose_shared_moments(project_id: int, run_id: int | None, event_ids: list[int], found: SharedMoments) -> list[int]:
+    """Propose each shared moment whose cards are this run's and span two or more characters; skip the rest."""
+    allowed = set(event_ids)
+    ids: list[int] = []
+    async with session_scope() as session:
+        owners = {row.id: row.character_id for row in await story_entities.list_entities(session, project_id, "timeline_event") if row.id in allowed}
+        for moment in found.moments:
+            cards = [event_id for event_id in dict.fromkeys(moment.event_ids) if event_id in owners]
+            if len({owners[event_id] for event_id in cards}) < 2:
+                logfire.info("Skipping shared moment {title}: its cards don't span two characters", title=moment.title)
+                continue
+            proposal = await propose_shared_moment(
+                session,
+                project_id,
+                SharedMomentProposal(title=moment.title, event_ids=cards, description=moment.description, story_time=moment.story_time),
+                run_id=run_id,
+            )
+            ids.append(proposal.id or 0)
+    return ids
+
+
+@activity.defn(name="room_read_journey")
+async def read_journey_map(project_id: int) -> dict[str, Any]:
+    """Return the Journey map summary (as data) and its prompt text."""
+    async with session_scope() as session:
+        summary = await journey_summary(session, project_id)
+    return {"summary": summary.model_dump(mode="json"), "text": journey_text(summary)}
+
+
 @activity.defn(name="room_link_beat_scenes")
 async def link_beat_scenes(project_id: int, links: list[list[int]]) -> int:
     """Link approved scenes to the beats they dramatise (``[beat_id, scene_id]`` pairs) and mark the beats drafted."""
@@ -799,6 +924,11 @@ ROOM_ACTIVITIES: list[Callable[..., Any]] = [
     cast_ids,
     propose_timeline,
     link_beat_scenes,
+    propose_journey_timeline,
+    lead_ids,
+    journey_cards,
+    propose_shared_moments,
+    read_journey_map,
 ]
 
 
@@ -834,6 +964,7 @@ ROOM_WORKFLOWS: dict[str, RoomWorkflow] = {
         RoomWorkflow("brainstorm", "Brainstorm", "Pitch ideas through several lenses in parallel, then shortlist.", BrainstormParams, ("brainstormer", "story_architect"), False),
         RoomWorkflow("audience_panel", "Audience panel", "Test the script on a panel of viewer personas.", PanelParams, ("audience_evaluator",), False),
         RoomWorkflow("coverage", "Coverage", "Studio-style coverage with graded craft and a verdict.", CoverageParams, ("coverage_reader",), False),
+        RoomWorkflow("arc_check", "Arc check", "Read the Journey map for flat arcs, arcs that never turn, and characters who never cross the protagonist.", ArcCheckParams, ("character_specialist",), False),
         RoomWorkflow("continuity", "Continuity pass", "Find timeline, character, prop and fact inconsistencies.", ContinuityParams, ("continuity_supervisor",), False),
         RoomWorkflow(
             "develop_story",

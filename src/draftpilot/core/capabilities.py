@@ -48,9 +48,9 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability(name="projects.update", description="Edit a project's brief, storyline and settings.", scope="project", mutates=True, approval_required=True),
     Capability(name="projects.duplicate", description="Copy a project into a new one (non-destructive).", scope="project", mutates=True),
     Capability(name="projects.delete", description="Back up and delete a project.", scope="project", mutates=True, approval_required=True),
-    Capability(name="story.read", description="Read the storyline, characters, timelines, shared moments, narrative variants, relationships, locations and outline.", scope="project"),
-    Capability(name="story.write", description="Create, edit or delete characters, timelines, shared moments, narrative variants, relationships, locations and beats.", scope="project", mutates=True, approval_required=True),
-    Capability(name="story.propose", description="Propose story changes (cast, timelines, shared moments, outline, storyline) for the writer to review.", scope="project", mutates=True),
+    Capability(name="story.read", description="Read the storyline, characters, timelines, shared moments, narrative variants, relationships, locations, outline and the Journey map summary.", scope="project"),
+    Capability(name="story.write", description="Create, edit or delete characters, timelines, shared moments and their participants, narrative variants, relationships, locations and beats.", scope="project", mutates=True, approval_required=True),
+    Capability(name="story.propose", description="Propose story changes (cast, timelines and their journey fields, shared moments, outline, storyline) for the writer to review.", scope="project", mutates=True),
     Capability(name="structure.write", description="Create, edit, move or delete acts, scenes and screenplay blocks.", scope="screenplay", mutates=True, approval_required=True),
     Capability(name="revisions.create", description="Capture a named scene snapshot.", scope="scene", mutates=True),
     Capability(name="imports.create", description="Import a Fountain, FDX or PDF script as a new draft.", scope="project", mutates=True),
@@ -69,6 +69,7 @@ _PAGE_CAPABILITIES: dict[str, tuple[str, ...]] = {
     "settings": ("providers.read", "providers.write", "backups.read", "backups.create", "backups.restore"),
     "context": ("context.read", "context.generate", "context.apply", "knowledge_graph.read", "revisions.read"),
     "workspace": ("screenplay.read", "context.read", "revisions.read"),
+    "journey": ("story.read", "story.propose", "story.write", "timeline.propose", "timeline.approve", "timeline.rollback", "room.workflow"),
 }
 
 

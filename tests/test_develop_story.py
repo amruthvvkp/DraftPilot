@@ -1,6 +1,7 @@
 """Test the develop_story pipeline: every stage waits for the writer, and only approved work feeds the next."""
 
 import asyncio
+import re
 from pathlib import Path
 from typing import Any
 
@@ -49,10 +50,10 @@ PAYLOADS: dict[str, Any] = {
             {"name": "Josephine", "role": "supporting", "summary": "Will's wife.", "want": "Peace", "need": "Truth", "objective": "Get Will to listen"},
         ]
     },
-    "CharacterTimeline": lambda _prompt, _count: {
+    "JourneyTimeline": lambda _prompt, _count: {
         "moments": [
-            {"story_time": "1937", "title": "Sees his death in the witch's eye", "objective": "Know his fate"},
-            {"story_time": "today", "title": "Asks Will to tell the ending", "emotional_state": "At peace"},
+            {"story_time": "1937", "title": "Sees his death in the witch's eye", "objective": "Know his fate", "intensity": -3, "motivation": "Fear of an ordinary life"},
+            {"story_time": "today", "title": "Asks Will to tell the ending", "emotional_state": "At peace", "intensity": 4, "motivation": "To be known"},
         ]
     },
     "Outline": _outline,
@@ -113,8 +114,57 @@ def test_develop_story_waits_for_the_writer_at_every_stage(project: AsyncSession
     assert story is not None
     edward = next(row for row in _all(project, Character) if row.name == "Edward")
     assert edward.want == "To be a legend" and not any(row.name == "Josephine" for row in _all(project, Character))
-    assert [event.story_time for event in _all(project, CharacterTimelineEvent)] == ["1937", "today"]
+    events = _all(project, CharacterTimelineEvent)
+    assert [(event.story_time, event.intensity, event.motivation) for event in events] == [("1937", -3, "Fear of an ordinary life"), ("today", 4, "To be known")]
+    assert "moments" not in stages  # one character's timeline has nobody to share a moment with
     beats = sorted(_all(project, StoryBeat), key=lambda beat: beat.position)
     assert len(beats) == 3 and [beat.status for beat in beats] == ["drafted", "drafted", "planned"]
     assert all(len(beat.scene_ids) == 1 for beat in beats[:2])
     assert len(_all(project, Scene)) == 3  # the seeded scene plus two drafted ones
+
+
+def _shared(prompt: str, _count: int) -> dict[str, Any]:
+    """Pair each character's first card (the ``#n`` ids under each ``##`` heading) into one shared moment."""
+    firsts = [int(match) for match in re.findall(r"## [^\n]+\n- #(\d+)", prompt)]
+    return {"moments": [{"title": "The river", "story_time": "today", "event_ids": firsts}, {"title": "Alone", "event_ids": firsts[:1] * 2}]}
+
+
+def test_develop_story_proposes_shared_moments_and_links_them_only_when_approved(project: AsyncSession, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: F811
+    """Timelines for the existing leads, then a shared-moment proposal; approving it links each side's card."""
+    ref = register_model(_room({**PAYLOADS, "SharedMoments": _shared}))
+
+    async def scenario() -> dict[str, Any]:
+        """Run only the timeline stage while a scripted writer approves everything."""
+        async with temporal_worker(all_workflows(), all_activities()) as (client, queue):
+
+            async def get_client() -> object:
+                """Let the proposals API signal the test server."""
+                return client
+
+            monkeypatch.setattr("draftpilot.core.temporal.get_client", get_client)
+            async with AsyncSession(project.bind, expire_on_commit=False) as session:
+                run = WorkflowRun(project_id=1, kind="room_workflow", input={"workflow": "develop_story", "params": {}}, permission_mode="suggest")
+                session.add(run)
+                await session.commit()
+                run_id = run.id or 0
+            room = RoomDeps(project_id=1, permission_mode="suggest", model_ref=ref, workflow_run_id=run_id, tools=False)
+            params = {"idea": "A tall tale.", "stages": ["timelines"], "cast_size": 2, "wait_hours": 1}
+            handle = await client.start_workflow("room:develop_story", RoomRunInput(workflow="develop_story", params=params, room=room), id=f"run-{run_id}-room", task_queue=queue)
+            for _ in range(600):
+                async with AsyncSession(project.bind, expire_on_commit=False) as session:
+                    for row in [row for row in _all(session, AgentProposal) if row.status == "proposed"]:
+                        if row.target_kind == "moment":
+                            assert not [event for event in _all(session, CharacterTimelineEvent) if event.moment_id is not None]
+                        await proposals.approve(session, 1, row.id or 0)
+                if (await handle.describe()).status != WorkflowExecutionStatus.RUNNING:
+                    break
+                await asyncio.sleep(0.05)
+            result: dict[str, Any] = await handle.result()
+            return result
+
+    result = run_async(scenario())
+    assert result["stages"]["moments"] == {"proposed": 1, "approved": 1}  # the one-character "moment" was skipped
+    moment = next(row for row in _all(project, AgentProposal) if row.target_kind == "moment")
+    assert moment.operation["fields"]["title"] == "The river" and len(moment.operation["event_ids"]) == 2
+    linked = [event for event in _all(project, CharacterTimelineEvent) if event.moment_id is not None]
+    assert len(linked) == 2 and len({event.character_id for event in linked}) == 2

@@ -1,7 +1,7 @@
 """Eval suites for the writers' room, each a ``pydantic_evals`` dataset plus the task that runs it."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from pydantic_evals import Case, Dataset, increment_eval_metric, set_eval_attribute
@@ -11,22 +11,30 @@ from draftpilot.agents.runtime import run_role
 from draftpilot.agents.specs import role_spec
 from draftpilot.agents.workflows import (
     Cast,
+    JourneyTimeline,
+    SharedMoments,
     StorylineDraft,
     WorkflowDeps,
+    journey_cards,
     run_room_workflow,
     scene_fountain,
 )
 from draftpilot.core.db import session_scope
 from draftpilot.core.screenplay.hydrate import blocks_for_scene
+from draftpilot.core.story import entities
+from draftpilot.core.twins import story_twin_brief
 from draftpilot.evals.evaluators import (
     CastDeveloped,
     CritiqueImproved,
+    FindsSharedMoments,
+    FlagsArc,
     FoundPlanted,
     Judges,
     KeepsCast,
     MentionsAny,
     NoHallucinatedScenes,
     OutlineShape,
+    SensibleIntensities,
     Shorter,
     StorylineComplete,
     UsedTools,
@@ -251,6 +259,102 @@ async def cast(project: EvalProject, model: Any, name: str, judges: Judges) -> t
     return dataset, task
 
 
+# The Journey map seeded for the journey suite: (character, role, [(title, story_time, intensity, scene number)]).
+# Edward and Will share the wedding and the river; Will's lane is flat; Karl never meets Edward on the map.
+JOURNEY_MAP: list[tuple[str, str, list[tuple[str, str, int, int | None]]]] = [
+    ("Edward", "protagonist", [
+        ("Sees his death in the witch's glass eye", "1937", -3, None),
+        ("Tells the catfish story at Will's wedding, stealing the toast", "1998", 3, 1),
+        ("Asks Will to tell him how it ends", "today", -2, None),
+        ("Will carries him to the river, where everyone waits", "today", 4, None),
+    ]),
+    ("Will", "supporting", [
+        ("His father steals his wedding toast with the fish story", "1998", -1, 1),
+        ("Stops speaking to his father for three years", "1998-2001", 0, None),
+        ("Carries his father to the river and tells the ending", "today", -1, None),
+    ]),
+    ("Karl", "supporting", [("Leaves his cave and follows a stranger out of the valley", "1940s", 2, None)]),
+]
+
+
+async def _seed_journey(project: EvalProject) -> dict[str, int]:
+    """Lay out ``JOURNEY_MAP`` on the eval project (reusing the Story twin's characters) and return card ids by title."""
+    cards: dict[str, int] = {}
+    async with session_scope() as session:
+        existing = {row.name.casefold(): row for row in await entities.list_entities(session, project.project_id, "character")}
+        for name, role, events in JOURNEY_MAP:
+            character = existing.get(name.casefold())
+            if character is None:
+                character = await entities.create_entity(session, project.project_id, "character", {"name": name, "role": role})
+            else:
+                character = await entities.update_entity(session, project.project_id, "character", character.id, {"role": role}, expected_version=None, require_version=False)
+            for position, (title, story_time, intensity, scene) in enumerate(events):
+                fields = {"character_id": character.id, "title": title, "story_time": story_time, "intensity": intensity, "position": position,
+                          "chrono_index": float(position + 1), "scene_id": project.scene(scene).id if scene else None}
+                cards[title] = (await entities.create_entity(session, project.project_id, "timeline_event", fields)).id
+    return cards
+
+
+SHARED_MOMENTS_PROMPT = (
+    "These are the approved timelines of the cast, card by card. Find the moments two or more characters share "
+    "(the same event seen from each side: the same scene, place and time). For each, give a title, the story time, "
+    "one line on what happens, and the card ids (#n) of every participant's side. Propose only real meetings; "
+    "an empty list is a fine answer."
+)
+
+
+async def journey(project: EvalProject, model: Any, name: str, judges: Judges) -> tuple[Dataset[Any, Any, Any], Task]:
+    """The Journey map agents: a timeline with intensity and motivation, shared moments across lanes, and the arc check."""
+    cards = await _seed_journey(project)
+    edward, will = (titles for _name, _role, titles in JOURNEY_MAP[:2])
+    meetings = [[cards[edward[1][0]], cards[will[0][0]]], [cards[edward[3][0]], cards[will[2][0]]]]
+    unrelated = [cards[edward[0][0]], cards[will[1][0]], cards[JOURNEY_MAP[2][2][0][0]]]
+    dataset = Dataset[Any, Any, Any](
+        name="journey",
+        cases=[
+            Case(name="edward_timeline", inputs={"kind": "timeline", "character": "Edward"}, evaluators=(
+                SensibleIntensities(),
+                *judges.evaluators(
+                    rubric="Each moment's intensity fits it on the -5 (lowest low) to +5 (highest high) scale: losses and fears "
+                    "are negative, triumphs and reconciliations positive. Each motivation says why Edward acts, true to Big Fish.",
+                    include_input=False,
+                ),
+            )),
+            Case(name="shared_moments", inputs={"kind": "moments"}, evaluators=(FindsSharedMoments(expected=meetings, unrelated=unrelated),)),
+            Case(name="arc_check", inputs={"kind": "arc_check"}, evaluators=(FlagsArc("Will", "flat_arc"), FlagsArc("Karl", "never_crosses_protagonist"))),
+        ],
+    )
+
+    async def task(inputs: dict[str, Any]) -> dict[str, Any]:
+        """Run one journey agent step: the develop_story timeline prompt, its shared-moment prompt, or the arc-check workflow."""
+        if inputs["kind"] == "timeline":
+            character = inputs["character"]
+            prompt = (
+                f"Trace {character}'s arc through the story as 4-8 moments in story order: when it happens, what happens, "
+                "what they want in that moment, why they act (motivation), how they feel, and its intensity from -5 "
+                "(their lowest low) to +5 (their highest high). Let the intensity rise and fall: an arc turns."
+            )
+            # As in develop_story: the story so far arrives as the Story twin brief, and the step has no tools.
+            async with session_scope() as session:
+                room = replace(_room(project), story_brief=await story_twin_brief(session, project.project_id))
+            timeline: JourneyTimeline
+            timeline, record = await run_role(role_spec("character_specialist"), model, room, prompt, JourneyTimeline,
+                                              provider="lm_studio", model_name=name, kind="eval", tools=False)
+            _measure(record)
+            return timeline.model_dump()
+        if inputs["kind"] == "moments":
+            text = (await journey_cards(project.project_id, list(cards.values())))["text"]
+            found: SharedMoments
+            found, record = await run_role(role_spec("story_editor"), model, _room(project), f"{SHARED_MOMENTS_PROMPT}\n\n{text}", SharedMoments,
+                                           provider="lm_studio", model_name=name, kind="eval", tools=False)
+            _measure(record)
+            return found.model_dump()
+        result = await run_room_workflow("arc_check", {}, _workflow_deps(project, model, name))
+        return {"findings": result["findings"], "report": result["report"]}
+
+    return dataset, task
+
+
 SUITES: dict[str, Suite] = {
     suite.name: suite
     for suite in (
@@ -260,5 +364,6 @@ SUITES: dict[str, Suite] = {
         Suite("continuity", "Catching a planted timeline contradiction", continuity),
         Suite("storyline", "Notes → storyline (logline, premise, synopsis, theme, tone)", storyline),
         Suite("cast", "Notes → a principal cast with motives and objectives", cast),
+        Suite("journey", "Journey map agents: intensity and motivation, shared moments, the arc check", journey),
     )
 }

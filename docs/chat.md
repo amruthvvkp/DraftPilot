@@ -55,7 +55,11 @@ Every message carries your place in the studio, so you can say "this scene" or "
 - **the page** you are on (Storyline, a character, the Outline, the Script…);
 - on the **Script**, the scene you have selected (its heading and id);
 - in the **Story studio**, the artifact you have open;
-- on the **Knowledge graph**, the node type you are adding.
+- on the **Knowledge graph**, the node type you are adding;
+- on the **Journey map**, the card or shared moment you have open (its id, character, intensity,
+  story time, scene and moment), or else the lane you selected by clicking a character's name.
+  There the room reads the whole map with `read_journey` and answers with card ids, so "where is
+  Will's emotional low?" or "give Josephine a reason to be here" works on what you are looking at.
 
 The empty dock says so: "It sees the page you are on", followed by your current selection.
 The room also reads your project instruction, your writer profile and the story brief (the same brief
@@ -86,6 +90,7 @@ used.
 | **Outline** / **Proposed outline** | reads or proposes the outline | open the Outline |
 | **Consulted a specialist** / **Consulted specialists** | asks one or more specialists | open each one's brief and answer |
 | **New scene** / **Rewrote** | writes or rewrites a scene | open the scene |
+| **Journey map** | reads the Journey map | see each lane as a strip of cards coloured by intensity (outlined when shared), read the arc check's findings, and open the map |
 | **Room run** | starts a workflow or an evaluation | follow its status and stages, then **Review in the writers' room** |
 | A proposal | proposes a change | **Approve proposal** or **Reject proposal** in place |
 

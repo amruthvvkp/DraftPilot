@@ -56,6 +56,7 @@ READ_TOOLS = frozenset(
         "list_story_entities",
         "read_character",
         "read_outline",
+        "read_journey",
         "read_project_artifacts",
         "read_screenplay_scenes",
         "retrieve_project_context",
@@ -75,6 +76,8 @@ PROPOSE_TOOLS = frozenset(
         "propose_outline",
         "propose_screenplay_change",
         "propose_timeline_reorder",
+        "propose_journey_event",
+        "propose_shared_moment",
         "propose_dialogue_translation",
         "start_room_workflow",
         "start_evaluation",
@@ -92,6 +95,7 @@ APPROVAL_TOOLS = frozenset(
         "create_story_entity",
         "update_story_entity",
         "delete_story_entity",
+        "set_moment_participants",
         "create_act",
         "update_act",
         "delete_act",
@@ -120,6 +124,13 @@ APPROVAL_TOOLS = frozenset(
         "create_project_backup",
         "control_workflow_run",
     }
+)
+# Said when the writer is on the Journey map, so the room reaches for the map's own tools.
+JOURNEY_FOCUS = (
+    "The writer is on the Journey map (character lanes of timeline events, shared moments, intensity −5…+5). "
+    "read_journey gives the whole map in brief. Propose a card's motivation, history, intensity or story time with "
+    "propose_journey_event, a shared moment with propose_shared_moment (never merge cards yourself), and a scene "
+    "reorder with propose_timeline_reorder. When asked where something happens, name the card ids."
 )
 EDIT_TOOLS = APPROVAL_TOOLS | {"start_context_workflow", "import_screenplay", "duplicate_project"}
 
@@ -188,6 +199,8 @@ def _context_instructions(ctx: RunContext[RoomDeps]) -> str:
     ]
     if deps.scene_id:
         lines.append(f"Current scene id: {deps.scene_id}.")
+    if (deps.artifact or "") == "journey" or "/journey" in (deps.page or ""):
+        lines.append(JOURNEY_FOCUS)
     if deps.project_instruction:
         lines.append(f"Project instruction from the writer: {deps.project_instruction}")
     if deps.scene_instruction:

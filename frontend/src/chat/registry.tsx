@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { CharacterCard, type CardProps, GenericCard, OutlineCard, PlanCard, proposalIn, ProposalCard, SceneCard, SpecialistCard, WorkflowCard } from './cards'
+import { CharacterCard, type CardProps, GenericCard, JourneyCard, OutlineCard, PlanCard, proposalIn, ProposalCard, SceneCard, SpecialistCard, WorkflowCard } from './cards'
 import { parseJson, type ToolEntry } from './reducer'
 
 type Rule = { match: (call: ToolEntry, args: Record<string, unknown>, result: unknown) => boolean; card: ComponentType<CardProps> }
@@ -9,6 +9,7 @@ export const TOOL_CARDS: Rule[] = [
   { match: call => call.name === 'plan', card: PlanCard },
   { match: (call, args) => call.name === 'read_character' || (call.name === 'create_story_entity' && args.kind === 'character'), card: CharacterCard },
   { match: call => call.name === 'read_outline' || call.name === 'propose_outline', card: OutlineCard },
+  { match: call => call.name === 'read_journey', card: JourneyCard },
   { match: call => call.name === 'start_room_workflow' || call.name === 'start_evaluation', card: WorkflowCard },
   { match: call => call.name === 'consult' || call.name === 'consult_many', card: SpecialistCard },
   { match: call => call.name === 'create_scene' || call.name === 'write_scene', card: SceneCard },

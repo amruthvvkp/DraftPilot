@@ -69,6 +69,14 @@ A typical session:
    `moment_id`, and list them with `list_story_entities(kind="timeline_event", moment_id=...)`.
    `kind="variant"` saves a named scene order (`name`, `scene_ids`) without applying it. Agents may
    propose moments with `propose_story_change(kind="moment")`; variants stay the writer's.
+   `read_journey` is the map in brief, for agents: each lane in story order (card ids, intensity,
+   motivation, scene and moment), the shared moments with their characters, and the arc check's
+   findings (`flat_arc`, `never_turns`, `never_crosses_protagonist`, `too_few_cards`). To change a
+   card, `propose_journey_event(event_id, motivation=, history=, intensity=, chrono_index=,
+   moment_id=)` queues a proposal; `propose_shared_moment(title, event_ids, ...)` proposes a moment
+   with its participants (cards from two or more characters), and approving it creates the moment
+   and links the cards; rolling it back unlinks them. `set_moment_participants(moment_id,
+   event_ids, expected_version)` sets a moment's cards directly and needs the writer's approval.
 5. Outline: `create_act` / `update_act` / `delete_act`, beats via `kind="beat"`, or a whole outline at
    once with `propose_outline`; read it with `read_outline` (acts → beats → scene headings).
 6. Script: `create_scene(heading, fountain=...)`, `write_scene` (replace a scene from Fountain),
@@ -87,7 +95,7 @@ changed the target since.
 | Area | Tools |
 |---|---|
 | Projects | `list_projects`, `create_project`, `update_project`, `duplicate_project`, `delete_project`, `write_reference`, `read_project_overview` |
-| Story | `read_storyline`, `read_story_context`, `list_story_entities`, `read_character`, `read_outline`, `read_story_visuals`, `create_story_entity`, `update_story_entity`, `delete_story_entity`, `propose_story_change`, `propose_outline`, `apply_story_operation`, `read_project_artifacts`, `write_artifact` |
+| Story | `read_storyline`, `read_story_context`, `list_story_entities`, `read_character`, `read_outline`, `read_story_visuals`, `read_journey`, `create_story_entity`, `update_story_entity`, `delete_story_entity`, `propose_story_change`, `propose_journey_event`, `propose_shared_moment`, `set_moment_participants`, `propose_outline`, `apply_story_operation`, `read_project_artifacts`, `write_artifact` |
 | Structure and script | `create_act`, `update_act`, `delete_act`, `create_scene`, `write_scene`, `write_scene_content`, `update_scene`, `move_scene`, `delete_scene`, `create_block`, `update_block`, `delete_block`, `reorder_blocks`, `read_screenplay_scenes`, `read_dialogue_translations`, `propose_dialogue_translation` |
 | Proposals | `list_proposals`, `propose_screenplay_change`, `review_screenplay_proposal`, `reject_proposal`, `propose_timeline_reorder`, `review_timeline_proposal`, `reject_timeline_proposal` |
 | Revisions, import and export | `snapshot_scene`, `read_scene_revisions`, `diff_scene_revisions`, `restore_scene_revision`, `import_screenplay`, `render_screenplay_export`, `create_screenplay_export`, `list_project_backups`, `create_project_backup`, `restore_project_backup` |
@@ -118,8 +126,9 @@ artifact and writer-twin writes, run control) go through these steps:
    and it expires after `MCP__APPROVAL_TTL_SECONDS` (default 900). A changed argument, a replay, or a
    pending, rejected or expired request is refused and audited.
 
-Creating proposals (`propose_story_change`, `propose_outline`, `propose_screenplay_change`,
-`propose_timeline_reorder`, `propose_dialogue_translation`) needs no pre-approval, because a proposal
+Creating proposals (`propose_story_change`, `propose_journey_event`, `propose_shared_moment`,
+`propose_outline`, `propose_screenplay_change`, `propose_timeline_reorder`,
+`propose_dialogue_translation`) needs no pre-approval, because a proposal
 changes nothing until the writer reviews it. Creating a project, snapshotting a scene, importing a
 draft and refreshing the Story twin are not destructive and need no approval either.
 

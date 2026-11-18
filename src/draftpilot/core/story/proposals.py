@@ -33,10 +33,19 @@ async def propose_story_change(
     entity_id: int | None = None,
     run_id: int | None = None,
     summary: str = "",
+    event_ids: list[int] | None = None,
 ) -> AgentProposal:
-    """Validate and store a story change for the writer to decide."""
+    """Validate and store a story change for the writer to decide.
+
+    A new shared moment may name its participants' ``event_ids``; approving it links them.
+    """
     await require_project(session, project_id)
     fields = dict(fields or {})
+    operation: dict[str, Any] = {"action": action, "fields": fields}
+    if event_ids:
+        if kind != "moment" or action != "create":
+            raise Invalid("Only a new shared moment can name participant events")
+        operation["event_ids"] = await _participants(session, project_id, event_ids)
     if kind == "storyline":
         if action != "update" or not fields or set(fields) - set(STORYLINE_FIELDS):
             raise Invalid(f"A storyline proposal updates some of: {', '.join(STORYLINE_FIELDS)}")
@@ -72,7 +81,7 @@ async def propose_story_change(
             run_id=run_id,
             target_kind=kind,
             target_id=target_id,
-            operation={"action": action, "fields": fields},
+            operation=operation,
             diff={"summary": summary or f"{action} {kind}"},
             before=before,
             base_version=base_version,
@@ -80,6 +89,46 @@ async def propose_story_change(
     )
     await events.publish(project_id, "proposal.changed", {"proposal_id": proposal.id, "status": "proposed"})
     return proposal
+
+
+async def _participants(session: AsyncSession, project_id: int, event_ids: list[int]) -> list[int]:
+    """Check a proposed moment's participant events: the project's own, from at least two characters."""
+    unique = list(dict.fromkeys(event_ids))
+    rows = [await entities.get_entity(session, project_id, "timeline_event", event_id) for event_id in unique]
+    if len({row.character_id for row in rows}) < 2:
+        raise Invalid("A shared moment needs events from at least two characters")
+    return unique
+
+
+async def _link_participants(session: AsyncSession, project_id: int, moment_id: int, event_ids: list[int]) -> dict[str, Any]:
+    """Link the approved moment's participant events; return each event's previous moment and new version."""
+    previous: dict[str, Any] = {}
+    versions: dict[str, int] = {}
+    for event_id in event_ids:
+        try:
+            row = await entities.get_entity(session, project_id, "timeline_event", event_id)
+        except NotFound:
+            continue  # the writer deleted it since; the moment simply has one participant fewer
+        previous[str(event_id)] = row.moment_id
+        updated = await entities.update_entity(
+            session, project_id, "timeline_event", event_id, {"moment_id": moment_id}, expected_version=None, require_version=False, source="agent"
+        )
+        versions[str(event_id)] = updated.version
+    return {"linked_events": versions, "previous_moments": previous}
+
+
+async def _restore_moments(session: AsyncSession, project_id: int, previous: dict[str, Any]) -> None:
+    """Put participant events back in the moments they were in before, where those still exist."""
+    for event_id, moment_id in previous.items():
+        if moment_id is None:
+            continue
+        try:
+            await entities.get_entity(session, project_id, "moment", int(moment_id))
+            await entities.update_entity(
+                session, project_id, "timeline_event", int(event_id), {"moment_id": moment_id}, expected_version=None, require_version=False
+            )
+        except NotFound:
+            continue
 
 
 def _beat_signature(rows: list[Any]) -> list[list[int]]:
@@ -188,7 +237,9 @@ async def approve_story(session: AsyncSession, project_id: int, proposal: AgentP
         return await _finish(session, project_id, proposal, "approved", created_ids=created)
     if action == "create":
         row = await entities.create_entity(session, project_id, kind, fields, source="agent")
-        return await _finish(session, project_id, proposal, "approved", created_id=row.id, applied_version=row.version)
+        event_ids = list(proposal.operation.get("event_ids") or [])
+        linked = await _link_participants(session, project_id, row.id, event_ids) if kind == "moment" and event_ids else {}
+        return await _finish(session, project_id, proposal, "approved", created_id=row.id, applied_version=row.version, **linked)
     if action == "update":
         row = await entities.update_entity(
             session, project_id, kind, proposal.target_id, fields, expected_version=proposal.base_version
@@ -217,6 +268,8 @@ async def rollback_story(session: AsyncSession, project_id: int, proposal: Agent
             if not isinstance(created, int):
                 raise Invalid("Proposal has no created entity to remove")
             await entities.delete_entity(session, project_id, kind, created, expected_version=applied)
+            if kind == "moment":
+                await _restore_moments(session, project_id, dict(proposal.diff.get("previous_moments") or {}))
         elif action == "update":
             await entities.update_entity(
                 session, project_id, kind, proposal.target_id, proposal.before, expected_version=applied

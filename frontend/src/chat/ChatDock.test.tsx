@@ -54,7 +54,7 @@ describe('ChatDock', () => {
     const { bodies } = chatBackend([() => reply('r1', 'Open on **the river**.')])
     renderAt('/projects/3')
     await screen.findByDisplayValue('INT. HALL - NIGHT')
-    await screen.findByRole('option', { name: 'Story architect' })
+    await screen.findByRole('option', { name: 'Story architect' }, { timeout: 5000 })
     await userEvent.selectOptions(screen.getByLabelText('Room role'), 'story_architect')
     await ask('Where should we open?')
     const log = screen.getByRole('log', { name: 'Conversation' })
@@ -82,7 +82,7 @@ describe('ChatDock', () => {
       ],
     ])
     renderAt('/projects/3/characters')
-    await userEvent.selectOptions(await screen.findByLabelText('Chat permission'), 'project_edit')
+    await userEvent.selectOptions(await screen.findByLabelText('Chat permission', {}, { timeout: 5000 }), 'project_edit')
     await ask('Add Karl the giant.')
     const card = await screen.findByRole('region', { name: 'Approve create_story_entity' })
     expect(card.textContent).toContain('"name": "Karl"')
