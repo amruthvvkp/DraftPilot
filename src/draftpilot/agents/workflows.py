@@ -307,8 +307,9 @@ class CharacterTimeline(BaseModel):
 class JourneyMoment(TimelineMoment):
     """A timeline moment as the Journey map draws it: with its intensity and the reason the character acts."""
 
-    intensity: int = Field(default=0, ge=-5, le=5, description="Emotional valence: -5 the lowest low, +5 the highest high, 0 neutral.")
-    motivation: str = Field(default="", max_length=1000, description="Why the character acts in this moment.")
+    # Both required, so an answer that skips them goes back to the model instead of landing as 0 and "".
+    intensity: int = Field(ge=-5, le=5, description="Emotional valence: -5 the lowest low, +5 the highest high, 0 neutral.")
+    motivation: str = Field(min_length=1, max_length=1000, description="Why the character acts in this moment (required).")
 
 
 class JourneyTimeline(BaseModel):

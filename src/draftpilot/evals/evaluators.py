@@ -236,6 +236,10 @@ class FlagsArc(Evaluator[Any, Any, Any]):
     character: str
     kind: str
 
+    def get_default_evaluation_name(self) -> str:
+        """Name each check by what it looks for, so two of them don't collide in a report."""
+        return f"FlagsArc[{self.character}:{self.kind}]"
+
     def evaluate(self, ctx: EvaluatorContext[Any, Any, Any]) -> EvaluationReason:
         """Look for the note in ``output['report']``."""
         notes = list(((ctx.output or {}).get("report") or {}).get("notes", []))

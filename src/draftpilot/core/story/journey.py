@@ -6,7 +6,9 @@ findings are deterministic, so the check is the same every time the map is the s
 - a **flat arc**: a lane whose intensity barely moves (a range of one step or less);
 - **never turns**: a lane whose intensity only rises or only falls;
 - **never crosses the protagonist**: a character who shares no moment and no scene with the lead;
-- **too few cards**: a lane with fewer than two cards, too thin to read an arc from.
+- **too few cards**: a lane with a single card, too thin to read an arc from.
+
+Characters with no cards at all get no findings: they are not on the map yet.
 """
 
 from itertools import pairwise
@@ -134,6 +136,8 @@ def _findings(
         )
 
     values = [event.intensity for event in lane.events]
+    if not values:
+        return found  # a character with no cards isn't on the map yet (the Story twin lists every speaker)
     if len(values) < 2:
         add(
             "too_few_cards",

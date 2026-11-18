@@ -599,7 +599,7 @@ def test_arc_check_measures_the_map_then_explains_it(project: AsyncSession) -> N
 
     result, _ = _run("arc_check", {}, {"ArcCheck": check})
     found = {(item["character"], item["kind"]) for item in result["findings"]}
-    assert found == {("Edward", "never_turns"), ("Will", "flat_arc"), ("Will", "never_crosses_protagonist"), ("Karl", "too_few_cards"), ("Karl", "never_crosses_protagonist")}
+    assert found == {("Edward", "never_turns"), ("Will", "flat_arc"), ("Will", "never_crosses_protagonist")}  # Karl has no cards: not on the map
     assert "Edward (protagonist)" in prompts[0] and "flat_arc: Will's intensity stays between +1 and +2" in prompts[0]
     assert result["report"]["notes"][0]["suggestion"] == "Let him break at the hospital." and result["proposes"] is False
     assert _all(project, AgentProposal) == []

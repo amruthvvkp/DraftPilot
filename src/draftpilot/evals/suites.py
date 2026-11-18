@@ -260,7 +260,7 @@ async def cast(project: EvalProject, model: Any, name: str, judges: Judges) -> t
 
 
 # The Journey map seeded for the journey suite: (character, role, [(title, story_time, intensity, scene number)]).
-# Edward and Will share the wedding and the river; Will's lane is flat; Karl never meets Edward on the map.
+# Edward and Will share the wedding and the river; Will's lane is flat; Karl has a single card.
 JOURNEY_MAP: list[tuple[str, str, list[tuple[str, str, int, int | None]]]] = [
     ("Edward", "protagonist", [
         ("Sees his death in the witch's glass eye", "1937", -3, None),
@@ -321,7 +321,7 @@ async def journey(project: EvalProject, model: Any, name: str, judges: Judges) -
                 ),
             )),
             Case(name="shared_moments", inputs={"kind": "moments"}, evaluators=(FindsSharedMoments(expected=meetings, unrelated=unrelated),)),
-            Case(name="arc_check", inputs={"kind": "arc_check"}, evaluators=(FlagsArc("Will", "flat_arc"), FlagsArc("Karl", "never_crosses_protagonist"))),
+            Case(name="arc_check", inputs={"kind": "arc_check"}, evaluators=(FlagsArc("Will", "flat_arc"), FlagsArc("Karl", "too_few_cards"))),
         ],
     )
 

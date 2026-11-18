@@ -131,8 +131,9 @@ the **timelines** stage to do this for the cast you already have.
 | Flat arc | the lane's intensity stays within one step across its cards |
 | Never turns | the intensity only rises or only falls (three cards or more) |
 | Never crosses the protagonist | the character shares no moment and no scene with the lead (the character whose role is protagonist) |
-| Too few cards | fewer than two cards, too few to read an arc |
+| Too few cards | a single card, too few to read an arc |
 
-The findings are measured from the cards, so the same map always gets the same findings. The
+Characters with no cards are left out: they are not on the map yet. The findings are measured
+from the cards, so the same map always gets the same findings. The
 character specialist then explains each one with card ids and suggests a fix. The check is a
 report; it changes nothing.

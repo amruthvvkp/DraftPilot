@@ -71,7 +71,7 @@ PAYLOADS: dict[str, Any] = {
     "StorylineDraft": lambda _count: {"title": "T", "logline": "L", "premise": "P", "synopsis": "S", "theme": "Th", "tone": "To"},
     "ContinuityReport": lambda _count: {"issues": [{"scene_ids": [1], "kind": "fact", "description": "The river changes name."}]},
     "ArcCheck": lambda _count: {"summary": "Will never turns.", "notes": [{"character": "Will", "kind": "flat_arc", "note": "Flat."}]},
-    "JourneyTimeline": lambda _count: {"moments": [{"title": "Leaves home", "intensity": -2, "motivation": "Escape"}, {"title": "Comes back", "intensity": 3}]},
+    "JourneyTimeline": lambda _count: {"moments": [{"title": "Leaves home", "intensity": -2, "motivation": "Escape"}, {"title": "Comes back", "intensity": 3, "motivation": "Love"}]},
 }
 
 ROOM_SCENARIOS: dict[str, dict[str, Any]] = {
